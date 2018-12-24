@@ -1,0 +1,2 @@
+If $\Phi = \phi_1, \phi_2 \ldots \phi_k \ldots \phi_k$, where each $0 \leq \phi_k \leq 1$, 
+and $\sum_{k=1}^K \phi_k = 1$, then $\Phi$ is a probability mass function.

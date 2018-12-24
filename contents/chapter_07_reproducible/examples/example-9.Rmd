@@ -1,0 +1,8 @@
+```{r, echo=TRUE, eval=FALSE}
+n <- 10
+x <- rnorm(n)
+y <- 2.25 * x + rnorm(n)
+
+M <- lm(y ~ x)
+```
+

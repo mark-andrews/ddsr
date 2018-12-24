@@ -1,0 +1,86 @@
+---
+title: "Data Analysis: Report II"
+author: "Mark Andrews"
+date: "October 25, 2019"
+output: 
+  pdf_document:
+    keep_tex: yes
+header-includes:
+- \usepackage{booktabs}
+bibliography: refs.bib
+biblio-style: apalike  
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+```{r load_packages, echo = FALSE}
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+
+weight_df <- read_csv('weight.csv')
+weight_df_grouped <- group_by(weight_df, gender)
+
+sample_size <- weight_df_grouped %>%
+  summarise(n=n()) %>% 
+  deframe()
+
+weight_df_summary <- weight_df_grouped %>% 
+  summarise_at(vars(weight, height), 
+               list(avg=mean, stdev=sd))
+```
+
+# Descriptive statistics
+
+In this data set, we have measured the weight (in kg)
+and height (in cm) of `r sum(sample_size)` participants 
+(`r sample_size['Male']` males, `r sample_size['Female']`
+females). In the following table, we show the mean and
+the standard deviations of the weights and heights, 
+separately for males and females. 
+                          
+```{r descriptives_table, echo=F}
+weight_df_summary %>% 
+  kable(format = "latex", 
+        booktabs = TRUE, 
+        digits = 2, 
+        align = 'c') %>%
+    kable_styling(position = "center")
+```
+
+# Statistical model
+
+We will model the relationship between weight and height 
+as a varying intercepts normal linear model as follows. 
+For each $i \in 1 \ldots n$, 
+$$
+\begin{aligned}
+y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i &= \beta_0 + \beta_1 x_i + \beta_2 z_i, 
+\end{aligned}
+$$
+where $y_i$, $x_i$, $z_i$ are the weight, height, 
+and gender of participant $i$.
+
+In R, this analysis can be easily performed as follows.
+```{r stat_model}
+model <- lm(weight ~ height + gender, data = weight_df)
+```
+```{r model_results, echo=F}
+R_sq <- summary(model)$r.sq
+f_stat <- summary(model)$fstatistic
+p_value <- pf(f_stat[1], f_stat[2], f_stat[3], lower.tail = F)
+```
+
+The $R^2$ for this model is `r round(R_sq, 2)`,
+$F(`r round(f_stat[2])`, `r round(f_stat[3])`) = 
+`r round(f_stat[1],2)`$,
+$p `r format.pval(p_value, eps = 0.01)`$.
+
+
+More information about varying intecept models can be
+found in @GelmanHill:2007.
+
+# References

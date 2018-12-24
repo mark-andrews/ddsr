@@ -1,0 +1,1546 @@
+---
+title: "Chapter 9: Normal linear models"
+author: "Mark Andrews"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    fig_caption: true
+    keep_tex: true
+    highlight: haddock
+  html_document:
+    highlight: haddock
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+---
+
+  
+```{r, echo=F}
+knitr::opts_chunk$set(echo = F, prompt = F, warning = F, message = F, comment='#>')
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+```
+
+```{r}
+library(tidyverse)
+library(cowplot)
+library(ggridges)
+theme_set(theme_classic())
+```
+
+# Introduction
+
+Normal linear models play a foundational role in statistical modelling. 
+In a sense, they can be seen as the backbone of most statistical modelling techniques. 
+In themselves, they comprise such well known and widely used models as simple and multiple linear regression, t-tests, Anova, Ancova, and related models, all of which we will cover in this chapter.
+They are the basis of all the classical and traditional approaches to path analysis, structural equation models, and factor analysis (see Chapter 14). 
+They can be extended in relatively simple ways to lead to the *generalized* linear models that include the logistic regression models for categorical data, or the count models such as Poisson or negative binomial regression (see Chapter 10 and Chapter 11).
+Their standard form may be generalized further to lead to the multilevel, also known as the hierarchical or mixed effects, linear models (see Chapter 12).
+Even the *nonlinear* models are often based on linear models, being linear combinations of nonlinear *basis functions* (see Chapter 13).
+
+## The univariate normal linear model
+
+In this chapter, we will deal exclusively with *univariate* normal linear models.
+In these models, we assume we have $n$ independent observations, that can be represented as $n$ pairs as follows.
+$$
+(y_1, \vec{x}_1), (y_2, \vec{x}_2) \ldots (y_i, \vec{x}_i) \ldots (y_n,\vec{x}_n).
+$$
+In each observation, the $y_i$ is the observed value of a univariate *outcome* variable.
+As we will see, the outcome variable is that which we are hoping to predict or explain or understand with the probabilistic model.
+On the other hand, the $\vec{x}_i = [x_{1i}, x_{2i} \ldots x_{ki} \ldots x_{Ki}]$ are a set of $K$ values that are used in the model to predict or explain each value $y_i$.
+Thus, each $\vec{x}_i$ are the observed values of a set of $K$ *predictor* or *explanatory* variables.
+There is no upper bound to the number $K$ of predictor variables we have.
+In terms of a lower bound, $K$ can be $0$, in fact, and this is important special case that often arises.
+
+The normal linear model of this data is as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad\mu_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$}.
+$$
+Here, $N(\mu_i, \sigma^2)$ denotes a univariate normal distribution with mean $\mu_i$ and variance $\sigma^2$.
+In other words, the normal linear model assumes that each observed value $y_i$ is a sample from a normal distribution whose mean is $\mu_i$, and whose standard deviation is $\sigma$, and the value of $\mu_i$ is a deterministic linear function of the values of the $K$ predictor variables. 
+
+It is important to see that this model is a probabilistic model of $y_1 \ldots y_n$.
+Specifically, it is a model of the probability of $y_1 \ldots y_n$ *conditional* on $\vec{x}_1 \ldots \vec{x}_n$, $\vec{\beta} = \beta_0, \beta_1 \ldots \beta_K$, and $\sigma$.
+Furthermore, it factors this probability distribution into a set of $n$ independent probability distributions.
+This can be written more formally as follows.
+$$
+\Prob{y_1 \ldots y_n \given \vec{x}_1 \ldots \vec{x}_n, \beta, \sigma^2} = 
+\prod_{i=1}^n \Prob{y_i \given \vec{x}_i, \vec{\beta}, \sigma^2} =
+\prod_{i=1}^n N(y_i \given \beta_0 + \textstyle{\sum}_k^K \beta_k x_{ki}, \sigma^2).
+$$
+Here, $\Prob{y_i \given \vec{x}_i, \vec{\beta}, \sigma^2}$ is the probability distribution for $y_i$, which is $N(y_i \given \beta_0 + \textstyle{\sum}_k^K \beta_k x_{ki}, \sigma^2)$, which is a normal distribution with mean $\beta_0 + \sum_k^K \beta_k x_{ki}$ and standard deviation of $\sigma$.
+
+Although we have observed $y_1, y_2 \ldots y_n$ and $\vec{x}_1, \vec{x}_2 \ldots \vec{x}_n$, we do not know the values of $\vec{\beta} = \beta_0, \beta_1 \ldots \beta_K$ or $\sigma$, and so these must be inferred on the basis of the observed data. 
+This can be done using classical or frequentist techniques or with Bayesian methods. 
+We will consider both approaches in this chapter.
+
+Having inferred the unknown variables, we then have a model of how the probability distribution of the outcome variable varies with changes of any or all of the predictor variables. 
+Amongst other things, this allows us to predict values of the outcome variable for any possible combination of values of the predictor variables.
+It also allows us to see how the probability distribution of the outcome variables varies with changes in any of the predictor variables assuming all other variables are held constant. 
+This is a particularly powerful feature of regression models generally as it allows us to identify spurious correlations between predictors and the outcome variable.
+
+As an example, let us consider a simple problem that we can analyse using a normal linear model.
+For this, we will use the `weight_df` data set that we already explored.
+```{r, echo=T}
+weight_df <- read_csv("data/weight.csv")
+```
+To simplify matters somewhat, we will initially just use data from males.
+```{r, echo=T}
+weight_male_df <- weight_df %>% 
+  filter(gender == 'male')
+```
+Let's say that our interest lies in understanding the distribution of the weights, which are measured in kilograms, of these men.
+A histogram of these weights is shown in Figure \ref{fig:male_weight_dist}.
+```{r male_weight_dist, fig.align='center', fig.cap='Histogram of the distribution of weights (kg) in a sample of men. The bin width is 5kg.', out.width='0.5\\textwidth'}
+weight_male_df %>% 
+  ggplot(aes(x = weight)) + 
+  geom_histogram(binwidth = 5, colour = 'white')
+```
+
+To begin with, let us imagine that we do not have any information concerning any other variable.
+In this case, our task is essentially to model the data that is being illustrated in the histogram in Figure \ref{fig:male_weight_dist}.
+Although this data is somewhat positively skewed (skewnsess is `r weight_male_df %>% pull(weight) %>% psych::skew() %>% round(2)`), it is unimodal and roughly bell-shaped, and so as a first approximation, we could model it as a normal distribution. 
+In other words, we assume that all the observed weights, which we will denote $y_1, y_2 \ldots y_n$, are samples from a normal distribution with a fixed and and unknown mean $\mu$ and fixed and unknown standard deviation $\sigma$.
+$$
+y_i \sim N(\mu, \sigma^2),\quad\text{for $i \in 1 \ldots n$.}
+$$
+This turns out to be identical to a normal linear regression model with $K=0$ predictor variables. 
+Using our definition of this model just provided, when $K=0$, the model is as follows.
+$$
+\begin{aligned}
+y_i &\sim N(\mu_i, \sigma^2),\quad\mu_i = \beta_0,\quad\text{for $i \in 1 \ldots n$},\\
+y_i &\sim N(\beta_0, \sigma^2),\quad\text{for $i \in 1 \ldots n$}.
+\end{aligned}
+$$
+In other words, the intercept term of the linear $\beta_0$ represents the mean of the normal distribution from which each of  $y_1, y_2 \ldots y_n$ is assumed to have been drawn.
+
+This model with no predictor variables essentially provides an *unconditional* probabilistic model of the weights $y_1, y_2 \ldots y_n$, and also its treats the probability distribution for each $y_i$ as independent of the others.
+We can write this as follows.
+$$
+\Prob{y_1 \ldots y_n \given \vec{\beta}, \sigma^2} = 
+\prod_{i=1}^n \Prob{y_i \given \beta, \sigma^2} = 
+\prod_{i=1}^n N(y_i \given \beta_0, \sigma^2).
+$$
+
+Now let us consider what happens when we use an explanatory variable, such as the men's heights, to help us understand the distribution of men's weights.
+In Figure \ref{fig:male_weight_dist_by_height}, we provide the histograms (a) and density plots (b) of weights subdivided by the quintile of the men's height. 
+In each quintile based group, we see that the distribution of heights is roughly normally distributed.
+We can also see that the means of these normal distributions increase as the height quintile increases.
+In fact, from Figure \ref{fig:male_weight_dist_by_height}c, which plots the mean height against the mean weight in each quintile group, we see that the mean weight increases almost perfectly linearly with the increase in mean height. 
+
+
+
+```{r, male_weight_dist_by_height, fig.align='center', fig.cap='The histograms (a) and density plots (b) of the weights in a sample of men who are subdivided according to the quintile of their heights. In (c), we plot the mean weight against the mean height in each quintile.', out.width='0.8\\textwidth', fig.height=7}
+P_1 <- weight_male_df %>% 
+  mutate(height_decile = ntile(height, 5)) %>% 
+  ggplot(aes(x = weight)) + 
+  geom_histogram(binwidth = 5, colour = 'white') +
+  facet_wrap(~height_decile) +
+  theme_minimal()
+
+P_2 <- weight_male_df %>% 
+  mutate(height_decile = ntile(height, 5)) %>% 
+  ggplot(aes(x = weight, y = height_decile, group = height_decile)) + 
+  geom_density_ridges(bandwidth = 10) + 
+  ylab('Height quintile')
+
+P_3 <- weight_male_df %>% 
+  mutate(height_decile = ntile(height, 5)) %>%
+  group_by(height_decile) %>% 
+  summarize(height = mean(height),
+            weight = mean(weight)) %>% 
+  ggplot(aes(x = height, y = weight)) + geom_point()
+
+plot_grid(P_1, 
+          plot_grid(P_2, P_3, labels = c('b', 'c')), 
+          labels = c('a', ''), 
+          nrow = 2)
+
+```
+
+Denoting the heights of the men by $x_1, x_2 \ldots x_n$, our new probabilistic model of their weights $y_1, y_2 \ldots y_n$ could be as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad\mu_i = \beta_0 + \beta_1 x_i,\quad\text{for $i \in 1 \ldots n$}.
+$$
+In other words, we our assuming that each observed weight $y_i$ is a sample drawn from a normal distribution.
+The mean of this normal distribution is determined by the corresponding observed height $x_i$ according to the linear relationship $\mu_i = \beta_0 + \beta_1 x_i$.
+For simplicity and convenience, but not of necessity, we also usually assume that the standard deviation of these distributions are all identical and have the value of $\sigma$. 
+This is the *homogeneity of variance* assume. 
+While it is widely and sometimes unquestionably made, it is at least somewhat dubious in this case as it appears that the standard deviation of the weight may be increasing as height increases.
+
+Although we have been referring specifically to the model above as being a model of the $n$ weights $y_1, y_2 \ldots y_n$, it is in fact a model of men's weight generally, with $y_1, y_2 \ldots y_n$ being just a sample from a *population* of men's weights.
+In particular, it provides us with a model of the distribution of male weight conditional on their height.
+For example, according to the model, for any given male height $x^\prime$, the corresponding distribution of male weights is normally distributed with a mean $\mu^\prime = \beta_0 + \beta_1 x^\prime$ and standard deviation $\sigma$.
+It also tells us that as height changes by any amount $\Delta_x$, the mean of the corresponding normal distribution over weight changes by exactly $\beta_1 \Delta_x$.
+This fact entails that if height changes by exactly $\Delta_x  = 1$, the mean of the corresponding normal distribution over weight changes by exactly $\beta_1$. 
+From this, we have the general interpretation of the coefficient $\beta_1$ in a linear model with a single predictor as the change in the average of the distribution over the outcome variable for a *unit change* in the predictor variable.
+
+We may use more explanatory variables to predict or explain the distribution of men's heights.
+For example, we also have a variable `age` that gives us the men's age in years. 
+And so we can see how the distribution of weight varies as either, or both, the height and the age of men changes.
+```{r male_weight_dist_by_height_age, fig.align='center', fig.cap='The density of male weight for the different quintiles of male height, and the different terciles of age. Although the changes by age are subtle, by paying attention to the vertical grid lines we see that for any given height, as age increases, so too does the average of the weight distribution.', out.width='0.8\\textwidth'}
+weight_male_df %>% 
+  mutate(height_decile = ntile(height, 5),
+         age_tercile = ntile(age, 3)) %>% 
+  ggplot(aes(x = weight, y = height_decile, group = height_decile)) + 
+  geom_density_ridges(bandwidth = 10.1) + 
+  ylab('Height quintile') + 
+  facet_grid(~age_tercile,
+             labeller = label_both
+             ) + theme_minimal()
+```
+In Figure \ref{fig:male_weight_dist_by_height_age}, we see the density plots of male weight for each height quintile and each age tercile.
+For any given combination of height and age, we have a distribution over weight that can be modelled as a normal distribution. 
+For any given age tercile, as height increases, so too does the average of the distribution of weight.
+Likewise, for any given height quintile, as age increases, so too does the average distribution of weight.
+
+Denoting the men's heights by $x_{11}, x_{12} \ldots x_{1i} \ldots x_{1n}$ and the men's ages by $x_{21}, x_{22} \ldots x_{2i} \ldots x_{2n}$, the model is now 
+$$
+y_i \sim N(\mu_i, \sigma^2)\quad \mu_i = \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i}.
+$$
+If the height variable changes by $\Delta_{x_1}$, when age is held constant, then the average value of the corresponding distribution of weight changes by $\beta_1 \Delta_{x_1}$.
+Conversely, if the age variable changes by $\Delta_{x_2}$, when height is held constant, then the average value of the corresponding distribution of weight changes by $\beta_2 \Delta_{x_2}$.
+The value of $\beta_1$ gives us the rate of change of the average of the distribution of men's weights for every unit change in height, assuming age is held constant
+The value of $\beta_2$ gives us the rate of change of the average of the distribution of men's weights for every unit change in age, assuming height is held constant.
+
+
+
+
+# Classical approaches to normal linear models
+
+Given observed values of an outcome variable $y_1, y_2 \ldots y_n$, and given $n$ corresponding vectors of $K$ predictor variables $\vec{x}_1, \vec{x}_2 \ldots \vec{x}_n$, and if we model $y_1, y_2 \ldots y_n$ using the normal linear model
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad\mu_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$},
+$$
+then we immediately face the problem of inferring the values of the unknown variables[^variables_or_parameters] $\beta_0, \beta_1 \ldots \beta_K$ and $\sigma$.
+As discussed in the previous chapter, here are two main approaches to the inference of the unknown variables: maximum likelihood estimation and Bayesian inference. 
+Of these two approaches, maximum likelihood estimate is both the default and traditional approach, and we will consider in this section. 
+However, Bayesian methods have been steadily increasing in their popularity for decades and there is now powerful and flexible yet simple to use Bayesian regression modelling software available in R, and so this will be covered in a subsequent section.
+
+
+[^variables_or_parameters]: It should be noted that some approaches to statistical inference insist on referring to these variables as *parameters* rather variables per se, preferring to reserve the term variables for observed or latent data variables. 
+However, we will not insist upon this term here for reasons that will hopefully become clear as we proceed.
+
+
+
+## Maximum likelihood estimation
+
+As we have seen in the previous chapter, maximum likelihood estimation estimates the values of the unknown variables in the model as those that maximize the model's likelihood function.
+The likelihood function is a function over the unknown variable space, which in this case is a $K + 2$ dimensional space (i.e., the $K + 1$ coefficients $\beta_0, \beta_1 \ldots \beta_K$ and $\sigma$). 
+We will denote this space by $\Theta$ and a point in this space, which is a particular set of values for $\beta_0, \beta_1 \ldots \beta_K, \sigma$ by $\theta$.
+The value of the likelihood function at the point $\theta$ gives the probability of the observed data when the unknown variables are equal to $\theta$.
+If we denote the observed data, which in our case is $(y_1, \vec{x}_1), (y_2, \vec{x}_2) \ldots (y_i, \vec{x}_i) \ldots (y_n,\vec{x}_n)$, by $\mathcal{D}$, the likelihood function can be written as[^likelihood] 
+$$
+L(\theta \given \mathcal{D})= \Prob{\mathcal{D}\given \theta}.
+$$
+The maximum likelihood estimator, denoted $\hat{\theta}$ is the value that maximizes this function and so is defined as follows.
+$$
+\hat{\theta} = \argmax_{\theta} L(\theta \given \data).
+$$
+Note that because the logarithm is a monotonic function, maximizing the logarithm of $L(\theta \given \data)$ is the same as maximizing $L(\theta \given \data)$, which is the same as minimizing the negative of the logarithm of $L(\theta \given \data)$.
+$$
+\hat{\theta} = \argmax_{\theta} L(\theta \given \data) = \argmax_{\theta} \log L(\theta \given \data) = \argmin_{\theta} - \log L(\theta \given \data).
+$$
+The logarithm of $L(\theta\given \data)$ is as follows.
+$$
+\begin{aligned}
+\log L(\theta \given \data) = 
+\log \Prob{\data \given \theta} &= 
+\log \prod_{i=1}^n \Prob{y_i \given x_i, \beta, \sigma}\\
+&= \sum_{i=1}^n \log \Prob{y_i \given x_i, \beta, \sigma}\\
+&= \sum_{i=1}^n \log \frac{1}{\sqrt{2\pi\sigma^2}} 
+    \exp\left(-\frac{|y_i - \mu_i|^2}{2\sigma^2}\right),\\
+&= -\frac{n}{2}\log(2\pi\sigma^2) -\frac{1}{2\sigma^2}\sum^n_{i=1} |y_i - \mu_i|^2,
+\end{aligned}
+$$
+where $\mu_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki}$.
+
+[^likelihood]: More strictly speaking, we should define $L(\theta \given \mathcal{D})$ as $L(\theta \given \mathcal{D})= c \cdot \Prob{\mathcal{D}\given \theta}$, where $c$ is an arbitrary positive constant.
+
+
+The difference 
+$$
+y_i - \mu_i = y_i - \left(\beta_0 + \sum_{k=1}^K \beta_k x_{ki}\right)
+$$
+is known as the *residual*. 
+It is the difference between the observed value of the outcome variable $y_i$ and the mean of the outcome variable according to the linear function of $\vec{x}_i$. In a simple linear model, with one predictor variable, we can easily visualize residuals.
+These are shown as the vertical blue line segments in Figure \ref{fig:residuals}.
+
+```{r residuals, fig.align='center', out.width='\\textwidth', fig.cap='A set of five points $(y_1, x_1), (y_2, x_2) \\ldots (y_5, x_5)$ are shown in black in both subfigures. Likewise, in each figure, a line $y = mx + c$ is shown in red, with different values of $m$ and $c$ in each case. The points in red are $(\\hat{y}_1, x_1), (\\hat{y}_2, x_2) \\ldots (\\hat{y}_5, x_5)$ where each $\\hat{y}_i = mx_i + c$. In other words, the points in red are the values of the linear function $y = mx + c$ that correspond to the sequence $x_1, x_2 \\ldots x_5$. The line segments shown in blue are the residuals. These are the vertical differences between the points $y_1, y_2 \\ldots y_5$ and the points $\\hat{y}_1, \\hat{y}_2 \\ldots \\hat{y}_5$. The sum of the squared residuals is less in subfigure b) than in subfigure a), and so we say that the line in b) is a better fit to the data. In general, in normal linear regression, finding the line that minimizes the sum of the squared residuals gives us the maximum likelihood estimator of the regression coefficients. Usually, we call the line minimizing the sum of the squared residuals the \\emph{line of best fit}.', fig.height=3}
+set.seed(142)
+Df <- tibble(x = c(1, 2, 3, 4, 5),
+       y = 2 + 1.25 * x + rnorm(5, sd = 1)
+) 
+
+M <- lm(y ~ x, data = Df)
+pred <- predict(M)
+alt <- 2.15 + 1.35 * Df$x 
+  
+P_1 <- Df %>% ggplot() + 
+  geom_point(aes(x, y)) +
+  geom_point(aes(x, alt), colour = 'red') +
+  geom_line(aes(x, alt), colour = 'red', size = 0.5, alpha = 0.5) +
+  geom_segment(aes(x = x, xend = x, y = y, yend = alt), colour = 'blue')
+
+P_2 <- Df %>% ggplot() + 
+  geom_point(aes(x, y)) +
+  geom_point(aes(x, pred), colour = 'red') +
+  geom_line(aes(x, pred), colour = 'red', size = 0.5, alpha = 0.5) +
+  geom_segment(aes(x = x, xend = x, y = y, yend = pred), colour = 'blue')
+
+plot_grid(P_1, P_2,
+          labels = c('a', 'b'), 
+          nrow = 1)
+
+```
+
+
+
+The sum of the squared residuals is 
+$$
+\textrm{RSS} = \sum^n_{i=1} |y_i - \mu_i|^2.
+$$ 
+\textrm{RSS} is obviously the summation term in $\log L(\theta\given \data)$.
+This will always be positive, and so the larger it is, the lower the likelihood.
+Thus, for any value of $\sigma$, maximizing the likelihood with respect to $\beta_0, \beta_1 \ldots \beta_K$ will always be obtained by minimizing \textrm{RSS}.
+This is an important result, it tells us that maximum likelihood estimator for the coefficients $\beta_0, \beta_1 \ldots \beta_K$ can be obtained by minimizing the sum of the squared residuals. 
+In linear regression, the line that minimizes \textrm{RSS} is known as the *line of best fit*.
+
+In order to find the values of $\vec{\beta}$ that minimize \textrm{RSS}, it is helpful to write \textrm{RSS} in matrix form. 
+First note that 
+$$
+\textrm{RSS} = \vec{\epsilon}\strut^\intercal \vec{\epsilon},
+$$
+where
+$$
+\boldsymbol{\epsilon} = [\epsilon_1, \epsilon_2 \ldots \epsilon_n]^\intercal,
+$$
+and 
+$$
+\epsilon_i = y_i - \mu_i.
+$$
+We may then write $\vec{\epsilon}$ in matrix form as follows.
+$$
+\vec{\epsilon}= 
+\left[
+\begin{matrix}
+\epsilon_1\\
+\epsilon_2\\
+\vdots\\
+\epsilon_i\\
+\vdots\\
+\epsilon_n
+\end{matrix}
+\right] 
+=
+\left[
+\begin{matrix}
+y_1\\
+y_2\\
+\vdots\\
+y_i\\
+\vdots\\
+y_n
+\end{matrix}
+\right] - 
+\left[
+\begin{matrix}
+\mu_1\\
+\mu_2\\
+\vdots\\
+\mu_i\\
+\vdots\\
+\mu_n
+\end{matrix}
+\right]
+=
+\left[
+\begin{matrix}
+y_1\\
+y_2\\
+\vdots\\
+y_i\\
+\vdots\\
+y_n
+\end{matrix}
+\right] - 
+\left[
+\begin{matrix}
+1 & x_{11} & x_{21} &\ldots& x_{K1}\\
+1 & x_{12} & x_{22} &\ldots& x_{K2}\\
+\vdots & \vdots & \vdots &\ldots& \vdots\\
+1 & x_{1i} & x_{2i} &\ldots& x_{Ki}\\
+\vdots & \vdots & \vdots &\ldots& \vdots\\
+1 & x_{1n} & x_{1n} &\ldots& x_{Kn}
+\end{matrix}
+\right]
+\left[
+\begin{matrix}
+\beta_0\\
+\beta_1\\
+\vdots\\
+\beta_K
+\end{matrix}
+\right] 
+=
+\vec{y} - X\vec{\beta }
+$$
+The crucial part here is writing $\vec{\mu} = [\mu_1, \mu_2 \ldots \mu_i \ldots \mu_n]^\intercal$ as a matrix vector multiplication, i.e. $\vec{\mu} = X\vec{\beta}$.
+Here, $X$ is a $n \times (K+1)$ matrix whose first column is all ones, and each subsequent column is the $n$ observations of each of the $K$ predictor variables.
+This matrix $X$ is usually known as the *design* matrix.
+
+From this, we have
+$$
+\textrm{RSS} = (\vec{y} - X\vec{\beta})\strut^\intercal (\vec{y} - X\vec{\beta}).
+$$
+This can be expanded as follows.
+$$
+\textrm{RSS} = \vec{y}\strut^\intercal \vec{y} - 2 \vec{y} X \vec{\beta} + \vec{\beta}^\intercal X\strut^\intercal X \vec{\beta}.
+$$
+In order to find the minimum of \textrm{RSS} with respect to $\vec{\beta}$, we can calculate the gradient of \textrm{RSS} with respect to $\vec{\beta}$, set this to equal to zero, and solve for $\beta$.
+To simplify the calculation, we may instead calculate the gradient of $\frac{1}{2}\textrm{RSS}$ with respect to $\vec{\beta}$, set this to equal to zero, and solve for $\beta$, and arrive at the same result.
+The gradient is as follows.
+$$
+\nabla_{\beta} \frac{\textrm{RSS}}{2} = X\strut^\intercal X\vec{\beta} -X\strut^\intercal \vec{y}.
+$$
+Setting this equal to zero we get 
+$$
+X\strut^\intercal X\vec{\beta} = X\strut^\intercal \vec{y}.
+$$
+Then solving[^solving]  for $\vec{\beta}$ we get
+$$
+\hat{\beta} = (X\strut^\intercal X)\strut^{-1} X\strut^\intercal \vec{y}.
+$$
+Thus, $\hat{\beta}$ is the maximum likelihood estimator for $\beta$.
+
+[^solving]: This assumes that $X\strut^\intercal X$ is invertible, which it will be if $K < n$.
+
+To obtain the maximum likelihood for $\sigma^2$, we calculate the partial derivative of $\log L(\theta \given \mathcal{D})$ with respect to $\sigma^2$ when $\vec{\beta}$ is set to $\hat{\beta}$.
+Then we set this derivative equal to zero and solve for $\sigma^2$.
+
+The log of the likelihood when $\vec{\beta} = \hat{\beta}$ can be written as follows.
+$$
+-\frac{n}{2}\log(2\pi) -\frac{n}{2}\log(\sigma^2) -\frac{1}{2\sigma^2}(\vec{y} - X\hat{\beta})\strut^\intercal (\vec{y} - X\hat{\beta}).
+$$
+The derivative of this function with respect $\sigma^2$ is 
+$$
+-\frac{n}{2\sigma^2} -\frac{1}{2\sigma^4}(\vec{y} - X\hat{\beta})\strut^\intercal (\vec{y} - X\hat{\beta}).
+$$
+Setting this equal to zero, multiplying both sides by $2\sigma^2$ to simplify it, and then solving for $\sigma^2$, we obtain
+$$
+\begin{aligned}
+\hat{\sigma}_{\textrm{mle}}^2 &= \frac{1}{n} (\vec{y} - X\hat{\beta})\strut^\intercal (\vec{y} - X\hat{\beta}),\\
+               &= \frac{1}{n} \sum_{i=1}^n | y_i - \hat{\mu}_i|^2,
+\end{aligned}
+$$
+where $\hat{\mu}_i = \hat{\beta}_0 + \sum_{}^{} \hat{\beta}_k x_{ki}$ is the mean of the outcome variable corresponding to $\vec{x}_i$ assuming the coefficients are $\hat{\beta}$.
+Thus, the maximum likelihood estimate of $\sigma^2$ is the mean of the squared residuals, and the maximum likelihood estimator of $\sigma$ is the square root of this mean. 
+
+It turns out that the maximum likelihood estimator $\hat{\sigma}^2$ is a biased estimator of the true value of $\sigma^2$.
+An unbiased estimator is as follows.
+$$
+\begin{aligned}
+\hat{\sigma}^2 &= \frac{1}{n - K - 1} \sum_{i=1}^n | y_i - \hat{\mu}_i|^2,\\
+               &= \frac{n}{n - K - 1} \hat{\sigma}_{\textrm{mle}}^2
+\end{aligned}
+$$
+This version is used widely as the estimator of $\sigma^2$.
+
+Having calculated the maximum likelihood estimators $\hat{\beta}$ and $\hat{\sigma}_{\textrm{mle}}$, we can now evaluate the log of the likelihood function at its maximum by substituting $\hat{\beta}$ and $\hat{\sigma}_{\textrm{mle}}$ for $\vec{\beta}$ and $\sigma$, respectively, in the log likelihood function.
+$$
+L(\theta \given \data) = -\frac{n}{2}\log(2\pi) -\frac{n}{2}\log(\sigma^2) -\frac{1}{2\sigma^2}(\vec{y} - X\vec{\beta})\strut^\intercal (\vec{y} - X\vec{\beta}).
+$$
+This is 
+$$
+\begin{aligned}
+\log L(\theta = \{\hat{\beta}, \hat{\sigma}_{\textrm{mle}} \}\given \data) &= 
+-\frac{n}{2}\log(2\pi) -\frac{n}{2}\log(\hat{\sigma}^2_{\textrm{mle}}) -\frac{1}{2\hat{\sigma}_{\textrm{mle}}^2}(\vec{y} - X\hat{\beta})\strut^\intercal (\vec{y} - X\hat{\beta}),\\
+&= -\frac{n}{2}\log(2\pi) -\frac{n}{2}\log(\hat{\sigma}^2_{\textrm{mle}}) - \frac{n}{2},\\
+&= -\frac{n}{2}\left(\log(2\pi) + \log(\hat{\sigma}^2_{\textrm{mle}}) + 1 \right),\\
+&= -\frac{n}{2}\left(\log(2\pi) - \log(n) + \log\left(\textrm{RSS} \right) + 1 \right).
+\end{aligned}
+$$
+
+## Maximum likelihood estimation using `lm`
+
+The main command for doing normal linear modelling in R is `lm`. 
+This is probably the most widely used statistical modelling command in R.
+
+As an example, we will model `weight` as a function of `height` and `age` in the sample of men in the `weight_male_df`
+```{r, echo=T}
+M <- lm(weight ~ height + age, data = weight_male_df)
+```
+The first thing we usually do with the object returned by `lm` is to look at the output provided by the `summary` function.
+```{r, echo=T}
+summary(M)
+```
+Although there is a lot of valuable information here, we will not pick it all apart immediately, preferring instead to concentrate on individual results one at a time through this and subsequent sections.
+
+We will begin by focusing on the estimated values of the coefficients $\beta_0$ (the intercept), $\beta_1$ (coefficient for height), $\beta_2$ (coefficient for age).
+These are available in the `Coefficients` section of the summary output under the column labelled `Estimate`.
+They may also be returned directly using the `coef` (or equivalently, the `coefficients`) function.
+```{r, echo=T}
+(estimates <- coef(M))
+```
+
+The meaning of these values is as follows. 
+The coefficient for height, `r estimates['height']`, gives the estimated change in average of the distribution of `weight` for every unit increase of `height`, assuming `age` is held constant. 
+The coefficient for age, `r estimates['age']`, gives the estimated change in average of the distribution of `weight` for every unit increase of `age`, assuming `height` is held constant. 
+Because understanding the meaning of the coefficients in regression analyses is so important, let us go through these values carefully.
+First, assume that we have a very large group of men who have exactly the same age in years. 
+It in fact does not matter what particular age they are, but for concreteness, let's just assume their age is 30 years.
+Then, we find all the men in this group who have a particular height.
+Again, it does not matter which height we choose, but for concreteness, let's assume we look at those that have a height of 175cm. 
+Now, we will look at the distribution of the weight of these men who are 30 years old and 175cm. 
+Our model assumes that it will be a normal distribution whose mean, which we will denote by $\hat{\mu}_{(175, 30)}$, is estimated to be (rounding the coefficients to three decimal places) as follows.
+$$
+\hat{\mu}_{(175, 30)} = `r round(estimates['(Intercept)'], 3)` + `r round(estimates['height'], 3)` \cdot 175 + `r round(estimates['age'], 3)` \cdot 30 = `r round(estimates %*% c(1, 175, 30), 2)`.
+$$
+Now, let us assume we stay with the 30 year men, but find all the men in this age group whose heights are 176 rather than 175.
+The corresponding mean of the distribution of weight would change by exactly `r round(estimates['height'], 3)`.
+We can see this as follows.
+$$
+\begin{aligned}
+\hat{\mu}_{(176, 30)} &= `r round(estimates['(Intercept)'], 3)` + `r round(estimates['height'], 3)` \cdot 176 + `r round(estimates['age'], 3)` \cdot 30,\\
+&= `r round(estimates['(Intercept)'], 3)` + `r round(estimates['height'], 3)` \cdot (175 + 1) + `r round(estimates['age'], 3)` \cdot 30,\\
+&= `r round(estimates['(Intercept)'], 3)` + `r round(estimates['height'], 3)` \cdot 175 + `r round(estimates['age'], 3)` \cdot 30 + `r round(estimates['height'], 3)`,\\
+&= \hat{\mu}_{(176, 30)} + `r round(estimates['height'], 3)`,\\
+&= `r round(estimates %*% c(1, 176, 30), 2)`.
+\end{aligned}
+$$
+Were we to choose 30 year men whose heights were 177, then the corresponding mean of the distribution of weights would again increase by exactly `r round(estimates['height'], 3)`.
+This increase by `r round(estimates['height'], 3)` for every unit increase in `height` would occur regardless of what age group we were focusing on.
+For example, if instead of looking at 30 year old men, we looked at 40 year men, and then looked at men in this age group who were 175, 176, or 177 cm, etc., we would see that the average of the corresponding distribution of weight would increase by `r round(estimates['height'], 3)` for each cm change in height.
+$$
+\begin{aligned}
+\hat{\mu}_{(175, 40)} &= `r round(estimates['(Intercept)'], 3)` + `r round(estimates['height'], 3)` \cdot 175 + `r round(estimates['age'], 3)` \cdot 40,\\
+\hat{\mu}_{(176, 40)} &= `r round(estimates['(Intercept)'], 3)` + `r round(estimates['height'], 3)` \cdot 176 + `r round(estimates['age'], 3)` \cdot 40,\\
+&= `r round(estimates['(Intercept)'], 3)` + `r round(estimates['height'], 3)` \cdot (175 + 1) + `r round(estimates['age'], 3)` \cdot 40,\\
+&= `r round(estimates['(Intercept)'], 3)` + `r round(estimates['height'], 3)` \cdot 175 + `r round(estimates['age'], 3)` \cdot 40 + `r round(estimates['height'], 3)`,\\
+&= \hat{\mu}_{(175, 40)} + `r round(estimates['height'], 3)`,\\
+\hat{\mu}_{(177, 40)} &= `r round(estimates['(Intercept)'], 3)` + `r round(estimates['height'], 3)` \cdot 177 + `r round(estimates['age'], 3)` \cdot 40,\\
+&= `r round(estimates['(Intercept)'], 3)` + `r round(estimates['height'], 3)` \cdot (176 + 1) + `r round(estimates['age'], 3)` \cdot 40,\\
+&= `r round(estimates['(Intercept)'], 3)` + `r round(estimates['height'], 3)` \cdot 176 + `r round(estimates['age'], 3)` \cdot 40 + `r round(estimates['height'], 3)`,\\
+&= \hat{\mu}_{(176, 40)} + `r round(estimates['height'], 3)`.
+\end{aligned}
+$$
+Reasoning along these lines, we can see that when we hold `age` constant at any value, and increase `height` by 1cm from any starting value, the corresponding mean of the distribution of `weight` always increases by `r round(estimates['height'], 3)`.
+Similarly, and for identical reasons, if we hold `height` constant at any value, and increase `age` by 1 year from any starting value, the corresponding mean of the distribution of `weight` always increases by `r round(estimates['age'], 3)`.
+
+The intercept term, by contrast, can sometimes be relatively meaningless.
+It is always exactly the average of the distribution of the outcome variable when the predictor variable or variables have values of zero.
+Given that having zero as the value of `height` and `age` is essentially meaningless, so too then is the value of the intercept term. 
+However, when values of zero of the predictor are meaningful, then likewise the intercept is meaningful too.
+Consider, the situation where we change `height` and `age` by subtracting their mean values. 
+As a result, both have means of zero, and their values indicate the difference from the man's height or age from average.
+We can perform the same regression analysis as above with these zero mean `height` and `age` variables.
+```{r, echo=T}
+weight_male_df %>% 
+  mutate(height = height - mean(height),
+         age = age - mean(age)
+  ) %>% lm(weight ~ height + age, data = .) %>% 
+  coef()
+```
+```{r}
+estimates_zero_mean <- weight_male_df %>% 
+  mutate(height = height - mean(height),
+         age = age - mean(age)
+  ) %>% lm(weight ~ height + age, data = .) %>% 
+  coef()
+```
+
+As we can see, the coefficients for `height` and `age` are as before. 
+However, the intercept term is now `r round(estimates_zero_mean['(Intercept)'], 3)` rather than `r round(estimates['(Intercept)'], 3)` as in the original model.
+As the intercept is always the average of the distribution of the outcome variable when the predictors are zero, and because the predictors having a value of zero denote a person of average height and average age, then the intercept term of `r round(estimates_zero_mean['(Intercept)'], 3)` is simply the mean of the distribution of weight for a man of average height and age.
+
+
+
+
+Let us now verify that coefficients calculated above (in the original model) are the maximum likelihood estimators defined by $\hat{\beta} = (X\strut^\intercal X)\strut^{-1} X\strut^\intercal \vec{y}$.
+For this, we will use some of R's matrix operations, particularly `t()` for the matrix transpose, `%*%` for matrix multiplication or inner product, and `solve` for the matrix inverse.
+```{r, echo=T}
+y <- weight_male_df %>% pull(weight)
+n <- length(y)
+
+# design matrix
+X <- weight_male_df %>% 
+  mutate(intercept = 1) %>% 
+  select(intercept, height, age) %>% 
+  as.matrix()
+
+# beta hat
+solve(t(X) %*% X) %*% t(X) %*% y
+```
+Clearly, these are the values returned by `coefficients(M)`.
+
+While the design matrix above was simple to create, in general it is easier to use tools in R such as `modelr::model_matrix` or base R's `model.matrix`.
+```{r, echo=T}
+library(modelr)
+
+X <- model_matrix(weight_male_df, weight ~ height + age) %>% 
+  as.matrix()
+
+# beta hat
+solve(t(X) %*% X) %*% t(X) %*% y
+```
+
+As mentioned, the unbiased estimator of $\sigma$ in this model is 
+$$
+\hat{\sigma} = \sqrt{\frac{1}{n - K - 1} \sum_{i=1}^n | y_i - \hat{\mu}_i|^2}.
+$$
+This is return by the command `sigma` applied to the model `M`.
+```{r, echo=T}
+sigma(M)
+```
+We can verify that the value of `sigma(M)` is $\hat{\sigma}^2$ by using the vector of residuals, i.e. $\vec{\epsilon} = [y_1 - \hat{\mu}_1, y_2 - \hat{\mu}_2 \ldots y_n - \hat{\mu}_n]^\intercal$, which can obtained by `residuals(M)`.
+```{r, echo=T}
+n <- nrow(X)
+K <- ncol(X) - 1
+
+epsilon <- residuals(M)
+
+sqrt(sum(epsilon^2)/(n - K - 1))
+```
+We can also verify that $\hat{\sigma} = \sqrt{\tfrac{n}{n - K - 1} \hat{\sigma}^2_{\textrm{mle}}}$.
+```{r, echo=T}
+sigma2_mle <- mean(epsilon^2)
+sqrt(n * sigma2_mle/(n - K - 1))
+```
+
+The value of the log of the likelihood at its maximum can be obtained from the `logLik` function applied to `M`.
+```{r, echo=T}
+logLik(M)
+```
+We can verify that this gives us the following 
+$$
+\log L(\theta = \{\hat{\beta}, \hat{\sigma}_{\textrm{mle}} \}\given \data) =  
+-\frac{n}{2}\left(\log(2\pi) - \log(n) + \log\left(\textrm{RSS} \right) + 1 \right).
+$$
+```{r, echo=T}
+rss <- sum(epsilon^2)
+-(n/2) * (log(2*pi) - log(n) + log(rss) + 1)
+```
+
+## Sampling distribution of $\hat{\beta}$
+
+In general, in a normal linear model, we assume that $y_1, y_2 \ldots y_n$ was generated as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad\mu_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$},
+$$
+where $\beta_0, \beta_1 \ldots \beta_K$ and $\sigma$ have some fixed but unknown values.
+Let us denote the true, but unknown, values of $\beta_0, \beta_1 \ldots \beta_K$ and $\sigma$ by $\betatrue$ and $\sigmatrue$, respectively.
+Using the matrix notation from before, this means that we are assuming that
+$$
+\vec{y} \sim N(X\betatrue, I_{\sigmatrue^2}),
+$$
+where $I_{\sigmatrue^2}$ is an $n \times n$ diagonal matrix with $\sigmatrue^2$ at each value on the diagonal.
+This means that
+$$
+\vec{y} = X\betatrue + \vec{\epsilon},\quad \vec{\epsilon} \sim N(0, I_{\sigmatrue^2}).
+$$
+
+We have established that $\hat{\beta}$ is 
+$$
+\hat{\beta} = (X\strut^\intercal X)\strut^{-1} X\strut^\intercal \vec{y}.
+$$
+Therefore, we have 
+$$
+\begin{aligned}
+\hat{\beta} &= (X\strut^\intercal X)\strut^{-1} X\strut^\intercal (X\betatrue + \vec{\epsilon}),\\
+            &= (X\strut^\intercal X)\strut^{-1} X\strut^\intercal X\betatrue + (X\strut^\intercal X)\strut^{-1} X\strut^\intercal\vec{\epsilon},\\
+            &= \betatrue + (X\strut^\intercal X)\strut^{-1} X\strut^\intercal\vec{\epsilon}.
+\end{aligned}
+$$
+Because $\vec{\epsilon}$ is a zero mean (multivariate) normally distributed random variable, $(X\strut^\intercal X)\strut^{-1} X\strut^\intercal\vec{\epsilon}$ is also a zero mean normally distributed random variable, and its variance can be shown to be $\sigmatrue^2 (X\strut^\intercal X)\strut^{-1}$.
+From this, we obtain
+$$
+\hat{\beta} \sim N(\betatrue, \sigmatrue^2 (X\strut^\intercal X)\strut^{-1}).
+$$
+This is the sampling distribution of the maximum likelihood estimator $\hat{\beta}$.
+From this, for any given element of $\hat{\beta}$, its sampling distribution is 
+$$
+\hat{\beta}_k \sim N(\beta^\star_k, \sigmatrue^2 (X\strut^\intercal X)\strut^{-1}_{kk}).
+$$
+This entails that
+$$
+\frac{\hat{\beta}_k - \beta^\star_k}{\sigmatrue \sqrt{(X\strut^\intercal X)\strut^{-1}_{kk}}}
+\sim
+N(0, 1).
+$$
+
+For the unbiased estimator $\hat{\sigma}^2$, it can shown that
+$$
+(n - K - 1)\frac{\hat{\sigma}^2}{\sigmatrue^2} \sim \chi^2_{n - K - 1}.
+$$
+For any variable $Z$ distributed as a standard normal distribution and any variable $V$ distributed as a $\chi^2$ distribution with $\nu$ degrees of freedom, we have the following result.
+$$
+Z \sqrt{\frac{\nu}{V}} \sim t_{\nu},
+$$
+where $t_\nu$ indicates a t-distribution with $\nu$ degrees of freedom.
+From this, we have the following result.
+$$
+\frac{\hat{\beta}_k - \beta^\star_k}{\sigmatrue \sqrt{(X\strut^\intercal X)\strut^{-1}_{kk}}}
+\sqrt{\frac{(n - K - 1)}{(n - K - 1)\frac{\hat{\sigma}^2}{\sigmatrue^2}}}
+= 
+\frac{\hat{\beta}_k - \beta^\star_k}{\hat{\sigma} \sqrt{(X\strut^\intercal X)\strut^{-1}_{kk}}}
+=
+\frac{\hat{\beta}_k - \beta^\star_k}{\hatse_k}
+\sim t_{n - K - 1}.
+$$
+
+We usually refer to $\hat{\sigma} \sqrt{(X\strut^\intercal X)\strut^{-1}_{kk}}$ as the *standard error* of the estimator $\hat{\beta}_k$, and so we denote it here by $\hatse_k$.
+With this result, as we will see, we may use our estimator of $\hat{\beta}_k$ to test the hypotheses that $\beta^\star_k$ has any given value. 
+Likewise, we may use this result to calculate confidence intervals for $\hat{\beta}_k$.
+
+
+
+## Hypothesis testing and confidence intervals using `lm`
+
+The standard errors for all $K + 1$ estimators $\hat{\beta}_0, \hat{\beta}_1 \ldots \hat{\beta}_K$ can be obtained from the coefficients table that is given in the `summary(M)`.
+We extract this table as an attribute of the `summary` output as follows.
+```{r, echo=T}
+summary(M)$coefficients
+```
+The standard errors are obviously given by the second column, which we extract as a vector.
+```{r, echo=T}
+(std_err <- summary(M)$coefficients[,2])
+```
+Let us first verify that these are $\hat{\sigma} \sqrt{\diag{(X\strut^\intercal X)\strut^{-1}}}$, where $\textrm{diag}$ extracts the diagonal of a square matrix.
+```{r, echo=T}
+sigma(M) * sqrt(diag(solve(t(X) %*% X)))
+```
+
+Now, should we wish test a null hypothesis that the true value of the coefficient for the height predictor is zero, i.e. $H_0\colon \beta^\star_{\text{height}} = 0$, we know that under this hypothesis $\hat{\beta}_{\text{height}}/\textrm{se}_{\text{height}}$ is distributed as t-distribution with $n - K - 1$ degrees of freedom. 
+The observed value of this t-statistic is as follows.
+```{r, echo=T}
+(t_stat <- estimates['height']/std_err['height'])
+```
+
+Note that this value is available in the `t value` column in the coefficients table above.
+The p-value corresponding to this t-statistic gives the probability of a getting a result as or more extreme than this value in a t-distribution with $n - K - 1 = `r n -K - 1`$ degrees of freedom.
+In this case, this probability of having a value greater than `r abs(t_stat)` *or* lower than `r -abs(t_stat)` in this t-distribution.
+In other words, it is the sum of two tail areas in a t-distribution.
+Because this t-distribution is symmetrical and centred at zero, the two tail areas probabilities are identical, and so their sum is any one of them multiplied by two. 
+
+To calculate the tail areas in a t-distribution we need its cumulative distribution function.
+If we denote the density function of a t-distribution with $\nu$ degrees of freedom by $t(x \given \nu)$, the corresponding cumulative distribution function is
+$$
+T_{\nu}(x) = \int_{-\infty}^x t(x^\prime \given \nu) dx^\prime.
+$$
+For any value $x$, $T_\nu(x)$ is the probability of getting a result less than or equal to $x$ in a t-distribution with $\nu$ degrees of freedom.
+This function is implemented in R using the `pt` function.
+For example, if $x = 1.5$ and $\nu = 5$, then $T_{\nu = 5}(x = 1.5)$ is obtained as follows.
+```{r, echo=T}
+pt(1.5, df = 5)
+```
+If we wanted the $1 - T_\nu(x) = \int_{x}^\infty t(x^\prime \given \nu) dx^\prime$, we could use the `lower.tail = FALSE` option in `pt`. 
+For example, the probability of getting a value *greater* than $x = 1.5$ in a t distribution with $\nu = 5$ is 
+```{r, echo=T}
+pt(1.5, df = 5, lower.tail = F)
+```
+Therefore, to get the sum of the tail areas, we do the following.
+```{r, echo=T}
+pt(t_stat, df = n-K-1, lower.tail = F) * 2
+```
+As we can see, this (very small) number is what is also reported in the `Pr(>|t|)` column in the summary coefficients table.
+
+For the calculation of confidence intervals, we need the inverse of the cumulative distribution function, defined as $T^{-1}_{\nu}(p)$ where $p \in (0, 1)$.
+This returns the value $x$ such that $T_\nu(x) = p$.
+If a variable $x$ has a t-distribution with $\nu$ degrees of freedom, we can make statements like 
+$$
+\begin{aligned}
+\PROB{T^{-1}_{\nu}(0.05) \leq 
+x \leq
+T^{-1}_{\nu}(0.95)
+} &= 0.9,\\
+\PROB{T^{-1}_{\nu}(0.005) \leq 
+x  \leq
+T^{-1}_{\nu}(0.995)
+} &= 0.99,
+\end{aligned}
+$$
+or more generally
+$$
+\PROB{T^{-1}_{\nu}(\epsilon) \leq 
+x  \leq
+T^{-1}_{\nu}(1-\epsilon)
+} = 1-2\epsilon,
+$$
+where $\epsilon \in (0, 0.5)$.
+
+By the fact that $\tfrac{\hat{\beta}_k - \beta^\star_k}{\hatse_k}$ has a t-distribution with $\nu = n - K - 1$ degrees of freedom, we can therefore state
+$$
+\PROB{T^{-1}_{\nu}(\epsilon) \leq 
+\frac{\hat{\beta}_k - \beta^\star_k}{\hatse_k}  \leq
+T^{-1}_{\nu}(1-\epsilon)
+} = 1-2\epsilon.
+$$
+We can then rearrange this statement as follows.
+$$
+\PROB{\hat{\beta}_k - T^{-1}_{\nu}(\epsilon)\cdot \hatse_k \geq 
+\beta^\star_k  \geq
+\hat{\beta}_k - T^{-1}_{\nu}(1-\epsilon)\cdot \hatse_k
+} = 1-2\epsilon.
+$$
+If we denote $T^{-1}_{\nu}(1-\epsilon)$ by $\tau_{(1-\epsilon, \nu)}$, which is always a positive quantity, because the t-distribution is symmetric, $T^{-1}_{\nu}(\epsilon) = -\tau_{(1-\epsilon, \nu)}$.
+Substituting in, this leads to 
+$$
+\PROB{\hat{\beta}_k -\tau_{(1-\epsilon, \nu)}  \cdot \hatse_k \leq 
+\beta^\star_k  \leq
+\hat{\beta}_k + \tau_{(1-\epsilon, \nu)} \cdot \hatse_k
+} = 1-2\epsilon.
+$$
+This is the $1 - 2\epsilon$ confidence interval.
+Thus, for example, if want to obtain the 95% confidence intervals for the `height` coefficient, we first obtain $\tau_{(0.975, n-K-1)}$ as follows
+```{r, echo=T}
+tau <- qt(0.975, df = n-K-1)
+```
+and then obtain the confidence interval as follows
+```{r, echo=T}
+estimates['height'] + c(-1, 1) * std_err['height'] * tau
+```
+This is also confidently available using the `confint` function applied to the `lm` object `M`.
+```{r, echo=T}
+confint(M, parm = 'height', level = 0.95)
+```
+We can use `confint` to obtain the confidence interval at any given level for any or all predictor variables or the intercept term by changing `parm` and `level` accordingly.
+Note that by default, `confint` gives the 95% confidence interval for all predictor variables.
+```{r, echo=T}
+confint(M)
+```
+
+## Predictions
+
+Given the definition of the normal linear model, if we knew the true values of $\beta_0, \beta_1 \ldots \beta_K, \sigma^2$, which we will denote again by $\betatrue$ and $\sigmatrue^2$, then for any new vector of predictor variables $\vec{x}_\iota$, the corresponding $y^\prime$ is
+$$
+y_\iota \sim N(\mu^\star_\iota, \sigma_\star^2), \quad\mu^\star_\iota = \beta^\star_0 + \sum_{k=1}^K \beta^\star_k x_{\iota k},
+$$
+where the mean of this distribution, $\mu^\star_\iota$, is the linear function of $\vec{x}_\iota$, which we could also write $\mu^\star_\iota = \vec{x}_{\iota} \betatrue$.
+
+Of course, however, we do not know the $\betatrue$ and $\sigmatrue^2$.
+On the other hand, we have estimates for them, which we have denoted by $\hat{\beta}$ and $\hat{\sigma}^2$, and in the previous section, we saw their sampling distributions:
+$$
+\hat{\beta} \sim N(\betatrue, \sigmatrue^2 (X\strut^\intercal X)\strut^{-1}),\quad (n - K - 1)\frac{\hat{\sigma}^2}{\sigmatrue^2} \sim \chi^2_{n - K - 1}.
+$$
+
+Based on $\hat{\beta}$, the estimated value of $\mu_\iota$ is $\hat{\mu}_\iota = \vec{x}_\iota \hat{\beta}$, and its sampling distribution is 
+$$
+\hat{\mu}_\iota 
+\sim N(\mu^\star_\iota, \sigmatrue^2\ \vec{x}_\iota (X\strut^\intercal X)\strut^{-1} \vec{x}\strut^\intercal_\iota).
+$$
+For reasons identical to those used above when discussing the sampling distribution of $\hat{\beta}$, we have
+$$
+\frac{\hat{\mu}_\iota - \mu^\star_\iota}{\sigmatrue \sqrt{\vec{x}_\iota (X\strut^\intercal X)\strut^{-1} \vec{x}\strut^\intercal_\iota}}
+\sim N(0, 1),
+$$
+and then
+$$
+\frac{\hat{\mu}_\iota - \mu^\star_\iota}{\hat{\sigma} \sqrt{\vec{x}_\iota (X\strut^\intercal X)\strut^{-1} \vec{x}\strut^\intercal_\iota}}
+=
+\frac{\hat{\mu}_\iota - \mu^\star_\iota}{\hatsemu} \sim t_{n-K-1}.
+$$
+From this, again following the same reasoning as before, we obtain the *confidence interval* for $\mu^\star_\iota$:
+$$
+\PROB{\hat{\mu}_\iota -\tau_{(1-\epsilon, \nu)}  \cdot \hatsemu \leq 
+\mu^\star_\iota  \leq
+\hat{\mu}_\iota + \tau_{(1-\epsilon, \nu)} \cdot \hatsemu
+} = 1-2\epsilon.
+$$
+
+There is a second interval that we can consider, that of $y_\iota$.
+Given that $y_\iota \sim N(\mu^\star_\iota, \sigmatrue^2)$, we can write this as $y_\iota = \mu^\star_\iota + \epsilon_\iota$ where $\epsilon_\iota \sim N(0, \sigmatrue^2)$.
+Using the $\hat{\mu}_\iota$ estimator for $\mu^\star_\iota$, we have $\hat{y}_l = \hat{\mu}_\iota + \epsilon_\iota$.
+Given the distributions of $\hat{\mu}_\iota$ and $\epsilon_\iota$, which are independent of one another, we then have
+$$
+\hat{y}_l \sim N\left(\mu^\star_\iota, \sigmatrue^2 (1 + \vec{x}_\iota (X\strut^\intercal X)\strut^{-1} \vec{x}\strut^\intercal_\iota)\right).
+$$
+Following the same reasoning as above, this leads to the following *prediction interval* for $y_\iota$
+$$
+\PROB{\hat{\mu}_\iota -\tau_{(1-\epsilon, \nu)}  \cdot \hatsey \leq 
+y_\iota  \leq
+\hat{\mu}_\iota + \tau_{(1-\epsilon, \nu)} \cdot \hatsey
+} = 1-2\epsilon,
+$$
+where
+$$
+\hatsey = \hat{\sigma} \sqrt{1 + \vec{x}_\iota (X\strut^\intercal X)\strut^{-1} \vec{x}\strut^\intercal_\iota}.
+$$
+
+## Predictions with `lm`
+
+We can calculate the confidence interval on $\mu_\iota$ and the prediction interval on $y_\iota$ using the generic `predict` function applied to the `lm` object.
+When applied to `lm` objects, `predict` will return either the point estimator $\hat{\mu}_\iota$, or else the confidence interval on $\mu^\star_\iota$, or else the prediction interval on $y_\iota$ depending whether we set `interval` option in `predict` to `none`, or `confidence`, or `prediction`.
+As an example, let us say we want to may predictions about a man's weight when his `height` is equal to $175$ and `age` is equal to $35$.
+First, regardless of the type of prediction we need to do, we have to set up a data frame with variables `height` and `age`.
+```{r, echo=T}
+weight_male_df_new <- tibble(height = 175,
+                             age = 35)
+```
+Then we can do the following,
+```{r, echo=T}
+predict(M, newdata = weight_male_df_new)
+```
+Here, we did not explicitly set the `interval` option and so it took its default value of `interval = 'none'`. 
+This then gives us simply the estimate of $\hat{\mu}_\iota$, which is simply the linear function of `height` using the maximum likelihood estimates $\hat{\beta}_0$ and $\hat{\beta}_1$.
+We can easily verify this.
+```{r, echo=T}
+mu_hat <- (estimates['(Intercept)'] + 
+             estimates['height'] * 175 + 
+             estimates['age'] * 35) %>% 
+  unname()
+mu_hat
+```
+
+To obtain the confidence intervals on $\mu^\star_\iota$, we use the option `interval = 'confidence'`.
+```{r, echo=T}
+predict(M, 
+        interval = 'confidence',
+        newdata = weight_male_df_new)
+```
+This is the 95% confidence interval, which is the default, but which we can change by using the `level` option. 
+For example, the 99% confidence interval is obtained as follows.
+```{r, echo=T}
+predict(M, 
+        interval = 'confidence',
+        level = 0.99,
+        newdata = weight_male_df_new)
+```
+Again, we can verify that this confidence interval is calculated as described above.
+```{r, echo=T}
+x_new <- c(1, 175, 35)
+std_err_mu <- sigma(M) * sqrt(x_new %*% solve(t(X) %*% X) %*% matrix(x_new)) %>% 
+  as.numeric()
+c(mu_hat, 
+  mu_hat + c(-1, 1) * std_err_mu * qt(0.995, df = n - K - 1)
+) %>% set_names(nm = c('fit', 'lwr' ,'upr'))
+```
+
+To obtain the prediction interval on $y_\iota$ rather than the confidence interval on $\mu^\star_\iota$, we use `interval = 'prediction'`.
+In the following, we calculate the 99% prediction interval for $y_\iota$.
+```{r, echo=T}
+predict(M, 
+        interval = 'prediction',
+        level = 0.99,
+        newdata = weight_male_df_new)
+```
+Again, we can confirm that this value is calculated according to the description above.
+```{r, echo=T}
+std_err_y <- sigma(M) * sqrt(1 + x_new %*% solve(t(X) %*% X) %*% matrix(x_new)) %>% 
+  as.numeric()
+c(mu_hat, 
+  mu_hat + c(-1, 1) * std_err_y * qt(0.995, df = n - K - 1)
+) %>% set_names(nm = c('fit', 'lwr' ,'upr'))
+```
+
+## $R^2$ and Adjusted $R^2$
+
+The observed values of the outcome variable are $y_1, y_2 \ldots y_n$. 
+The mean and variance of these values are
+$$
+\bar{y} = \frac{1}{n} \sum_{i=1}^n y_i,\quad \textrm{var}(y) = 
+\frac{1}{n-1} \underbrace{\sum_{i=1}^n (y_i - \bar{y})^2}_{\textrm{TSS}}.
+$$
+The $\textrm{TSS}$ summation term in the variance stands for *total sum of squares*, and is the sum of the squared differences of each observation from the mean.
+It can be shown that in general
+$$
+\underbrace{\sum_{i=1}^n (y_i-\bar{y})^2}_{\text{TSS}} = \underbrace{\sum_{i=1}^n (\hat{\mu}_i - \bar{y})^2}_{\text{ESS}} + \underbrace{\sum_{i=1}^n (y_i - \hat{\mu}_i)^2}_{\text{RSS}},
+$$
+where $\textrm{ESS}$ stands *explained sum of squares*, and $\textrm{RSS}$ stands the *residual sum of squares*.
+The $\textrm{RSS}$ is the sum of the squared residuals when the coefficients take on their maximum likelihood values $\hat{\beta}$.
+The $\textrm{ESS}$, by contrast, measures the variability in the outcome variable due to changes in the predictor variables.
+Equivalently, because $\bar{y} = \bar{\mu}$, where $\bar{\mu} = \tfrac{1}{n}\sum_{i=1}^n \hat{\mu}_i$, $\textrm{ESS}$ can also be written as
+$$
+\text{ESS} = \sum_{i=1}^n (\hat{\mu}_i - \bar{\mu})^2 = (n-1) \cdot \textrm{var}(\hat{\mu}),
+$$
+and so it is the variability of the predicted mean values of weight.
+The proportion of the variability in outcome variable due to changes in predictors is referred to as $R^2$:
+$$
+R^2 = \frac{\textrm{ESS}}{\textrm{TSS}} = \frac{\textrm{var}(\hat{\mu})}{\textrm{var}(y)}.
+$$
+This is equivalent to 1 minus the proportion of variability in the outcome variable that is residual variation:
+$$
+R^2 = 1 - \frac{\textrm{RSS}}{\textrm{TSS}} = 1 - \frac{\hat{\sigma}^2}{\textrm{var}(y)} .
+$$
+
+$R^2$ is routinely taken to be a measure of model fit in linear models. 
+Given that it is a proportion, it varies between 0 and 1. 
+When $\textrm{ESS} = 0$, $\textrm{TSS} = \textrm{RSS}$ and so $R^2 = 0$. 
+When $\textrm{RSS} = 0$, $\textrm{TSS} = \textrm{ESS}$, and so $R^2 = 1$. 
+In other words, $R^2$ takes its maximum value of $1$ when the observed values of the outcomes variables can be predicted exactly as a linear function of the predictors, i.e., for each $i$, $y_i = \hat{\mu}_i = \sum_{k=1}^K \hat{\beta}_{ki} x_{ki}$, or equivalently, for each $i$, $\epsilon_i = 0$.
+On the other hand, when $\textrm{TSS} = \textrm{RSS}$, it must be the case that $\beta_1 = \beta_2 = \ldots \beta_K = 0$, and so no change in the outcome variable's value can be predicted as a function of any of the $K$ predictors.
+
+$R^2$, by definition, gives the proportion of total variation due to variation in the predictor variables.
+This is often stated as the *proportion of variation explained* by the model. 
+While in one sense this is true by definition, it is misleading if we interpret it as measuring the extent the predictor explain, in the causal sense, the outcome variable. 
+
+The value of $R^2$ necessarily increases, or does not decrease, as we add more predictors to the model, even if the true values of the coefficients for these predictors are zero.
+To overcome this spurious increase in $R^2$, the following adjustment is applied.
+$$
+\begin{aligned}
+R^2_{\textrm{Adj}} &= 1 - \frac{\textrm{RSS}}{\textrm{TSS}} \frac{n-1}{n-K-1},\\
+                   &= 1 - \left(1 - R^2\right) \underbrace{\frac{n-1}{n-K-1}}_{\textrm{penalty}}.
+\end{aligned}
+$$
+The value of $R_{\textrm{Adj}}^2$ is necessarily less than or equal to $R^2$. 
+The amount of adjustment is determined by the penalty term. 
+Note that this term is greater than 1 and it multiplies by $\textrm{RSS}/\textrm{TSS}$, which measures the proportion of the total variation due to residual variation.  
+As $n$ increases, $R_{\textrm{Adj}}^2$ and $R^2$ become closer in value, but for relatively small $n$ and relatively large $K$, the adjustment can be considerable.
+
+Unlike $R^2$, $R^2_{\textrm{Adj}}$ can have negative values. 
+Moreover, it does not represent a proportion of the total variation in the outcome variable. 
+For this reason, it is incorrect to state it as measuring, as $R^2$ does, the proportion of explain variation. 
+On the other hand, both $R^2$ and $R^2_{\textrm{Adj}}$ can be seen as estimators of the true or population $R^2$, and $R^2_{\textrm{Adj}}$ can be seen as a less biased estimator of this than $R^2$.
+
+## $R^2$ and Adjusted $R^2$ with `lm`
+
+From the `lm` object, the $R^2$ and $R^2_{\textrm{Adj}}$ are easily obtained using the `summary` function.
+```{r, echo=T}
+S <- summary(M)
+S$r.squared
+S$adj.r.squared
+```
+We can verify that these values are calculated as described above.
+```{r, echo=T}
+tss <- sum((y - mean(y))^2)
+# R^2
+rsq <- (1 - rss/tss)
+# Adj R^2
+(adj_rsq <- 1 - rss/tss * (n-1)/(n-K-1))
+```
+Note than in this case, the adjustment is minimal because $n \gg K$ and so the penalty term is close to 1.0.
+```{r, echo=T}
+(n-1)/(n-K-1)
+```
+
+## Model comparison
+
+Given that $R^2 = 0$ if and only if $\beta_1 = \beta_2 = \ldots \beta_K = 0$, a null hypothesis test that $R^2 = 0$ is the hypothesis that all coefficients, except the intercept term, are simultaneously zero. 
+When all coefficients are simultaneously zero, we are essentially saying that the following two models are identical.
+$$
+\begin{aligned}
+\mathcal{M}_0 &\colon y_i \sim N(\hat{\mu}_i, \sigma^2),\quad\hat{\mu}_i = \beta_0,\quad\text{for $i \in 1 \ldots n$},\\
+\mathcal{M}_1 &\colon y_i \sim N(\hat{\mu}_i, \sigma^2),\quad\hat{\mu}_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$}.
+\end{aligned}
+$$
+In $\mathcal{M}_0$ and $\mathcal{M}_1$, we have estimators $\hat{\sigma}^2_{\mathcal{M}_0}$ and $\hat{\sigma}^2_{\mathcal{M}_1}$, respectively, which are both of $\sigmatrue^2$. 
+
+Both are estimators of $\sigmatrue^2$, and their respective relationships to $\sigma^2$ are as follows:
+$$
+\frac{(n-1)\hat{\sigma}^2_{\mathcal{M}_0}}{\sigma^2} 
+= \frac{\textrm{RSS}_{0}}{\sigma^2}
+\sim \chi^2_{n-1},\quad
+\frac{(n-K-1)\hat{\sigma}^2_{\mathcal{M}_1}}{\sigma^2}= \frac{\textrm{RSS}_{1}}{\sigma^2} \sim \chi^2_{n-K-1}.
+$$
+The ratio of the difference of $\textrm{RSS}_0$ and $\textrm{RSS}_1$ to $\sigma^2$ is also distributed as a $\chi^2$
+$$
+\frac{\textrm{RSS}_{0} - \textrm{RSS}_{1}}{\sigma^2} \sim \chi^2_{K}.
+$$
+Given that 
+$$
+\frac{\textrm{RSS}_{0} - \textrm{RSS}_{1}}{\sigma^2},\quad\frac{\textrm{RSS}_{1}}{\sigma^2}
+$$
+are independent of one another and both are $\chi^2$ distributed with $K$ and $n - K - 1$ degrees of freedom, respectively, then we have the following sampling distribution under the null hypothesis:
+$$
+\frac{\left(\textrm{RSS}_{0} - \textrm{RSS}_{1}\right)/K}
+{\textrm{RSS}_{1}/(n-K-1)}
+\sim F(K, n-K-1).
+$$
+Note that above statistic can be rewritten as follows.
+$$
+\frac{\textrm{ESS}/K}{\textrm{RSS}/(n-K-1)} = \frac{R^2}{1 - R^2} \times \frac{n - K - 1}{K} \sim F(K, n-K-1).
+$$
+
+We can extend the above result to test whether any subset of the $K$ predictors have coefficients that are simultaneously zero. 
+In general, we can compare two models $\mathcal{M}_1$ and $\mathcal{M}_0$ that $K_1$ and $K_0$ predictors, respectively, and where $K_0 < K$ and all the $K_0$ predictors in $\mathcal{M}_0$ are also present in $\mathcal{M}_1$.
+Following identical reasoning to the above, the null hypothesis that the $K_1 - K_0$ predictors in $\mathcal{M}_1$ and not in $\mathcal{M}_0$ are simultaneously zero is 
+$$
+\frac{\left(\textrm{RSS}_{0} - \textrm{RSS}_{1}\right)/(K_1 - K_0)}
+{\textrm{RSS}_{1}/(n-K_1-1)}
+\sim F(K_1 - K_0, n-K_1-1).
+$$
+
+## Model comparison using `lm`
+
+The results of the null hypothesis test that $R^2 = 0$ can be obtained in numerous ways, but the easiest is to use the generic `anova` function where we compare model `M` against `M_null`.
+```{r, echo=T}
+M_null <- lm(weight ~ 1, data = weight_male_df)
+A <- anova(M_null, M)
+A
+```
+Note that the values in the `Sum Sq` column are the $\textrm{TSS}$ and $\textrm{RSS}$, respectively, which we can verify
+```{r, echo=T}
+c(tss, rss)
+```
+The $\textrm{TSS}$ is in fact the $\textrm{RSS}$ of the null model with no predictors.
+The $\textrm{ESS}$ is therefore as follows.
+```{r, echo=T}
+ess <- tss - rss
+```
+
+
+Likewise, the `Df` and the second value of the `Res.Df` column give us the degrees of freedom by which `ess` and `rss` are divided.
+```{r, echo=T}
+c(K, n - K - 1)
+```
+The `F value` column gives the ratio of these two values.
+```{r, echo=T}
+f_stat <- (ess/K) / (rss/(n - K - 1))
+f_stat
+```
+Finally, the p-value gives us the probability of getting a result greater than this F statistic in an F distribution with $K$ and $n-K-1$ degrees of freedom.
+We can calculate this using the cumulative distribution function of the F distribution, which is `pf`.
+```{r, echo=T}
+pf(f_stat, K, n-K-1, lower.tail = F)
+```
+This is identical to the value calculated by the `anova` function, which we may verify if we extract the value from the Anova table.
+```{r, echo=T}
+A[2,'Pr(>F)']
+```
+
+# Bayesian approaches to normal linear models
+
+In the Bayesian approach to normal linear models, our starting point is identical to that of the classical approach.
+Specifically, we assume we have $n$ independent observations that can be represented as follows
+$$
+(y_1, \vec{x}_1), (y_2, \vec{x}_2) \ldots (y_i, \vec{x}_i) \ldots (y_n,\vec{x}_n),
+$$
+and we assume the following model of $y_1, y_2 \ldots y_n$: 
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad\mu_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$}.
+$$
+We also assume that $\vec{\beta} = \beta_0, \beta_1 \ldots \beta_K$ and $\sigma^2$ have *fixed but unknown* values.
+Inference in Bayesian approaches, just like in classical approaches, aims to infer what these values are. 
+The reasoning and procedure on how to do this, however, differs markedly between the two approaches. 
+Despite this, as we will see, the ultimate conclusions can nonetheless be remarkably similar to one another.
+
+As we've seen in the previous chapter, the fundamental point of departure between the classical and the Bayesian approaches is that the Bayesian approach assumes that $\vec{\beta}$ and $\sigma$ have been drawn from a *prior* distribution. 
+The prior effectively extends the linear model above. 
+Writing $\vec{x}_i \vec{\beta} = \beta_0 + \sum_{k=1}^K \beta_k x_{ki}$, the extended model is
+$$
+\begin{aligned}
+y_i &\sim N(\vec{x}_i \vec{\beta}, \sigma^2),\quad\text{for $i \in 1 \ldots n$},\\
+\vec{\beta}, \sigma &\sim \Prob{\vec{\beta}, \sigma},
+\end{aligned}
+$$
+where $\Prob{\vec{\beta}, \sigma}$ is an, as yet unspecified, probability distributions over $\vec{\beta}$ and $\sigma$, respectively.
+In other words, the Bayesian approach assumes, like the classical approach, that each $y_i$ is drawn from a normal distribution centred at $\vec{x}_i \vec{\beta}$ and whose standard deviation is $\sigma$.
+However, the Bayesian approach, unlike the classical approach, also assumes that the values $\vec{\beta}$ and $\sigma$ have been drawn from the probability distribution $\Prob{\vec{\beta}, \sigma}$.
+Having made this assumption, it is now possible to use Bayes' theorem to calculate the *posterior* probability that $\vec{\beta}$ and $\sigma$ have any given values conditional on the data we have observed.
+Writing $\vec{y}$ for the $n \times 1$ vector of outcome variable observations, and $X$ for the $n \times (K + 1)$ matrix of predictors, the posterior distribution can be written as follows.
+$$
+\overbrace{\Prob{\beta, \sigma \given \vec{y}, X}}^{\textrm{posterior}} = \frac{
+\overbrace{\Prob{\vec{y} \given X, \vec{\beta}, \sigma}}^{\textrm{likelihood}} 
+\overbrace{\Prob{\vec{\beta},\sigma}}^{\textrm{prior}}
+}{
+\underbrace{\int \Prob{\vec{y} \given X, \vec{\beta}, \sigma} \Prob{\vec{\beta},\sigma} d\beta d\sigma}_{\textrm{marginal likelihood}}.
+}
+$$
+
+In general across all Bayesian models, the posterior distribution is a probability distribution, i.e. a non-negative function over all possible values of a variable, which may be multivariate, that integrates to exactly 1.0. 
+However, whether we have a *closed form* or *analytic* expression for this function varies from model to model. 
+As described in the previous chapter, a closed form or analytic expression means that the function can be described, like all probability distributions we have seen so far, in a finite number of mathematical operations.
+Informally speaking, when there is a closed form or analytic expression, we say we have a formula for the probability distribution and we can obtain the value of the function at any value of the variable by a small number of calculations, possibly even by hand.
+For most Bayesian models, we simply do not have closed form expressions for the posterior distribution. 
+This is primarily because the right hand side of the formula above involves the evaluation of an integral, which is the product of two functions, and there may be no analytic expression for this integral. 
+In situations where we have no closed form expression for the posterior, we generally resort to Monte Carlo, specifically Markov Chain Monte Carlo (\mcmc), sampling methods whereby we draw samples from the posterior distribution.
+We provided an introduction to \mcmc in the previous chapter and throughout the remaining chapters, we will often use \mcmc, and in doing so, it will become more apparent what these methods afford us in practice.
+
+For normal linear models, with judicious choices of the types of priors we use, we can in fact obtain analytic expressions for the posterior distribution.
+It can be informative and useful to use these approaches. 
+On the other hand, by using \mcmc sampling methods, we are not limited to certain choices of priors.
+Moreover, the \mcmc sampling methods we use for normal linear models are identical to those used for more general and more complex statistical models, and so using and understanding these sampling methods in normal linear model, which are relatively simple, can be very helpful before to using them in more complex models.
+As such, we will consider both the analytic and \mcmc based approaches here.
+
+## Closed form solutions
+
+The first term in the numerator on the right hand side of Bayes' rule above is the likelihood function.
+The likelihood function is not a probability distribution, but is a function over the $\vec{\beta}$ and $\sigma$ space.
+It is exactly the same function that was maximized to find the maximum likelihood estimators in the classical approach to inference in linear models.
+It can be written as follows.
+$$
+\begin{aligned}
+\Prob{\vec{y}\given X, \hat{\beta}, \sigma} &= \prod_{i=1}^n \Prob{y_i \given \vec{x}_i \beta, \sigma^2},\\
+&= \left(\frac{1}{\sqrt{2\pi}}\right)^n \sigma^{-n} 
+\exp\left[- \frac{1}{2\sigma^2} (\vec{y} - X\vec{\beta})\strut^\intercal (\vec{y} - X\vec{\beta})\right],\\
+&= \left(\frac{1}{\sqrt{2\pi}}\right)^n \sigma^{-n} 
+\exp\left[- \frac{1}{2\sigma^2} 
+\left[(n-K-1)\hat{\sigma}^2 + (\vec{\beta} - \hat{\beta})\strut^\intercal X\strut^\intercal X (\vec{\beta} - \hat{\beta})\right]\right],\\
+\end{aligned}
+$$
+where $\hat{\beta}$ and $\hat{\sigma^2}$ have identical values to those defined above, namely
+$$
+\begin{aligned}
+\hat{\beta} &= (X\strut^\intercal X)\strut^{-1} X\strut^\intercal \vec{y},\\
+\hat{\sigma}^2 &= \frac{1}{n - K - 1} \sum_{i=1}^n | y_i - \hat{\mu}_i|^2.
+\end{aligned}
+$$
+
+The second term in the numerator is the prior.
+Like the the likelihood function, it is a function over the $\vec{\beta}$ and $\sigma$ space, but of course it is also a probability distribution.
+In principle, this probability distribution can be from any parametric family that is defined on the $\vec{\beta}$ and $\sigma$ space.
+However, as mentioned, in order to obtain an analytic expression for the posterior, we must restrict our choices of probability distributions.
+One common choice for normal linear models is to use an *uninformative prior*, specifically one that is uniform over $\vec{\beta}$ and $\log(\sigma)$. 
+This turns out to be equivalent to 
+$$
+\Prob{\vec{\beta}, \sigma^2} \propto \frac{1}{\sigma^2}.
+$$
+This prior works well when $n$ is relatively large and $K$ is relatively small[^improper].
+
+[^improper]: It should be noted that this is an *improper prior*, which means that it does not have a finite value for its integral.
+
+
+The posterior $\Prob{\vec{\beta}, \sigma \given \vec{y}, X}$ is the product of the likelihood and the prior, divided by their integral.
+The resulting distribution is a normal-inverse-Gamma distribution, which can be written in the following factored form.
+$$
+\begin{aligned}
+\Prob{\vec{\beta}, \sigma \given \vec{y}, X} 
+&= \Prob{\vec{\beta} \given \sigma, \vec{y}, X} \Prob{\sigma \given \vec{y}, X},\\
+&= N(\vec{\beta} \given \hat{\beta}, \sigma^2(X\strut^\intercal X)\strut^{-1})\times\textrm{invGamma}(\sigma^2 \given \tfrac{n-K-1}{2},\tfrac{(n-K-1)\hat{\sigma}^2}{2}).
+\end{aligned}
+$$
+
+An interesting consequence of this distribution is when we marginalize over the $\sigma^2$, this leads to a multivariate t distribution with location parameter $\hat{\beta}$, scale parameter $\hat{\sigma}^2(X\strut^\intercal X)\strut^{-1}$, and degrees of freedom $n - K -1$:
+$$
+\Prob{\vec{\beta}\given \vec{y}, X} \sim 
+\textrm{t}_{n-K-1}(\vec{\beta}\given \hat{\beta}, \hat{\sigma}^2(X\strut^\intercal X)\strut^{-1}).
+$$
+From this, for any $\beta_k$, we have
+$$
+\Prob{\beta_k \given \vec{y}, X} \sim
+t_{n-K-1}(\beta_k \given \hat{\beta}_k, \hat{\sigma}^2 (X\strut^\intercal X)\strut^{-1}_{kk}).
+$$
+In other words, the posterior distribution of $\beta_k$ is a (non standard) t-distribution with degrees of freedom of $n-K-1$, mean $\hat{\beta}_k$ and scale parameter $\hat{\sigma}^2 (X\strut^\intercal X)\strut^{-1}_{kk}$.
+This entails, amongst other things, that the probability, according to the posterior distribution, that $\beta_k$ is in the range
+$$
+\hat{\beta}_k \pm \tau_{(1-\epsilon, n -K -1)} 
+\hat{\sigma} \sqrt{(X\strut^\intercal X)\strut^{-1}_{kk}},
+$$
+is $1 - 2\epsilon$.
+Note that here, $\tau_{(1-\epsilon, n - K -1)}$ is the inverse cumulative distribution function of a standard t-distribution, as defined above.
+This gives us the *high posterior density* (\hpd) interval for $\beta_k$.
+Setting $\epsilon = 0.025$, for example, gives us the 95% \hpd interval.
+In other words, according to the posterior distribution, there is a 95% probability that $\beta_k$ is in the range $\hat{\beta}_k \pm \tau_{(0.975, n -K -1)} \hat{\sigma} \sqrt{(X\strut^\intercal X)\strut^{-1}_{kk}}$.
+What is particularly interesting about this result is that it is identical to the 95% confidence interval for $\beta_k$ defined above.
+
+In Bayesian approaches in general, as we will see repeatedly below, a common focus of interest is the *posterior predictive distribution*.
+In normal linear models, this is defined as follows:
+$$
+\Prob{y_\iota \given x_\iota, \vec{y}, X} =
+  \int \Prob{y_\iota \given x_\iota, \vec{\beta}, \sigma^2} 
+  \underbrace{\Prob{\vec{\beta}, \sigma^2 \given, \vec{y}, X}}_{\textrm{posterior}}
+  d\vec{\beta} d\sigma^2.
+$$
+The first term in the integral is the probability distribution over the outcome variable given that the predictor takes the value $x_\iota$, and given known values of $\vec{\beta}$ and $\sigma^2$.
+This, of course, is a normal distribution centred at $x_\iota \vec{\beta}$ and whose standard deviation is $\sigma$.
+This integral simplifies to the following
+$$
+\Prob{y_\iota \given x_\iota, \vec{y}, X} \sim
+t_{n-K-1}\left(x_\iota \vec{\beta} \given 
+\hat{\sigma}^2(1 + x_\iota (X\strut^\intercal X)\strut^{-1} x_\iota^\intercal)
+\right).
+$$
+This entails that the $1-2\epsilon$ density interval for predicted value of $y_\iota$ is the following range. 
+$$
+x_\iota \vec{\beta} \pm \tau_{(1-\epsilon, n -K -1)} 
+\hat{\sigma} \sqrt{1 + x_\iota (X\strut^\intercal X)\strut^{-1} x_\iota^\intercal}.
+$$
+This interval is identical to prediction interval for $y_\iota$ that we defined above.
+
+
+## Monte Carlo approaches
+
+As mentioned, in situations where a closed form expression for the posterior distribution is not available, we may use Monte Carlo methods to draw samples from this distribution.
+Even though, as we have seen, we can obtain a closed form expression for the normal linear model, it is still useful and informative to use Monte Carlo methods, especially because there is excellent general purpose software for doing so.
+In particular, here we will use the `brms` (*B*ayesian *r*egression *m*odelling using *S*tan) package, which is an R based regression modelling interface to the general purpose Bayesian probabilistic modelling language *Stan*.
+
+The main command in the `brms` package is `brm`.
+When used for normal linear models, assuming we accept all the default setting, the usage of this command is identical to that of `lm`.
+```{r, echo=T, eval=F}
+library(brms)
+M_bayes <- brm(weight ~ height + age, data = weight_male_df)
+```
+```{r, cache=TRUE}
+library(brms)
+M_bayes <- brm(weight ~ height + age,
+               silent = TRUE, refresh = 0,
+               data = weight_male_df)
+```
+
+We can view the results of this analysis using the generic `summary` function.
+```{r, echo=T}
+summary(M_bayes)
+```
+There is a lot information in this output, and we will not focus on all of it immediately.
+Let us begin by noting that it tells us that we drew 1000 samples from 4 independent chains, each one drawing samples from the same posterior distribution.
+Thus, for each of the three coefficients and for the standard deviation, we represent the posterior by a set of 4000 samples.
+
+Let us now look at the first few columns of the coefficients table, which is listed in the summary output under `Population-Level Effects`.
+```{r, echo=T}
+summary(M_bayes)$fixed[,1:4] %>% 
+  print(digits = 2)
+```
+The values listed under `Estimate` and `Est.Error` are the means and the standard deviations, respectively, of the posterior distributions for the three coefficients.
+The remaining two columns give us the lower and upper bounds, respectively of the high posterior density interval.
+
+Compare these results to the maximum likelihood estimates, standard errors, and 95% confidence intervals from the `lm` model.
+```{r, echo=T}
+cbind(summary(M)$coefficients[,1:2],
+      confint(M)
+) %>% print(digits = 2)
+```
+Clearly, these results are remarkably similar, and any minor differences that are there may in fact be due to the sampling variation.
+
+In Figure \ref{fig:posterior_dens}, we plot the density functions and the trace plots of the samples for each of the four unknown variables.
+The density plots are essentially smoothed histograms of the samples.
+The trace plots plot the trajectory of the samples from each chain for each variable.
+```{r posterior_dens, echo=T, fig.align='center', fig.cap="Density plots and trace plots of the posterior distribution of each of the three coefficients and $\\sigma$."}
+plot(M_bayes)
+```
+These trace plots can tell us whether the four chains are sampling over time from the same areas of space.
+If they are, then the trace plots should appear like a "hairy caterpillar", with the traces of each chain being on top of one another.
+
+When we represent a posterior distribution using samples, the posterior predictive distribution is calculated as follows
+$$
+\int \Prob{y_\iota \given x_\iota, \vec{\beta}, \sigma^2}
+\Prob{\vec{\beta}, \sigma^2 \given \vec{y}, X} d\vec{\beta}\sigma^2 
+\approx
+\frac{1}{J}
+\sum_{j=1}^J 
+\Prob{y_\iota \given x_\iota, \tilde{\beta}_j, \tilde{\sigma}_j^2},
+$$
+where $\{\tilde{\beta}_j, \tilde{\sigma}_j^2\}_{j=1}^J$ are the $J$ samples from the posterior distribution.
+
+Using the `weight_male_df_new` data that we also used above, with the `brm` object, we can calculate this posterior predictive distribution as follows.
+```{r, echo=T}
+predict(M_bayes, newdata = weight_male_df_new)
+```
+Note how this is almost identical to the prediction interval calculated using classical methods.
+```{r, echo=T}
+predict(M, newdata = weight_male_df_new, interval = 'prediction')
+```
+
+# Categorical predictor variables
+
+```{r weight_dist_by_sex_height, fig.align='center', fig.cap='a) Density plots of the weights of males and females. b) Density plots of the weights of males and females for each of the different quintiles of height (across both males and females).', out.width='0.8\\textwidth', fig.height=7}
+
+tmp_df <- weight_df %>%
+  mutate(height_ntile = ntile(height, 5),
+         age_ntile = ntile(age, 3))
+
+p_1 <- tmp_df %>% 
+  ggplot(aes(x = weight, group = gender, colour = gender, fill = gender)) + 
+  geom_density(bw = 5.1, alpha = 0.5) + 
+  ylab('density') + 
+  theme_minimal()
+
+p_2 <- tmp_df %>% 
+  ggplot(aes(x = weight, y = height_ntile, group = height_ntile)) + 
+  geom_density_ridges(bandwidth = 10.1) + 
+  ylab('Height quintile') + 
+  facet_grid(~ gender,
+             labeller = label_both
+  ) + theme_minimal()
+
+plot_grid(p_1, p_2, 
+          labels = c('a', 'b'), 
+          rel_heights = c(1, 2)/3,
+          nrow = 2)
+```
+
+Thus far, we have only considered predictor or explanatory variables that are continuous, like height or age.
+The important feature of these variables is that they are defined on a metric space, and we assume that the average of the outcome variable changes by a constant proportion of any change of each predictor.
+Of course, some potentially important explanatory variables are not continuous, or are not defined on a metric space, but have categorically distinct values.
+For these variables, we assume that changing from one of these categorically distinct values to another corresponds to a constant change in the average of the outcome variable.
+
+As a simple example, again using `weight` as our outcome variable, we could have a single explanatory variable `gender`, which takes on two categorically distinct values: `male`, `female`.
+In Figure \ref{fig:weight_dist_by_sex_height}a, we show the density plots for the weights of both males and females.
+When modelling weight in a normal linear model with `gender` as a explanatory variable, for each of its two discrete and categorically distinct values, we assume that weight is normally distributed. 
+In other words, we assume the distribution of weight for males and also for females is a normal distribution.
+We assume that these distributions have different means, but that their standard deviations are identical.
+Using binary valued categorical predictor variables in a normal linear model is, as we will see, easily accomplished by coding the two values as 0 and the other as 1, and then treating the resulting coding variable as a normal numerical predictor variable.
+
+When using `lm`, we can simply use the categorical variable in the formula for `lm` just as we would any other variable.
+For example, in the following code, we model the distribution of weight as before, but now model how its distribution varies by `gender`. 
+```{r, echo=T}
+M_gender <- lm(weight ~ gender, data = weight_df)
+```
+The variable `gender` has values `male` and `female`. 
+When used in `lm`, one of these is recoded as 0 and the other as 1.
+Which one is coded as 0 or 1 is completely arbitrary and ultimately makes no difference to the model.
+Nonetheless, we do have to know which is coded as 0 and 1 in order to be able to interpret the model.
+In R, we can always control how categorical variables are coded, but by default, the value that is listed first alphabetically is coded by `0`. 
+In the case of `gender`, this means `female` is coded as 0 and `male` as 1.
+The model above then is equivalent to the following.
+$$
+y_i \sim N(\mu_i, \sigma^2), \quad \mu_i = \beta_0 + \beta_1 x_i,\quad\text{for $i \in 1\ldots n$},
+$$
+where $x_i = 0$ if person $i$ is `female` and $x_i = 1$ if person $i$ is `male`.
+Put another way, we create variables $x_1, x_2 \ldots x_n$ defined as follows
+$$
+x_i = \begin{cases}
+0,\text{if $\textrm{gender}_i = \texttt{female}$}\\
+1,\text{if $\textrm{gender}_i = \texttt{male}$}
+\end{cases}
+$$
+
+Let us look at the coefficients.
+```{r, echo=T}
+coef(M_gender)
+```
+As we can see, the intercept term has a value of `r coef(M_gender)[1] %>% round(2)`, and the second coefficient is `r coef(M_gender)[2] %>% round(2)`.
+The intercept term $\beta_0$ is, by definition, the average of the distribution of weight when the predictor variable takes a value of 0. 
+In this case, $x_i$ takes a value of 0 whenever $\textrm{gender}_i$ is `female`.
+As such, the intercept term is the average of the distribution of weights for females.
+On the other hand, the average of the distribution of weight for males is equal to the the value of $\mu_i$ when $x_i = 1$, which is $\beta_0 + \beta_1 \cdot 1 = \beta_0 + \beta_1$.
+This entails that $\beta_1$ gives the *difference* in the average of the distribution of weight for females and males.
+
+We can therefore also write this model as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2), \quad \mu_i
+= \begin{cases}
+\beta_0,\quad\text{if $\textrm{gender}_i = \texttt{female}$}\\
+\beta_0 + \beta_1,\text{if $\textrm{gender}_i = \texttt{male}$}
+\end{cases}.
+$$
+Note that this model is identical to an independent samples t-test.
+In that model, we assume we have two groups of independent observations.
+Each group is assumed to be drawn from a normal distribution, and the two distributions are assumed to have identical standard deviations.
+The null hypothesis test in the t-test is that the means of these two distributions are identical.
+This is identical to a null hypothesis test that $\beta_1 = 0$ in the above linear model.
+This is zero if and only if the mean of the males and the mean of the females are identical.
+
+When we include `gender` as a explanatory variable in addition to a continuous predictor variable, like `height` for example, we are dealing with a situation like that shown in Figure \ref{fig:weight_dist_by_sex_height}b.
+Using a linear model for this situation, we assume that for both males and females, the average of the weight distribution changes as a constant proportion of height.
+More precisely, the model is as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2), \quad \mu_i = \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i},\quad\text{for $i \in 1\ldots n$},
+$$
+where $x_{1i}$ is the height of person $i$, and 
+$$
+x_{2i} = \begin{cases}
+0,\text{if $\textrm{gender}_i = \texttt{male}$}\\
+1,\text{if $\textrm{gender}_i = \texttt{female}$}
+\end{cases}.
+$$
+To implement this model using `lm` we would do the following.
+```{r, echo=T}
+M_gender_height <- lm(weight ~ height + gender, data = weight_df)
+coef(M_gender_height)
+```
+Using the same reasoning as above, given that $x_{2i}$ takes that value of 0 when the gender is female and takes the value of 1 when gender is male, this model can be written as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2), \quad \mu_i
+= \begin{cases}
+\beta_0 + \beta_1 x_{1i},\text{if $\textrm{gender}_i = \texttt{female}$}\\
+\beta_0 + \beta_1 x_{1i} + \beta_2,\text{if $\textrm{gender}_i = \texttt{male}$}
+\end{cases}.
+$$
+This is identical to a *varying intercept* model. 
+In particular, we have two linear models, one for males and one for females.
+The slopes for these two models are the same, namely $\beta_1$, but the intercepts are different.
+The intercept for the females is $\beta_0$, and the intercept for the males is $\beta_0 + \beta_1$.
+
+To make the values of the coefficients somewhat easier to interpret, let us subtract an arbitrary constant from the `height` variable and rerun the analysis.
+```{r, echo=T}
+weight_df %>% 
+  mutate(height = height - 150) %>% 
+  lm(weight ~ height + gender, data = .) %>% 
+  coef()
+```
+```{r}
+weight_df %>% 
+  mutate(height = height - 150) %>% 
+  lm(weight ~ height + gender, data = .) %>% 
+  coef() -> tmp_m
+```
+This tells us that the distribution of weight of females with a height of exactly 150cm has an average value of `r tmp_m['(Intercept)'] %>% round(digits = 2)`.
+For males on the other hand, the distribution of their weights is centred at `r tmp_m['(Intercept)'] %>% round(digits = 2)` + `r tmp_m['gendermale'] %>% round(digits = 2)`, which is `r round(tmp_m['(Intercept)'] + tmp_m['gendermale'], 2)`.
+For any given height, the average of the distribution of weights for males is greater than that of females by `r tmp_m['gendermale'] %>% round(2)`.
+But for both males and females, according to this model, the average of the distribution of weight increases by `r tmp_m['height'] %>% round(2)` for every change by 1cm in height.
+
+In linear models, we can also use categorical predictor variables that have more than two levels.
+Consider, for example, the variable `race`.
+This has `r weight_df %>% pull(race) %>% unique() %>% length()` distinct values in the original `weight_df` data set.
+Some of these values have very few corresponding observations, so therefore for simplicity, we will limit the observations to just those where the values of `race` are `white`, `black`, or `hispanic`.
+```{r, echo=T}
+weight_df_2 <- weight_df %>% 
+  filter(race %in% c('white', 'black', 'hispanic'))
+```
+We may easily include `race` as a predictor in a `lm` model.
+When used on its own, for example, this would effectively model the distribution of weight as a normal distribution for each of the `white`, `black`, and `hispanic` people.
+Unlike in the case of a variable with two values, however, we can use a single coding variable.
+For example, while we could code `female` and `male` by $x_i = 0$ and $x_i = 1$, respectively, we can not code `white`, `black`, `hispanic` by $x_i = 0$, $x_i = 1$, $x_i = 2$. 
+To do so would entail that `race` is variable on a metric space and that `white`, `black`, and `hispanic` are ordered and equidistant positions in this space.
+This would mean that, amongst other things, the difference in the average heights of `white` and `black` would be exact the same as the average difference in height of `black` and `hispanic`.
+
+To deal with categorical variables with more than two levels we use *dummy* codes. 
+In a dummy code, one value of the variable is chosen as the *base* level.
+If this variable has three values, then the base level has the dummy code of $0, 0$.
+On of the remaining values is dummy coded as $0, 1$, and the final one is coded as $1, 0$.
+Which value is coded using which code is arbitrary, but by default with R, the alphabetically first value is the base level.
+
+Using `race` as our single categorical predictor variable, the linear model would be as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2), \quad \mu_i = \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i},\quad\text{for $i \in 1\ldots n$},
+$$
+where $x_{1i}, x_{2i}$ are as follows
+$$
+x_{1i}, x_{2i} = \begin{cases}
+0,0\quad\text{if $\textrm{race}_i = \texttt{black}$}\\
+1,0\quad\text{if $\textrm{race}_i = \texttt{hispanic}$}\\
+0,1\quad\text{if $\textrm{race}_i = \texttt{white}$}\\
+\end{cases}.
+$$
+
+Using `lm`, we would simply do as follows.
+```{r, echo=T}
+M_race <- lm(weight ~ race, data = weight_df_2)
+coef(M_race)
+```
+The intercept term is, as always, the predicted mean of the outcome variable when the predictors are equal to zero.
+In this case, both predictors are zero if and only if the `race` of the observation is `black`.
+Thus, the predicted average of the distribution of weight when `race` is `black` is `r coef(M_race)[1] %>% round(2)`.
+
+On the other hand, when the `race` of the observable is `hispanic`, then the dummy code is $x_{1i} = 1, x_{2i} = 0$.
+Therefore, the predicted mean of the weight distribution for Hispanics is
+$$
+`r round(coef(M_race)[1], 2)` + `r round(coef(M_race)[2], 2)` \times 1 + `r round(coef(M_race)[3], 2)` \times 0 = `r round(sum(coef(M_race)[c(1,2)]), 2)`.
+$$
+From this, we see that `r round(coef(M_race)[2], 2)` is the difference in the average of the distribution of weight between the `black` and the `hispanic` race categories.
+
+Finally, when the `race` is `white`, then the dummy code is $x_{1i} = 0, x_{2i} = 1$.
+Therefore, the predicted mean of the weight distribution for whites is
+$$
+`r round(coef(M_race)[1], 2)` + `r round(coef(M_race)[2], 2)` \times 0 + `r round(coef(M_race)[3], 2)` \times 1 = `r round(sum(coef(M_race)[c(1,3)]), 2)`.
+$$
+From this, we see that `r round(coef(M_race)[3], 2)` is the difference in the average of the distribution of weight between the `black` and the `white` race categories.
+```{r}
+S <- summary(M_race)
+f_stat <- S$fstatistic[1]
+df_1 <- S$fstatistic[2] %>% round()
+df_2 <- S$fstatistic[3] %>% round()
+```
+
+This linear model is identical to a oneway Anova.
+In the oneway Anova, we have $J$ distinct groups and have independent observations from each one.
+We assume that these $J$ groups can be each modelled as normal distributions, whose means differ, but who have a common standard deviation.
+This is precisely the model assumed when using `lm` as above.
+Moreover, the null hypothesis test that $\beta_1 = \beta_2 = 0$ in the model above is exactly the same as the null hypothesis, as in the one Anova, that the mean weights of all three race groups are the same.
+Using the `lm` model, the F statistic for the null hypothesis that $\beta_1 = \beta_2 = 0$ is $F(`r df_1`, `r df_2`) = `r f_stat %>% round(2)`$ (to two decimal places).
+The corresponding Anova table can be obtained as follows.
+```{r}
+anova(M_race)
+```
+
+If we use `aov` to perform a standard oneway Anova with this data set, we see that its null hypothesis test is identical to this.
+```{r, echo=T}
+aov(weight ~ race, data = weight_df_2) %>% 
+  summary()
+```
+

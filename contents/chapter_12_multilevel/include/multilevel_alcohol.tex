@@ -1,0 +1,61 @@
+\begin{figure}
+\begin{center}
+\begin{tikzpicture}[mynode/.style={draw,circle, minimum width=10mm,align=center},font=\small]
+\node[mynode, fill=red!10] (y_1) {$y_1$};
+\node[mynode, fill=red!10,right=of y_1] (y_2) {$y_2$};
+\node[mynode, fill=red!10, right=of y_2] (y_3) {$y_3$};
+\node[right=of y_3] (dots_1) {$\cdots$};
+\node[mynode, fill=red!10,right=of dots_1] (y_i) {$y_i$};
+\node[mynode, fill=red!10,right=of y_i] (y_i_1) {$y_{i+1}$};
+\node[right=of y_i_1] (dots_2) {$\cdots$};
+\node[mynode, fill=red!10,right=of dots_2] (y_n_1) {$y_{n-1}$};
+\node[mynode, fill=red!10,right=of y_n_1] (y_n) {$y_{n}$};
+
+\node[mynode, above right=of y_1] (mu_1) {$\mu_1$};
+\node[mynode, right=of mu_1] (mu_2) {$\mu_2$};
+
+\draw[->] (mu_1) to (y_1);
+\draw[->] (mu_1) to (y_2);
+\draw[->] (mu_2) to (y_3);
+\draw[->] (mu_2) to (dots_1);
+
+\node[mynode, above right=of y_i] (mu_j) {$\mu_j$};
+\node[mynode, above left=of y_n] (mu_J) {$\mu_J$};
+
+\draw[->] (mu_j) to (y_i);
+\draw[->] (mu_j) to (y_i_1);
+\draw[->] (mu_j) to (dots_2);
+\draw[->] (mu_J) to (y_n_1);
+\draw[->] (mu_J) to (y_n);
+
+
+
+\node[mynode, below = of y_i] (sigma) {$\sigma$};
+\draw[->, bend left=10] (sigma) to (y_1);
+\draw[->] (sigma) to (y_2);
+\draw[->] (sigma) to (y_3);
+\draw[->] (sigma) to (dots_1);
+\draw[->] (sigma) to (y_i);
+\draw[->] (sigma) to (y_i_1);
+\draw[->, bend right=10] (sigma) to (y_n);
+\draw[->] (sigma) to (y_n_1);
+\draw[->] (sigma) to (dots_2);
+
+
+\node[mynode, above = 3cm of y_i] (phi) {$\phi$};
+\draw[->] (phi) to (mu_1);
+\draw[->] (phi) to (mu_2);
+\draw[->] (phi) to (mu_j);
+\draw[->] (phi) to (mu_J);
+
+\node[mynode, left = of phi] (tau) {$\tau$};
+\draw[->] (tau) to (mu_1);
+\draw[->] (tau) to (mu_2);
+\draw[->] (tau) to (mu_j);
+\draw[->] (tau) to (mu_J);
+
+\end{tikzpicture}
+\end{center}
+\caption{A multilevel model for average alcohol consumption across. This model is an extension of the non-multilevel model shown in Figure \ref{fig:nonmultilevel_alcohol} by modelling the $\mu_1, \mu_2 \ldots \mu_j \ldots \mu_J$ as samples from a normal distribution with mean $\phi$ and standard deviation $\tau$.}
+\label{fig:multilevel_alcohol}
+\end{figure}

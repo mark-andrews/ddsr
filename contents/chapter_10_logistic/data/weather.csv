@@ -1,0 +1,917 @@
+weather,age
+app,30 - 44
+app,18 - 29
+app,30 - 44
+app,30 - 44
+app,30 - 44
+app,18 - 29
+weather_channel,30 - 44
+weather_channel,30 - 44
+app,30 - 44
+internet,18 - 29
+app,30 - 44
+tv,30 - 44
+weather_channel,18 - 29
+internet,18 - 29
+app,30 - 44
+app,30 - 44
+tv,30 - 44
+app,18 - 29
+app,18 - 29
+tv,30 - 44
+weather_channel,30 - 44
+app,30 - 44
+app,30 - 44
+app,18 - 29
+tv,30 - 44
+weather_channel,45 - 59
+other,18 - 29
+weather_channel,45 - 59
+other,30 - 44
+app,18 - 29
+internet,18 - 29
+app,60+
+internet,18 - 29
+app,18 - 29
+app,30 - 44
+app,45 - 59
+weather_channel,60+
+weather_channel,30 - 44
+internet,30 - 44
+tv,60+
+app,30 - 44
+tv,18 - 29
+app,30 - 44
+weather_channel,30 - 44
+app,18 - 29
+internet,18 - 29
+internet,18 - 29
+weather_channel,60+
+app,60+
+other,30 - 44
+tv,30 - 44
+app,30 - 44
+internet,30 - 44
+app,18 - 29
+internet,30 - 44
+tv,30 - 44
+internet,30 - 44
+internet,18 - 29
+app,30 - 44
+app,18 - 29
+other,30 - 44
+app,30 - 44
+app,18 - 29
+weather_channel,18 - 29
+app,18 - 29
+other,30 - 44
+app,18 - 29
+other,30 - 44
+app,30 - 44
+app,30 - 44
+app,30 - 44
+tv,30 - 44
+app,18 - 29
+internet,60+
+app,30 - 44
+app,30 - 44
+weather_channel,18 - 29
+app,30 - 44
+app,30 - 44
+app,30 - 44
+app,18 - 29
+app,18 - 29
+tv,30 - 44
+internet,18 - 29
+app,18 - 29
+weather_channel,18 - 29
+weather_channel,18 - 29
+other,18 - 29
+internet,18 - 29
+other,18 - 29
+app,18 - 29
+weather_channel,30 - 44
+app,18 - 29
+app,18 - 29
+internet,18 - 29
+app,30 - 44
+tv,18 - 29
+internet,18 - 29
+app,30 - 44
+other,18 - 29
+tv,30 - 44
+app,30 - 44
+weather_channel,18 - 29
+app,18 - 29
+app,30 - 44
+app,30 - 44
+internet,30 - 44
+app,30 - 44
+internet,30 - 44
+app,30 - 44
+internet,45 - 59
+app,45 - 59
+internet,18 - 29
+app,30 - 44
+internet,45 - 59
+internet,18 - 29
+app,45 - 59
+app,45 - 59
+weather_channel,45 - 59
+app,45 - 59
+internet,45 - 59
+weather_channel,45 - 59
+internet,45 - 59
+app,45 - 59
+other,45 - 59
+weather_channel,45 - 59
+app,45 - 59
+tv,45 - 59
+other,18 - 29
+app,45 - 59
+app,45 - 59
+tv,45 - 59
+internet,30 - 44
+weather_channel,30 - 44
+app,45 - 59
+app,45 - 59
+app,45 - 59
+app,45 - 59
+other,45 - 59
+app,45 - 59
+internet,45 - 59
+tv,45 - 59
+app,18 - 29
+app,45 - 59
+app,45 - 59
+app,45 - 59
+weather_channel,45 - 59
+internet,45 - 59
+weather_channel,45 - 59
+internet,30 - 44
+internet,45 - 59
+app,18 - 29
+app,45 - 59
+app,45 - 59
+tv,45 - 59
+app,45 - 59
+tv,18 - 29
+app,18 - 29
+weather_channel,45 - 59
+tv,45 - 59
+other,45 - 59
+app,45 - 59
+other,18 - 29
+tv,45 - 59
+weather_channel,45 - 59
+other,45 - 59
+weather_channel,18 - 29
+weather_channel,45 - 59
+app,45 - 59
+app,45 - 59
+internet,18 - 29
+other,18 - 29
+app,45 - 59
+weather_channel,30 - 44
+app,45 - 59
+app,45 - 59
+app,45 - 59
+app,45 - 59
+app,45 - 59
+other,18 - 29
+weather_channel,45 - 59
+weather_channel,45 - 59
+tv,60+
+weather_channel,60+
+weather_channel,60+
+internet,60+
+app,60+
+app,60+
+internet,45 - 59
+weather_channel,45 - 59
+app,18 - 29
+tv,60+
+app,45 - 59
+app,30 - 44
+tv,60+
+app,60+
+tv,30 - 44
+app,30 - 44
+other,60+
+app,60+
+tv,45 - 59
+weather_channel,60+
+internet,45 - 59
+app,60+
+app,45 - 59
+app,45 - 59
+tv,60+
+other,60+
+app,60+
+weather_channel,60+
+app,60+
+app,60+
+internet,45 - 59
+tv,60+
+tv,60+
+weather_channel,45 - 59
+app,45 - 59
+weather_channel,60+
+other,60+
+tv,45 - 59
+app,60+
+tv,60+
+tv,60+
+app,45 - 59
+weather_channel,45 - 59
+internet,60+
+tv,60+
+tv,60+
+app,45 - 59
+internet,45 - 59
+app,18 - 29
+app,30 - 44
+other,60+
+app,60+
+other,45 - 59
+internet,45 - 59
+tv,30 - 44
+other,30 - 44
+tv,60+
+app,30 - 44
+app,30 - 44
+tv,60+
+app,30 - 44
+internet,60+
+internet,45 - 59
+app,60+
+app,30 - 44
+other,60+
+app,30 - 44
+app,60+
+app,60+
+weather_channel,45 - 59
+app,30 - 44
+app,60+
+internet,60+
+app,30 - 44
+app,60+
+app,30 - 44
+app,60+
+other,60+
+internet,60+
+internet,60+
+weather_channel,30 - 44
+app,60+
+app,30 - 44
+other,60+
+tv,30 - 44
+tv,60+
+tv,30 - 44
+tv,45 - 59
+internet,45 - 59
+internet,60+
+internet,18 - 29
+app,30 - 44
+weather_channel,60+
+weather_channel,30 - 44
+tv,60+
+internet,60+
+tv,60+
+internet,60+
+internet,30 - 44
+app,30 - 44
+internet,60+
+weather_channel,60+
+app,60+
+app,30 - 44
+tv,60+
+app,30 - 44
+tv,30 - 44
+other,60+
+app,60+
+weather_channel,18 - 29
+app,60+
+app,18 - 29
+tv,60+
+internet,45 - 59
+app,45 - 59
+tv,60+
+weather_channel,60+
+other,60+
+internet,45 - 59
+app,60+
+app,60+
+tv,45 - 59
+app,30 - 44
+weather_channel,60+
+app,60+
+app,60+
+internet,30 - 44
+app,60+
+app,30 - 44
+app,45 - 59
+internet,18 - 29
+internet,60+
+app,60+
+internet,60+
+tv,60+
+weather_channel,60+
+tv,30 - 44
+weather_channel,60+
+tv,45 - 59
+app,45 - 59
+other,60+
+app,60+
+internet,60+
+app,30 - 44
+other,60+
+other,60+
+app,45 - 59
+other,60+
+weather_channel,60+
+tv,60+
+app,60+
+weather_channel,30 - 44
+weather_channel,60+
+tv,45 - 59
+other,60+
+tv,30 - 44
+internet,45 - 59
+other,60+
+weather_channel,60+
+tv,60+
+internet,45 - 59
+app,60+
+other,45 - 59
+internet,45 - 59
+tv,60+
+app,30 - 44
+other,45 - 59
+app,30 - 44
+weather_channel,30 - 44
+tv,45 - 59
+internet,60+
+app,60+
+app,45 - 59
+app,45 - 59
+weather_channel,45 - 59
+tv,45 - 59
+app,30 - 44
+app,45 - 59
+app,30 - 44
+app,60+
+weather_channel,30 - 44
+tv,45 - 59
+tv,30 - 44
+app,30 - 44
+app,30 - 44
+tv,45 - 59
+app,30 - 44
+app,60+
+other,60+
+tv,60+
+internet,45 - 59
+weather_channel,45 - 59
+tv,45 - 59
+tv,60+
+tv,45 - 59
+app,45 - 59
+app,45 - 59
+tv,60+
+tv,45 - 59
+tv,45 - 59
+weather_channel,45 - 59
+internet,45 - 59
+tv,45 - 59
+other,45 - 59
+other,30 - 44
+tv,30 - 44
+app,60+
+other,45 - 59
+tv,45 - 59
+tv,30 - 44
+app,45 - 59
+app,30 - 44
+tv,45 - 59
+app,60+
+app,45 - 59
+app,45 - 59
+app,60+
+tv,60+
+app,45 - 59
+app,30 - 44
+app,60+
+weather_channel,30 - 44
+tv,45 - 59
+tv,45 - 59
+app,45 - 59
+app,30 - 44
+app,30 - 44
+internet,18 - 29
+app,45 - 59
+weather_channel,45 - 59
+tv,60+
+app,30 - 44
+app,45 - 59
+app,30 - 44
+app,60+
+internet,60+
+internet,18 - 29
+internet,30 - 44
+other,60+
+app,45 - 59
+app,45 - 59
+internet,45 - 59
+internet,60+
+app,30 - 44
+app,45 - 59
+weather_channel,45 - 59
+weather_channel,45 - 59
+app,60+
+weather_channel,60+
+app,45 - 59
+tv,60+
+app,18 - 29
+app,30 - 44
+app,45 - 59
+tv,45 - 59
+tv,18 - 29
+weather_channel,18 - 29
+weather_channel,18 - 29
+app,45 - 59
+app,60+
+app,60+
+weather_channel,18 - 29
+internet,18 - 29
+weather_channel,60+
+internet,45 - 59
+app,18 - 29
+app,18 - 29
+app,45 - 59
+internet,18 - 29
+app,60+
+tv,30 - 44
+internet,30 - 44
+internet,60+
+tv,60+
+weather_channel,60+
+internet,60+
+weather_channel,45 - 59
+app,60+
+app,60+
+app,18 - 29
+app,45 - 59
+app,30 - 44
+weather_channel,45 - 59
+internet,18 - 29
+app,45 - 59
+weather_channel,45 - 59
+app,18 - 29
+app,18 - 29
+weather_channel,45 - 59
+other,45 - 59
+tv,30 - 44
+tv,30 - 44
+weather_channel,45 - 59
+app,30 - 44
+tv,60+
+app,30 - 44
+tv,30 - 44
+tv,60+
+app,18 - 29
+internet,18 - 29
+app,60+
+tv,45 - 59
+app,30 - 44
+tv,18 - 29
+app,45 - 59
+other,60+
+internet,30 - 44
+tv,60+
+other,60+
+weather_channel,60+
+app,60+
+tv,45 - 59
+app,18 - 29
+tv,45 - 59
+other,45 - 59
+internet,60+
+tv,60+
+app,30 - 44
+weather_channel,60+
+internet,30 - 44
+app,45 - 59
+internet,60+
+other,60+
+app,60+
+internet,18 - 29
+app,18 - 29
+internet,45 - 59
+app,60+
+weather_channel,18 - 29
+weather_channel,18 - 29
+tv,60+
+weather_channel,45 - 59
+weather_channel,45 - 59
+weather_channel,18 - 29
+tv,18 - 29
+app,45 - 59
+weather_channel,60+
+app,45 - 59
+tv,60+
+weather_channel,60+
+app,60+
+app,45 - 59
+app,18 - 29
+app,18 - 29
+weather_channel,45 - 59
+app,60+
+internet,18 - 29
+tv,45 - 59
+app,30 - 44
+app,45 - 59
+app,18 - 29
+app,18 - 29
+weather_channel,45 - 59
+app,18 - 29
+other,60+
+app,45 - 59
+other,60+
+app,18 - 29
+app,45 - 59
+tv,60+
+app,18 - 29
+internet,18 - 29
+app,45 - 59
+internet,45 - 59
+tv,45 - 59
+tv,18 - 29
+app,60+
+app,45 - 59
+internet,60+
+app,60+
+app,30 - 44
+weather_channel,60+
+tv,45 - 59
+app,30 - 44
+tv,60+
+internet,45 - 59
+tv,45 - 59
+internet,18 - 29
+tv,45 - 59
+weather_channel,45 - 59
+internet,30 - 44
+weather_channel,60+
+weather_channel,45 - 59
+app,18 - 29
+internet,18 - 29
+app,60+
+other,45 - 59
+app,45 - 59
+weather_channel,45 - 59
+app,45 - 59
+tv,60+
+app,45 - 59
+internet,18 - 29
+tv,60+
+tv,18 - 29
+other,60+
+weather_channel,45 - 59
+internet,60+
+tv,45 - 59
+internet,30 - 44
+tv,60+
+app,18 - 29
+app,60+
+internet,45 - 59
+other,60+
+tv,60+
+app,30 - 44
+tv,45 - 59
+app,45 - 59
+tv,45 - 59
+other,45 - 59
+app,30 - 44
+weather_channel,18 - 29
+app,45 - 59
+internet,60+
+app,45 - 59
+other,60+
+tv,60+
+internet,60+
+internet,18 - 29
+tv,45 - 59
+app,30 - 44
+app,60+
+app,18 - 29
+app,30 - 44
+tv,60+
+weather_channel,45 - 59
+tv,60+
+tv,30 - 44
+app,18 - 29
+app,60+
+other,45 - 59
+app,45 - 59
+tv,18 - 29
+app,18 - 29
+app,60+
+app,60+
+weather_channel,18 - 29
+app,60+
+tv,45 - 59
+other,45 - 59
+internet,45 - 59
+app,45 - 59
+app,18 - 29
+tv,45 - 59
+tv,60+
+app,30 - 44
+tv,45 - 59
+app,45 - 59
+internet,30 - 44
+tv,30 - 44
+app,18 - 29
+app,30 - 44
+weather_channel,30 - 44
+app,45 - 59
+weather_channel,45 - 59
+app,45 - 59
+weather_channel,45 - 59
+weather_channel,60+
+app,18 - 29
+app,18 - 29
+tv,45 - 59
+tv,60+
+app,60+
+weather_channel,60+
+app,30 - 44
+weather_channel,18 - 29
+tv,60+
+app,60+
+other,60+
+tv,60+
+internet,30 - 44
+app,30 - 44
+weather_channel,30 - 44
+app,18 - 29
+other,60+
+tv,60+
+app,60+
+app,60+
+internet,45 - 59
+weather_channel,45 - 59
+tv,60+
+tv,60+
+weather_channel,60+
+app,18 - 29
+tv,45 - 59
+weather_channel,18 - 29
+other,30 - 44
+app,60+
+weather_channel,60+
+app,18 - 29
+tv,18 - 29
+tv,60+
+tv,18 - 29
+tv,45 - 59
+app,45 - 59
+app,45 - 59
+app,30 - 44
+tv,18 - 29
+app,18 - 29
+app,45 - 59
+weather_channel,60+
+app,18 - 29
+tv,45 - 59
+tv,60+
+internet,60+
+app,45 - 59
+app,30 - 44
+internet,60+
+app,18 - 29
+internet,45 - 59
+tv,60+
+app,60+
+weather_channel,30 - 44
+app,60+
+other,60+
+app,60+
+tv,60+
+other,45 - 59
+app,30 - 44
+tv,30 - 44
+app,18 - 29
+tv,60+
+tv,45 - 59
+tv,60+
+tv,30 - 44
+app,60+
+app,18 - 29
+app,18 - 29
+app,45 - 59
+internet,60+
+tv,60+
+tv,45 - 59
+app,30 - 44
+tv,60+
+weather_channel,60+
+tv,45 - 59
+tv,60+
+app,45 - 59
+app,45 - 59
+app,18 - 29
+tv,45 - 59
+weather_channel,30 - 44
+internet,18 - 29
+app,18 - 29
+app,30 - 44
+weather_channel,18 - 29
+other,60+
+app,45 - 59
+app,18 - 29
+app,18 - 29
+app,18 - 29
+tv,60+
+internet,60+
+internet,45 - 59
+tv,45 - 59
+app,30 - 44
+weather_channel,45 - 59
+weather_channel,45 - 59
+app,60+
+weather_channel,18 - 29
+app,45 - 59
+app,45 - 59
+tv,45 - 59
+weather_channel,60+
+internet,60+
+internet,30 - 44
+app,45 - 59
+tv,18 - 29
+tv,45 - 59
+app,30 - 44
+app,30 - 44
+app,18 - 29
+tv,30 - 44
+internet,30 - 44
+tv,60+
+app,18 - 29
+tv,60+
+app,18 - 29
+tv,30 - 44
+internet,30 - 44
+weather_channel,30 - 44
+weather_channel,30 - 44
+internet,18 - 29
+app,18 - 29
+weather_channel,60+
+weather_channel,30 - 44
+weather_channel,18 - 29
+app,18 - 29
+tv,45 - 59
+app,18 - 29
+other,60+
+app,60+
+weather_channel,60+
+app,30 - 44
+tv,30 - 44
+app,18 - 29
+weather_channel,60+
+app,45 - 59
+weather_channel,30 - 44
+tv,45 - 59
+weather_channel,18 - 29
+tv,45 - 59
+internet,18 - 29
+app,30 - 44
+app,18 - 29
+weather_channel,18 - 29
+other,45 - 59
+tv,60+
+tv,60+
+tv,60+
+app,18 - 29
+app,18 - 29
+tv,60+
+app,45 - 59
+app,18 - 29
+app,18 - 29
+app,18 - 29
+weather_channel,30 - 44
+tv,45 - 59
+internet,60+
+app,45 - 59
+other,60+
+app,60+
+app,18 - 29
+weather_channel,45 - 59
+internet,18 - 29
+app,45 - 59
+app,45 - 59
+tv,60+
+tv,60+
+app,60+
+app,45 - 59
+app,18 - 29
+app,18 - 29
+tv,45 - 59
+app,30 - 44
+other,45 - 59
+internet,30 - 44
+tv,30 - 44
+app,60+
+internet,18 - 29
+tv,45 - 59
+app,30 - 44
+other,45 - 59
+tv,45 - 59
+weather_channel,45 - 59
+app,30 - 44
+app,45 - 59
+app,18 - 29
+tv,60+
+app,30 - 44
+internet,60+
+weather_channel,45 - 59
+app,45 - 59
+app,18 - 29
+app,18 - 29
+app,45 - 59
+app,60+
+app,18 - 29
+app,30 - 44
+internet,30 - 44
+tv,18 - 29
+app,30 - 44
+app,30 - 44
+weather_channel,45 - 59
+weather_channel,30 - 44
+other,18 - 29
+tv,60+
+internet,18 - 29
+other,45 - 59
+app,18 - 29
+internet,30 - 44
+internet,30 - 44
+app,18 - 29
+app,30 - 44
+app,45 - 59
+weather_channel,18 - 29
+app,60+
+app,30 - 44
+internet,60+
+tv,60+
+app,45 - 59
+app,60+
+tv,30 - 44
+app,45 - 59
+app,18 - 29
+weather_channel,18 - 29
+internet,60+
+tv,45 - 59
+internet,60+
+internet,45 - 59
+tv,45 - 59
+weather_channel,45 - 59
+tv,45 - 59
+app,18 - 29
+app,45 - 59
+other,60+
+tv,30 - 44
+app,18 - 29
+tv,45 - 59
+internet,45 - 59
+app,30 - 44
+app,60+
+weather_channel,30 - 44
+app,30 - 44
+weather_channel,18 - 29
+app,60+
+internet,30 - 44
+weather_channel,30 - 44
+tv,45 - 59
+app,60+
+other,60+
+tv,45 - 59
+weather_channel,45 - 59
+tv,30 - 44
+app,45 - 59
+app,30 - 44
+app,30 - 44
+app,45 - 59
+app,30 - 44
+other,45 - 59
+weather_channel,30 - 44
+weather_channel,45 - 59
+tv,45 - 59
+tv,45 - 59
+app,30 - 44
+app,18 - 29
+app,45 - 59
+weather_channel,30 - 44
+internet,60+
+weather_channel,45 - 59
+app,30 - 44
+tv,60+

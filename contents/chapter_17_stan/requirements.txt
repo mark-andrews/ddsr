@@ -1,0 +1,3 @@
+powerline-shell==0.7.0
+powerline-status==2.7
+Pygments==2.5.2

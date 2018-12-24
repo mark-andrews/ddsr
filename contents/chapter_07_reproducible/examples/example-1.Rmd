@@ -1,0 +1,8 @@
+This is some text. Some of it is *italicized*, and some is in **bold**.
+
+```{r}
+x <- c(5, 12, 103)
+y <- x ^ 2
+```
+
+The mean of `x` is `r mean(x)`, and the min value of `y` is `r min(y)`.

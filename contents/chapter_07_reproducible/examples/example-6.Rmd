@@ -1,0 +1,6 @@
+The probability of the observed data is as follows: 
+$$
+\mathrm{P}(x_i \ldots x_n \vert \mu, \sigma^2) 
+= \prod_{i=1}^n \mathrm{P}(x_i \vert \mu, \sigma^2),
+$$
+where $\mu$ and $\sigma$ are parameters.

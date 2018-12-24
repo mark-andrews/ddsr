@@ -1,0 +1,3 @@
+\begin{center}
+The result is $x = \frac{a + b}{c + d}$.
+\end{center}

@@ -1,0 +1,1257 @@
+---
+title: "Chapter 11: Generalized Linear Models for Count Data"
+author: "Mark Andrews"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    fig_caption: true
+    keep_tex: true
+    highlight: haddock
+  html_document:
+    highlight: haddock
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+  - \usepackage{subfigure}
+---
+
+  
+```{r, echo=F}
+knitr::opts_chunk$set(echo = F, prompt = F, warning = F, message = F, comment='#>')
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+```
+
+```{r}
+library(tidyverse)
+library(cowplot)
+library(latex2exp)
+library(brms)
+theme_set(theme_classic())
+
+set.seed(101101)
+
+brm <- function(...) brms::brm(silent = TRUE, refresh = 0, seed = 10101, ...)
+
+```
+
+In the previous chapter, we covered logistic regression models, each of which are types of generalized linear models.
+Generalized linear models are regression models that extend the normal linear model so that it can model data that is not normally distributed around a mean that is a linear function of predictors.
+The general definition of a generalized linear model is as follows.
+Assuming that our data is as follows:
+$$
+(y_1, \vec{x}_1), (y_2, \vec{x}_2) \ldots (y_i, \vec{x}_i) \ldots (y_n,\vec{x}_n),
+$$
+where $y_1, y_2 \ldots y_n$ are the observed values of an outcome variable and $\vec{x}_1, \vec{x}_2 \ldots \vec{x}_n$ are the corresponding vectors of predictors and each $\vec{x}_i = x_{1i}, x_{2i} \ldots x_{ki} \ldots x_{Ki}$, a generalized linear model of this data is
+$$
+ y_i \sim D(\theta_i, \psi),\quad f(\theta_i) = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1\ldots n$},
+$$
+where $D(\theta_i, \psi)$ is some probability distribution centered at $\theta_i$ and with an optional parameter $\psi$ that controls the scale or shape of the distribution, and where $f$ is a monotonic (and thus invertible) *link* function.
+As an example, we've already seen that the binary logistic regression is 
+$$
+y_i \sim \textrm{Bernoulli}(\theta_i),\quad \textrm{logit}\left(\theta_i\right) = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$}.
+$$
+Thus, in this case, $D(\theta_i, \psi)$ is $\textrm{Bernoulli}(\theta_i)$, there so there is no optional $\psi$ parameter, and the link function is the $\textrm{logit}$ function.
+
+In this chapter, we will cover some other generalized linear models, and ones that are specifically designed to model *count* data.
+Count data is simply data of counts, or the number of times something has happened.
+Examples of count data are widespread: the number of car accidents that occur in a region each day (or week, year, etc); the number of extramarital affairs that a married person has in a year; the number of times a person visits a doctor in a year; and so on.
+Count data must be non-negative integers: they can take values of 0, but not negative values, and they must be a whole numbers.
+Although there are many models that could be considered under this general topic, we will cover just some of them, but ones that are very widely used or otherwise very useful.
+In particular, we will cover Poisson regression, negative binomial regression, and so-called zero-inflated count models, particularly zero-inflated Poisson regression.
+
+# Poisson regression
+
+In Poisson regression, our data are 
+$$
+(y_1, \vec{x}_1), (y_2, \vec{x}_2) \ldots (y_i, \vec{x}_i) \ldots (y_n,\vec{x}_n),
+$$
+as described above, and where each $y_i \in 0, 1, 2, \ldots$.
+In other words, $y_i$ takes on a non-negative integer value which specifically represents a *count*, or the number of times something happened a period of time.
+
+```{r poisson_distributions, fig.cap='Poisson distributions with different values of the parameter $\\lambda$.', fig.align='center'}
+x <- seq(0, 25)
+
+tex_labeller <- function(lambda){
+  TeX(sprintf('$\\lambda = %s', lambda))
+}
+
+lambdas <- c(3.5, 5, 10, 15)
+epsilon = 0.25
+map(lambdas %>% set_names(lambdas),
+    ~dpois(x, lambda = .)
+) %>% bind_cols() %>% 
+  bind_cols(x = x, .) %>% 
+  gather(key = 'lambda', value = 'd', -x) %>% 
+  mutate_at(vars(lambda), 
+            ~factor(., levels = lambdas)) %>% 
+  ggplot(aes(x = x, y = d)) +
+  geom_point() +
+  geom_segment(aes(x = x, xend = x, y = 0, yend = d)) +
+  facet_wrap(~ lambda, nrow = 2, labeller = as_labeller(tex_labeller, default = label_parsed)) +
+  labs(y = 'P(x)') +
+  theme_minimal()
+```
+
+In order to deal with count outcome data in a regression framework, we first must use an appropriate probability distribution as a model of the outcome variable.
+A default choice here is the *Poisson distribution*.
+A Poisson distribution is a probability distribution over non-negative integers.
+If $x$ is a Poisson random variable, it takes on values $k \in 0, 1, \ldots$, and the probability that $x = k$ is
+$$
+\textrm{Poisson}(x = k\given \lambda) = \Prob{x = k \given \lambda} = \frac{e^{-\lambda} \lambda^k}{k!}.
+$$
+Here, $\lambda$ is the Poisson distribution's single parameter.
+While usually denoted by $\lambda$, it is usually known as the *rate* or the *rate parameter*.
+It gives the average value of the random variable $x$.
+Unlike the values of $x$, which must be non-negative integers, $\lambda$ is not constrained to be an integer, it is just constrained to be non-negative.
+In Figure \ref{fig:poisson_distributions}, we plot four different Poisson distributions, which differ from one another by the value of $\lambda$.
+
+The Poisson distribution can be understood as limit of a binomial distribution.
+The binomial distribution is also a distribution over counts but where there are a fixed number of times, known as the number of *trials* and signified by $n$, an event can happen, known as a *success*, and where the probability of a *success*, signified by $\theta$, is independent and identical on each trial.
+As the number of trials in a binomial distributions tends to infinity, but if $\theta \cdot n$ is held constant, then the distribution tends to a Poisson distribution with parameter $\lambda = \theta \cdot n$.
+This phenomenon is illustrated in Figure \ref{fig:binomial_distributions}.
+```{r, binomial_distributions, fig.cap='a) Binomial distributions with increasing values of $n$, which denote the number of trials, but where $\\theta \\cdot n$ is held constant at $\\theta \\cdot n = 5$. b) A Poisson distribution with $\\lambda = 5$.', fig.height = 6, fig.align='center'}
+x <- seq(0, 25)
+
+tex_labeller <- function(lambda){
+  TeX(sprintf('$n = %s', lambda))
+}
+
+n <- c(10, 20, 100, 1000)
+n <- n %>% set_names(n)
+lambda <- 5
+theta <- lambda/n
+
+p1 <- map2(n, theta, ~dbinom(x, size=.x, prob = .y)) %>% 
+  bind_cols() %>% 
+  bind_cols(x = x, .) %>% 
+  gather(key = 'lambda', value = 'd', -x) %>% 
+  mutate_at(vars(lambda), as.numeric) %>% 
+  ggplot(aes(x = x, y = d)) +
+  geom_point() +
+  geom_segment(aes(x = x, xend = x, y = 0, yend = d)) +
+  facet_wrap(~ lambda, nrow = 2, labeller = as_labeller(tex_labeller, default = label_parsed)) +
+  labs(y = 'P(x)') +
+  theme_minimal()
+
+p2 <- tibble(x = x, d = dpois(x, lambda = lambda)) %>% 
+  ggplot(aes(x = x, y = d)) +
+  geom_point() + 
+  geom_segment(aes(x = x, xend = x, y = 0, yend = d)) +
+  ylim(0, 0.25) +
+  labs(y = 'P(x)') +
+  theme_minimal()
+
+plot_grid(p1, 
+          plot_grid(NULL, p2, NULL, rel_widths = c(1, 3, 1), nrow = 1, labels = c('','b','')), 
+          nrow = 2, 
+          labels = c('a',''),
+          rel_heights = c(2, 1.1))
+```
+
+This relationship between the binomial distribution and the Poisson distribution helps us to understand why the Poisson distribution commonly occurs in the natural and social world.
+In situations where events occur independently with fixed probability $\theta$, when the number of opportunities when these events can occur is very large but where $\theta$ is very low, then the distribution of the number of times an event occurs tends to a Poisson distribution.
+As an example, the number of occasions when a car accident can occur on any given day is extremely high, yet the probability of an accident occurring on any one of these occasions is very low, and so the resulting distribution of the number of car accidents is well described by a Poisson distribution.
+
+In Poisson regression, we assume that each $y_i$ is distributed as a Poisson distribution with parameter $\lambda_i$ and assume that $\lambda_i$ is determined by a function of $\vec{x}_i$.
+For analogous reasons to what occurs in the case of logistic regression, we can not have each $\lambda_i$ being a linear function of $\vec{x}_i$ because each $\lambda_i$ is constrained to take non-negative values only, and in general, if we allow $\lambda_i$ to be a linear function of $\vec{x}_i$, we can not guarantee that it will be constrained to be non-negative.
+For this reason, again analogously to what happened in the logistic regression, we can transform $\lambda_i$ to another variable $\phi_i$, which can take any value in $\mathbb{R}$, and then treat $\phi_i$ as the linear function of $\vec{x}_i$.
+For this, as before, we need an invertible *link function* $f \colon \mathbb{R}^+ \mapsto \mathbb{R}$ that can map any value of $\lambda_i$ to a unique value of $\phi$, and vice versa.
+For this case, we have a number of options for $f$, but the default choice is simply the natural logarithm function:
+$$
+\phi_i = f(\lambda_i) = \log(\lambda_i).
+$$
+As such, our Poisson regression model is as follows:
+$$
+y_i \sim \textrm{Poisson}(\lambda_i),\quad f(\lambda_i) = \log(\lambda_i) = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$},
+$$
+which is identical to 
+$$
+y_i \sim \textrm{Poisson}(\lambda_i),\quad \lambda_i = e^{\phi_i},\quad \phi_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$}.
+$$
+Returning to the general definition of generalized linear models:
+$$
+ y_i \sim D(\theta_i, \psi),\quad f(\theta_i) = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1\ldots n$},
+$$
+we see that in the case of Poisson regression, $D(\theta_i, \psi)$ is $\textrm{Poisson}(\lambda_i)$, where we follow conventions and use $\lambda_i$ instead of $\theta_i$ as the location parameters, and where there is no optional $\psi$ parameter, and where the $f$ link function is the $\log$ function.
+
+
+As an example of a problem seemingly suited to a Poisson regression model, we will use the following data set.
+```{r, echo=T}
+lbw_df <- read_csv('data/lbw.csv')
+lbw_df
+```
+This gives us data relating to low birth weight infants.
+One variable in this data set is `ftv`, which is the number of visits to the doctor by the mother in her trimester of pregnancy.
+In Figure \ref{fig:ftv}, we show the distribution of value of `ftv` as function of the age of the mother, which we have grouped by age tercile.
+There, we see that the distribution shifts upwards as we go from the 1st, 2nd to 3rd age tercile.
+Thus, we could model `ftv` as a Poisson variable whose mean varies as a function of age, as well as other potentially interesting explanatory variables.
+```{r ftv, fig.align='center', fig.cap='The number of visits to a doctor in the first trimester of pregnancy for each age tercile.', fig.height=3}
+lbw_df %>% 
+  mutate(age_grp = ntile(age, 3)) %>% 
+  group_by(ftv, age_grp) %>% 
+  summarise(n = n()) %>% 
+  ggplot(aes(x = ftv, y = n)) + 
+  geom_point() + 
+  geom_segment(aes(x = ftv, xend = ftv, y = 0, yend = n)) +
+  facet_grid(~age_grp) +
+  theme_minimal()
+```
+In general, in Poisson regression, we model a count response variable as a Poisson distribution whose parameter $\lambda$ varies by a set of explanatory variables.
+More precisely, we model the log of $\lambda$ as a linear function of the explanatory variables.
+
+## Maximum likelihood estimation
+
+Just as with linear and logistic regression, our estimate of the value of $\vec{\beta}$ is the maximum likelihood estimator.
+The likelihood function is as follows.
+$$
+\begin{aligned}
+\Prob{\vec{y} \given X, \vec{\beta}} &= \prod_{i=1}^n \Prob{y_i \given \vec{x}_i, \beta},\\
+                                     &= \prod_{i=1}^n e^{-\lambda_i}\frac{\lambda_i^{y_i}}{y_i!},
+\end{aligned}
+$$
+where
+$$
+\lambda_i = e^{\vec{x}_i \vec{\beta}} = e^{\beta_0 + \sum_{k=1}^K \beta_k x_{ki}},
+$$
+and where $\vec{y} = [y_1, y_2 \ldots y_n]\strut^\intercal$, $\vec{\beta} = [\beta_0, \beta_1 \ldots \beta_K]\strut^\intercal$, $X$ is a matrix of $n$ stacked row vectors $\vec{1}, \vec{x}_1, \vec{x}_2 \ldots \vec{x}_n$, where $\vec{1}$ is a row of $K+1$ ones.
+The logarithm of the likelihood is then defined as 
+$$
+\begin{aligned}
+L(\vec{\beta} \given \vec{y}, X) &= \log \Prob{\vec{y} \given X, \vec{\beta}},\\
+                                 &= \sum_{i=1}^n\left( \lambda_i + y_i \log(\lambda_i) - \log(y_i!)\right).
+\end{aligned}
+$$
+The maximum likelihood estimator is the value of $\vec{\beta}$ that maximizes this function.
+We obtain this calculating the gradient of $L(\vec{\beta} \given \vec{y}, X)$ with respect to $\vec{\beta}$, setting this to equal zero, and solving for $\vec{\beta}$.
+As with the logistic regression, this is done using a Newton-Raphson method, and the resulting estimator is labelled $\hat{\beta}$.
+Similarly to the case of the logistic regression, the asymptotic sampling distribution of $\hat{\beta}$ is 
+$$
+\hat{\beta} \sim N(\vec{\beta}, (X\strut^\intercal W X)\strut^{-1}),
+$$
+where $W$ is an $n \times n$ diagonal matrix whose $i$th element is 
+$$
+\hat{\lambda}_i = e^{\vec{x}_i \hat{\beta}} .
+$$
+This entails that 
+$$
+\frac{\hat{\beta}_k - \beta_k}{\sqrt{(X\strut^\intercal W X)\strut^{-1}_{kk}}} \sim N(0, 1),
+$$
+where $\sqrt{(X\strut^\intercal W X)\strut^{-1}_{kk}}$ is the standard error term $\hat{\textrm{se}}_k$.
+This is the basis for hypothesis testing and confidence intervals for the coefficients.
+
+## Poisson regression using R
+
+Here, we will use the `lbw_df` data set and model `ftv` as a function of the mother's age.
+```{r, echo=T}
+lbw_m <- glm(ftv ~ age,
+             data = lbw_df,
+             family = poisson(link = 'log')
+)
+```
+Note that we use `glm` just we did with logistic regression, but use `family = poisson(link = 'log')`.
+It would have been sufficient to use `family = poisson()`, given the `link = 'log'` is the default.
+
+First, let us look at $\hat{\beta}$, the maximum likelihood estimators for $\vec{\beta}$, which we can do with `coef`.
+```{r, echo=T}
+(estimates <- coef(lbw_m))
+```
+From this, we see that the logarithm of average the visits increases by `r coef(lbw_m)['age'] %>% round(3)` for every extra year of age.
+This entails that the average number of visits increases by a factor of $e^{`r coef(lbw_m)['age'] %>% round(3)`} = `r exp(coef(lbw_m)['age']) %>% round(3)`$ with every extra year of marriage.
+
+Now, let us turn to hypothesis tests and confidence intervals.
+We can begin by examining the coefficients table.
+```{r, echo=T}
+summary(lbw_m)$coefficients
+```
+Let us first confirm that this standard error is calculated as we have stated above.
+```{r, echo=T}
+library(modelr)
+X <- model_matrix(lbw_df, ~ age) %>% 
+  as.matrix()
+W <- diag(lbw_m$fitted.values)
+
+std_err <- solve(t(X) %*% W %*% X) %>% diag() %>% sqrt()
+std_err
+```
+The `z value` is the statistic for the hypothesis that each $\hat{\beta}_k$ is zero, which is easily verified as the maximum likelihood estimate divided by its corresponding standard error.
+```{r, echo=T}
+(z_stat <- estimates / std_err)
+```
+
+The corresponding p-values are given by `Pr(>|z|)`, which is also easily verified as the probability of getting a value as or more extreme than `z value` in a standard normal distribution, as we see in the following.
+```{r, echo=T}
+2 * pnorm(abs(z_stat), lower.tail = F)
+```
+The 95% confidence interval for `age` is as follows.
+```{r, echo=T}
+confint.default(lbw_m, parm='age')
+```
+We can confirm that this is $\hat{\beta}_k \pm \hat{\textrm{se}}_k \cdot \zeta_{(0.975)}$.
+```{r, echo=T}
+estimates['age'] + c(-1, 1) * std_err['age'] * qnorm(0.975)
+```
+
+## Prediction in Poisson regression
+
+Given a vector of new values of the predictor variables $\vec{x}_\iota$, and given the estimates $\hat{\beta}$, the predicted value of log of the rate is 
+$$
+\hat{\phi}_\iota = \vec{x}_\iota \hat{\beta},
+$$
+and so the predicted value of the rate is obtained by applying the inverse of the $\log$ link function
+$$
+\hat{\lambda}_i = e^{\hat{\phi}_\iota} = e^{\vec{x}_\iota \hat{\beta}}.
+$$
+For example, the predicted log of the rate for mothers aged 20, 25, 30 is easily calculated as follows.
+```{r, echo=T}
+estimates['(Intercept)'] + estimates['age'] * c(20, 25, 30)
+```
+And so the predicted rate for these women is as follows
+```{r, echo=T}
+exp(estimates['(Intercept)'] + estimates['age'] * c(20, 25, 30))
+```
+As we seen above, these calculations are easier using the `predict` function.
+There, we have option of obtaining these predictions on the linear scale, the default, or by using `type = 'response'` to give predictions after the inverse of the link function is applied.
+```{r, echo=T}
+lbw_df_new <- tibble(age = c(20, 25, 30))
+predict(lbw_m, newdata = lbw_df_new)
+predict(lbw_m, newdata = lbw_df_new, type = 'response')
+```
+We also saw that these predictions can be even more easily performed using `add_predictions`.
+```{r, echo=T}
+lbw_df_new %>% 
+  add_predictions(lbw_m)
+
+lbw_df_new %>% 
+  add_predictions(lbw_m, type='response')
+```
+
+Given that $\phi_\iota = \vec{x}_\iota \hat{\beta}$ and that $\hat{\beta}$ has the multivariate normal distribution stated above, then $\phi_\iota$ will have the following sampling distribution.
+$$
+\hat{\phi}_\iota \sim N(\vec{x}_\iota \vec{\beta}, 
+      \underbrace{\vec{x}_\iota (X\strut^\intercal W X)\strut^{-1}\vec{x}^\intercal_\iota}
+                  _{\hat{\textrm{se}}^2_\iota}
+).
+$$
+From this, the 95% confidence interval on $\phi_\iota = \vec{x}_\iota \vec{\beta}$ is
+$$
+\hat{\phi}_\iota \pm \hat{\textrm{se}}_\iota \cdot \zeta_{(0.975)}.
+$$
+
+Using the `se.fit = TRUE` option in `predict`, we can obtain the standard errors for prediction.
+```{r, echo=T}
+predict(lbw_m, newdata = lbw_df_new, se.fit = T)$se.fit
+```
+We can verify that these are calculated as stated above.
+```{r, echo=T}
+x_iota <- model_matrix(lbw_df_new, ~ age) %>% 
+  as.matrix()
+
+x_iota %*% solve(t(X) %*% W %*% X) %*% t(x_iota) %>% 
+  diag() %>% 
+  sqrt()
+```
+We can use the standard errors to calculate the confidence intervals on the predicted log of the rates.
+```{r, echo=T}
+predictions <- predict(lbw_m, newdata = lbw_df_new, se.fit = T)
+cbind(
+  predictions$fit - predictions$se.fit * qnorm(0.975),
+  predictions$fit + predictions$se.fit * qnorm(0.975)
+)
+```
+Applying the inverse of the link function, we can get confidence intervals on the predicted rates.
+```{r, echo=T}
+cbind(
+  predictions$fit - predictions$se.fit * qnorm(0.975),
+  predictions$fit + predictions$se.fit * qnorm(0.975)
+) %>% exp()
+```
+
+## Model comparison
+
+Just as we did in the case of binary logistic regression, we can compare nested Poisson regression models using a likelihood ratio test.
+If we have one model with a set of $K$ predictors and another model with $K^\prime < K$ predictors, the null hypothesis when comparing these two models is that the coefficients of all the $K - K^\prime$ predictors in the larger model but not in the smaller one are simultaneously zero.
+In other words, if the larger model $\mathcal{M}_1$ has $K$ predictors whose coefficients are $\beta_0, \beta_1 \ldots \beta_{K^\prime} \ldots \beta_K$, and the smaller model $\mathcal{M}_0$ has $K^\prime$ predictors whose coefficients are $\beta_0, \beta_1 \ldots \beta_{K^\prime}$, then the null hypothesis is 
+$$
+\beta_{K^\prime + 1} = \beta_{K^\prime + 2} = \ldots = \beta_{K} = 0.
+$$
+We can test this null hypothesis by comparing the maximum of the likelihood of the model with the $K$ predictors to that of the model with the $K^\prime$ predictors.
+Under this null hypothesis, -2 times the log of the likelihood ratio of the models will be distributed as $\chi^2_{K-K^\prime}$.
+
+As an example, consider the model whose predictor variables are `age`, `low`, and `smoke`, where `low` is a binary variable that indicates if the birth weight of the newborn infant was low (`low = 1`) or not (`low = 0`), and `smoke` is a binary variable that indicates if the pregnant woman was a smoker (`smoke = 1`) or not (`smoke = 0`).
+We will denote this model with three predictors by $\mathcal{M}_1$.
+We can then compare this to the model with `age` alone, which we will denote by $\mathcal{M}_0$.
+The null hypothesis when comparing $\mathcal{M}_1$ and $\mathcal{M}_0$ is that the coefficients for `low` and `smoke` are both zero.
+To test this null hypothesis, we calculate $\mathcal{L}_1$ and $\mathcal{L}_0$, which are the likelihoods of $\mathcal{M}_1$ and $\mathcal{M}_1$ evaluated at their maximum.
+According to the null hypothesis,
+$$
+-2 \log\left(\frac{\mathcal{L}_0}{\mathcal{L}_1}\right) \sim \chi^2_{2},
+$$
+where the degrees of freedom of $2$ is the difference between the number of predictors in $\mathcal{M}_1$ and $\mathcal{M}_0$.
+We can calculate -2 times the log of the likelihood by the difference of the deviances 
+$$
+\Delta_{\mathcal{D}}  = -2 \log\left(\frac{\mathcal{L}_0}{\mathcal{L}_1}\right) = \mathcal{D}_0 - \mathcal{D}_1,
+$$
+where $\mathcal{D}_0 = -2 \log \mathcal{L}_0$ and $\mathcal{D}_1 = -2 \log \mathcal{L}_1$.
+
+Model $\mathcal{M}_1$ with `age`, `low` and `smoke` as predictors is as follows.
+```{r, echo=T}
+lbw_m_1 <- glm(ftv ~ age + low + smoke,
+               family = poisson(link = 'log'),
+               data = lbw_df)
+```
+Model $\mathcal{M}_0$ with just `age` is `lbw_m` from above.
+The deviances $\mathcal{D}_1$ and $\mathcal{D}_0$ are as follows.
+```{r, echo=T}
+deviance(lbw_m_1)
+deviance(lbw_m)
+```
+We can verify that these are -2 times the log of the likelihoods $\mathcal{L}_1$ and $\mathcal{L}_0$.
+```{r, echo=T}
+-2 * logLik(lbw_m_1)
+-2 * logLik(lbw_m)
+```
+The difference of these two deviances is
+```{r, echo=T}
+(delta_deviance <- deviance(lbw_m) - deviance(lbw_m_1))
+```
+By the null hypothesis, this $\Delta_\mathcal{D}$ will be distributed as $\chi^2_2$, and so the p-value is the probability of getting a value greater than $\Delta_\mathcal{D}$ in a $\chi^2_2$ distribution.
+```{r, echo=T}
+pchisq(delta_deviance, df = 2, lower.tail = F)
+```
+This null hypothesis test can be performed more easily with the generic `anova` function.
+```{r, echo=T}
+anova(lbw_m_1, lbw_m, test='Chisq')
+```
+
+From this result, we can not reject the null hypothesis that coefficients for `low` and `smoke` are simultaneously zero.
+Put less formally, the model with `age`, `low`, and `smoke` is not significantly better at predicting the `ftv` outcome variable than the model with `age` alone, and so we can conclude the `low` and `smoke` are not significant predictors of `ftv`, at least when `age` is known.
+
+## Bayesian approaches to Poisson regression
+
+As was the case with linear and binary logistic regression models, the Bayesian approach to Poisson regression begins with an identical probabilistic model of the data to the classical approach.
+In other words, we assume 
+$$
+y_i \sim \textrm{Poisson}(\lambda_i),\quad\log(\lambda_i) = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$},
+$$
+but now our aim is to infer the posterior distribution over $\vec{\beta} = \beta_0, \beta_1 \ldots \beta_K$:
+$$
+\Prob{\vec{\beta} \given \vec{y}, X} \propto
+\overbrace{\Prob{\vec{y} \given X, \vec{\beta}}}^{\textrm{likelihood}}\overbrace{\Prob{\vec{\beta}}}^{\textrm{prior}}.
+$$
+Just as was the case with binary logistic regression, there is no analytic solution to the posterior distribution, and so numerical methods are necessary.
+As we explained already, a powerful and general numerical method is to use Markov Chain Monte Carlo.
+Practically, the most powerful general purpose MCMC Bayesian modelling software is the probabilistic programming language Stan, for which we have the extremely easy to use R interface package `brms`. 
+
+We perform a Bayesian Poisson regression model of the `lbw` data with outcome variable `ftv` and predictor `age` using `brms` as follows.
+```{r, echo=T,cache=T}
+lbw_m_bayes <- brm(ftv ~ age,
+                   family = poisson(link = 'log'),
+                   data = lbw_df)
+```
+
+```{r}
+S <- summary(lbw_m_bayes)
+stopifnot(all(round(S$fixed[,'Rhat'], 2) == 1))
+```
+The priors are very similar to the prior used by default by the logistic regression analysis above:
+```{r, echo=T}
+prior_summary(lbw_m_bayes)
+```
+A uniform prior is on the coefficient for `age` and a non-standard t-distribution is on the intercept term.
+Using these priors, again, just like the binary logistic regression, by using the default settings, we use `r S$chains` chains, each with `r S$iter` iterations, and where the initial `r S$warmup` iterations are discarded, leaving to `r S$chains * (S$iter - S$warmup)` total samples from the posterior.
+
+```{r}
+original_width <- getOption('width')
+options(width = 300)
+```
+
+
+We can view the summary of the posterior distribution as follows.
+```{r, echo=T}
+summary(lbw_m_bayes)$fixed
+```
+As we can see, the `Rhat` values close to $1$ and the relatively high `ESS` values indicate that this sampler has converged and mixed well.
+As was the case with binary logistic regression, the mean and standard deviation of the posterior distribution very closely match the maximum likelihood estimator and the standard error of the sampling distribution.
+Likewise, the 95% high posterior density interval closely matches the 95% confidence interval.
+```{r}
+options(width = original_width)
+```
+
+The posterior distribution over the predicted value of $\phi_\iota = \vec{x}_\iota \vec{\beta}$, where $\vec{x}_\iota$ is a vector of values of the predictors can be obtained similarly to the case of binary logistic regression:
+```{r, echo=T}
+posterior_linpred(lbw_m_bayes, newdata = lbw_df_new) %>%
+  as_tibble() %>% 
+  map_df(~quantile(., probs=c(0.025, 0.5, 0.975))) %>% 
+  as.matrix() %>% 
+  t() %>%
+  as_tibble() %>% 
+  set_names(c('l-95% CI', 'prediction', 'u-95% CI')) %>% 
+  bind_cols(lbw_df_new, .)
+```
+As we can see, these are very close to the confidence intervals for predictions in the classical approach.
+
+In addition to the posterior distribution over $\phi_\iota = \vec{x}_\iota \vec{\beta}$, we can can also calculate the *posterior predictive distribution*, which is defined as follows:
+$$
+\Prob{y_\iota \given \vec{x}_\iota, \vec{y}, X} = 
+\int \Prob{y_\iota \given \vec{x}_\iota \vec{\beta}} 
+    \underbrace{\Prob{\vec{\beta} \given \vec{y}, X}}_{\textrm{posterior}}  d\vec{\beta},
+$$
+where 
+$$
+\Prob{y_\iota \given \vec{x}_\iota, \vec{\beta}} = \frac{e^{-\lambda_\iota} \lambda_\iota^{y_\iota}}{y_\iota!},
+\quad\text{where }\lambda_\iota = e^{\phi_\iota},\quad\phi_\iota = \vec{x}_\iota \vec{\beta}.
+$$
+The posterior predictive distribution gives return a probability distribution over the counts $0, 1, 2 \ldots$, just like a Poisson distribution, but it essentially *averages* over all possible values of $\vec{\beta}$ according to the posterior distribution.
+
+Using Stan/brms, the `posterior_predict` function can be used to draw samples from the posterior predictive distribution: for each sample from the posterior. 
+```{r, echo=T}
+pp_samples <- posterior_predict(lbw_m_bayes, newdata = lbw_df_new)
+```
+This returns a matrix of `r nrow(pp_samples)` rows and `r ncol(pp_samples)`,
+where each element of each column is a sample from $\Prob{y_\iota \given \vec{x}_\iota, \vec{\beta}}$, and each column represents the different values of `age` that we are making predictions about.
+We plot the histograms of these samples for each value of age in Figure \ref{fig:pp_plots}.
+
+```{r, pp_plots, fig.align='center', fig.cap='Posterior predictive distribution of the number of visits to the doctor by women of different ages.', fig.height=3}
+pp_samples %>%
+  as_tibble() %>% 
+  magrittr::set_colnames(lbw_df_new %>% pull(age)) %>% 
+  gather(age, ftv) %>% 
+  ggplot(aes(x = ftv)) + 
+  geom_bar(width = 0.5) + 
+  facet_wrap(~age) +
+  theme_minimal()
+```
+
+
+# Negative binomial regression
+
+```{r setup, include=FALSE, message=FALSE}
+set.seed(10101)
+```
+
+We saw above that the mean of a Poisson distribution is equal to its rate parameter $\lambda$.
+As it happens, in any Poisson distribution, its variance is also equal to $\lambda$.
+Therefore, in any Poisson distribution, as the mean increases, so too does the variance.
+We can see this in Figure \ref{fig:pois_varying_lambda}.
+Likewise, if we draw samples from any Poisson distribution, the mean and variance should be approximately equal.
+```{r, echo=T}
+x <- rpois(25, lambda = 5)
+c(mean(x), var(x), var(x)/mean(x))
+
+x <- rpois(25, lambda = 3)
+c(mean(x), var(x), var(x)/mean(x))
+```
+What this entails is that when modelling data as a Poisson distribution, the mean and the variance of the counts (conditional on the predictors) should be approximately equal.
+If the variance is much greater or much less than the mean, we say the data is *overdispersed* or *underdispersed*, respectively.
+Put more precisely, if the variance of a sample of values is greater or less than would be expected according to a given theoretical model, then we say the data is overdispersed or underdispersed, respectively.
+
+
+```{r pois_varying_lambda, out.width='0.75\\textwidth', fig.align='center', fig.cap = "A series of Poisson distributions with increasing means. As the mean of the distribution increases, so too does the variance."}
+lambda_0 <- 3.5
+lambda_1 <- 5.0
+lambda_2 <- 10.0
+lambda_3 <- 15.0
+tibble(x = seq(0, 25),
+       y_0 = dpois(x, lambda = lambda_0),
+       y_1 = dpois(x, lambda = lambda_1),
+       y_2 = dpois(x, lambda = lambda_2),
+       y_3 = dpois(x, lambda = lambda_3)
+) %>% gather(lambda, density, -x) %>% 
+  ggplot(aes(x = x, y = density, col = lambda)) +
+  geom_line() + 
+  geom_point() +
+  ylab('P(x)') + 
+  scale_colour_discrete(name = TeX("$\\lambda"), labels = c("3.5", "5", "10", "15"))
+```
+
+
+Overdispersed data is quite a common phenomenon when using Poisson regression models.
+It occurs when the mean of the data being modelled by the Poisson distribution is relatively low, but the variance is not low.
+This is an example of model mis-specification, and it will also usually lead to the underestimation of the standard errors in the regression model.
+
+Let us consider the following data set.
+```{r,echo=T}
+biochemists_df <- read_csv('data/biochemist.csv')
+biochemists_df
+```
+In this data, we have counts of the number of articles published (`publications`) by PhD students in the field of bio-chemistry in the last three years.
+The distribution of these publications is shown in Figure \ref{fig:biochem_pubs}.
+What is notable is that the variance of the counts is notably larger than the means, which we can see in the following.
+```{r, echo=T}
+publications <- biochemists_df %>% pull(publications)
+var(publications)/mean(publications)
+```
+
+
+```{r biochem_pubs, out.width='0.7\\textwidth', fig.align='center', fig.cap="A histogram of the number of publications by PhD students in the field of bio-chemistry."}
+ggplot(biochemists_df, aes(x=publications)) + geom_histogram(col='white', binwidth = 1)
+```
+
+
+Were we to model this data using a Poisson regression model, this will lead to the standard errors being underestimated.
+In the following, we use an intercept only Poisson regression model with `publications` as the outcome variable.
+This effectively fits a Poisson distribution to the `publications` data.
+```{r, echo=T}
+Mp <- glm(publications ~ 1, 
+          family=poisson(link = 'log'),
+          data = biochemists_df)
+summary(Mp)$coefficients
+```
+The standard error, `r round(summary(Mp)$coefficients[1,'Std. Error'], 3)`, is underestimated here.
+
+One relatively easy solution to this problem is to use a so-called *quasi* Poisson regression model.
+This is easily done with `glm` by setting the `family` to `quasipoisson` rather than `poisson`.
+```{r, echo=T}
+Mq <- glm(publications ~ 1, 
+          family=quasipoisson(link = 'log'),
+          data = biochemists_df)
+summary(Mq)$coefficients
+```
+Note that the standard error is now `r round(summary(Mq)$coefficients[1,'Std. Error'], 3)`.
+The quasi Poisson model calculates an *overdispersion parameter*, which is roughly the ratio of the variance to the mean, and multiplies the standard error by its square root.
+In this example, the overdispersion parameter is estimated to be `r round(summary(Mq)$dispersion, 3)`. 
+This value is returned in the summary output and can be obtained directly as follows.
+```{r, echo=T}
+summary(Mq)$dispersion
+```
+
+We can see that this is very close to the ratio of the variance of `publications` to the `mean`.
+```{r, echo=T}
+var(publications)/mean(publications)
+```
+The square root of this is `r summary(Mq)$dispersion %>% sqrt() %>% round(3)`.
+Multiplying this by the standard error of the Poisson model leads to `r round(summary(Mp)$coefficients[1,'Std. Error'] * sqrt(summary(Mq)$dispersion), 3)`.
+
+An alternative and more principled approach to modelling overdispersed count data is to use a negative binomial regression model.
+As we will see, there are close links between the Poisson and negative binomial model, but for simplicity, we can see the negative binomial distribution as similar to a Poisson distribution, but with an additional dispersion parameter.
+
+## Negative binomial distribution
+
+A negative binomial distribution is a distribution over non-negative integers.
+To understand the negative binomial distribution, we start with the binomial distribution, which we can encountered already.
+The binomial distribution gives the number of *successes* in a fixed number of *trials*, when the probability of a success on each trial is a fixed probability and all trials are independent.
+For example, if we have a coin whose probability of coming up heads is $\theta$, then the number of Heads in a sequence of $n$ flips will follow a  binomial distribution.
+In this example, an outcome of Heads is regarded as a *success* and each flip is a *trial*.
+The probability mass function for a binomial random variable $y$ is as follows.
+$$
+\textrm{Binomial}(y=k\given n, \theta) = \Prob{y = m \given n, \theta} = \binom{n}{m} \theta^m (1-\theta)^{n-m}.
+$$
+In Figure \ref{fig:binom_25_.75}, we show a binomial distribution where $n=25$ and $\theta = 0.75$.
+
+```{r binom_25_.75, out.width='0.67\\textwidth', fig.align='center', fig.cap="A binomial distribution where $n=25$ and $\\theta = 0.75$"}
+n <- 25
+
+tibble(x = seq(0, n),
+       p = dbinom(x, size=n, prob=0.75)
+) %>% ggplot(aes(x = x, y = p)) + geom_bar(stat = 'identity')
+
+```
+  
+By contrast to a binomial distribution, a *negative* binomial distribution gives the probability distribution over the number of *failures* before $r$ *successes* in a set of independent binary outcome (success or failure) trials where the probability of a success is, as before, a fixed constant $\theta$.
+Again consider the coin flipping scenario.
+The negative binomial distribution tells the probability of observing any number of Tails (failures) before $r$ Heads (successes) occur.
+For example, in Figure \ref{fig:negbin_3_.25}, we show a set of binomial distributions, with each one giving the probability distribution over the number of failures, e.g. Tails, that occur before we observe $r$ successes, e.g. Heads, when the probability of a success is $\theta$, for different values of $r$ and $\theta$.
+
+```{r negbin_3_.25, out.width='\\textwidth', fig.align='center', fig.cap="Negative binomial distributions with parameters a) $r=2$ and $\\theta=0.25$, b) $r=3$ and $\\theta=0.25$, c) $r=4$ and $\\theta=0.5$, and d) $r=7$ and $\\theta=0.5$."}
+n <- 35
+width <- 0.2
+
+p1 <- tibble(x = seq(0, n),
+       p = dnbinom(x, size=2, prob=0.25)
+) %>% ggplot(aes(x = x, y = p)) + geom_bar(stat = 'identity', width = width)
+p2 <- tibble(x = seq(0, n),
+       p = dnbinom(x, size=3, prob=0.25)
+) %>% ggplot(aes(x = x, y = p)) + geom_bar(stat = 'identity', width = width)
+p3 <- tibble(x = seq(0, n),
+       p = dnbinom(x, size=4, prob=0.5)
+) %>% ggplot(aes(x = x, y = p)) + geom_bar(stat = 'identity', width = width)
+p4 <- tibble(x = seq(0, n),
+       p = dnbinom(x, size=7, prob=0.5)
+) %>% ggplot(aes(x = x, y = p)) + geom_bar(stat = 'identity', width = width)
+
+plot_grid(p1, p2, p3, p4, labels = 'auto')
+
+```
+  
+The probability mass function for a negative binomial random variable $y$, with parameters $r$ and $\theta$ is
+$$
+\textrm{NegBinomial}(y=k\given r, \theta) = \Prob{y = k \given r, \theta} = \binom{r+k-1}{k} \theta^r(1-\theta)^k,
+$$
+or more generally
+$$
+\textrm{NegBinomial}(y=k\given r, \theta) = \Prob{x = k \given r, \theta} = \frac{\Gamma(r + k)}{\Gamma(r) k!} \theta^r(1-\theta)^k,
+$$
+where $\Gamma()$ is a Gamma function (note that $\Gamma(n) = (n-1)!$).
+In the negative binomial distribution, the mean of the distribution is 
+$$
+\mu = \frac{1 -\theta}{\theta} \times r,
+$$
+and so 
+$$
+\theta = \frac{r}{r + \mu},
+$$
+and so we can generally parameterize the distribution by $\mu$ and $r$.
+  
+
+A negative binomial distribution is equivalent as weighted sum of Poisson distributions.
+We illustrate this in Figure \ref{fig:neg_from_pois_average} where we show an average of four different Poisson disributions.
+More precisely, the negative binomial distribution with parameters $r$ and $\theta$ is an infinite mixture of Poisson distributions with all possible values of $\lambda$ from $0$ to $\infty$ and where the weighting distribition is a gamma distribution with shape parameter $r$ and scale parameter $s = \tfrac{\theta}{1-\theta}$.
+$$
+\textrm{NegBinomial}(y=k\given r, \theta) =
+\int_0^\infty \textrm{Poisson}(y = k \given \lambda) \textrm{Gamma}(\lambda \given \alpha = r, s = \tfrac{\theta}{1-\theta}) d\lambda.
+$$
+We have seen that a Poisson distribution arises when there is a large number of opportunities for an event to happen but a low probability of it happening on any one of those opportunities.
+Given that the negative binomial is a weighted average of Poisson distributions, we can now see that it arises from a similar process as the Poisson distribution, but where there is a probability distribution (specifically a gamma distribution) over the probability of the event happening on any one opportunity.
+
+
+```{r neg_from_pois_average, out.width='\\textwidth', fig.align='center', fig.cap="A negative binomial distribution is an infinite weighted sum of Poisson distributions, where the weighting distribution is a gamma distribution. In a) we show a set of four different Poisson distributions and their (uweighted) average. In b) we show a gamma distribution with shape parameter $r=2$ and scale parameter $s = \\theta/(1-\\theta)$, where $\\theta=-.25$."}
+lambda_0 <- 3.5
+lambda_1 <- 5.0
+lambda_2 <- 7.0
+lambda_3 <- 10.0
+p1 <- tibble(x = seq(0, 25),
+       y_0 = dpois(x, lambda = lambda_0),
+       y_1 = dpois(x, lambda = lambda_1),
+       y_2 = dpois(x, lambda = lambda_2),
+       y_3 = dpois(x, lambda = lambda_3),
+       y_sum = (y_0 + y_1 + y_2 + y_3)/4
+) %>% gather(lambda, density, -x) %>% 
+  ggplot(aes(x = x, y = density, col = lambda)) +
+  geom_line() + 
+  geom_point() +
+  ylab('P(x)') +
+  scale_colour_discrete(name = TeX("$\\lambda"), labels = c("3.5", "5", "7", "10", "average"))
+
+p2 <- tibble(x = seq(0, 10, length.out = 1000),
+             y = dgamma(x, shape = 3, scale = 0.25/0.75)
+) %>% ggplot(aes(x = x, y = y)) + geom_line()
+
+plot_grid(p1, p2, labels = 'auto', nrow = 2)
+```
+
+## Negative binomial regression
+
+In negative binomial regression, we have observed counts $y_1, y_2 \ldots y_n$, and a set of predictor variable vectors $\vec{x}_1, \vec{x}_2 \ldots \vec{x}_n$, where $\vec{x}_i = x_{1i}, x_{2i} \ldots x_{ki} \ldots x_{Ki}$, and our model of this data is as follows.
+$$
+y_i \sim \mathrm{NegBinomial}(\mu_i, r),\quad \log(\mu_i) = \beta_0 + \sum_{k=1}^K \beta_{k} x_{ki},\quad \text{for $i \in 1\ldots n$}.
+$$ 
+In other words, our probability distribution for outcome variable $y_i$ is a negative binomial distribution whose mean is $\mu_i$, and which as an additional parameter $r$, whose value is a fixed but unknown constant.
+The link function is, like in the case of the Poisson model, the natural logarithm, and so we model the natural logarithm of $\mu_i$ as a linear function of the $K$ predictors.
+
+In R, we perform negative binomial regression using the `glm.nb` function from the `MASS` package, and we use `glm.nb` very similarly to how we have used other regression functions in R like `lm` and `glm`.
+For example, we perform the intercept only negative binomial regression on the `biochemists_df`'s `publication` data as follows.
+```{r, echo=T}
+library(MASS)
+
+Mnb <- glm.nb(publications ~ 1, data = biochemists_df)
+```
+Note that, unlike the case of `glm`, we do not need to specify a `family` in `glm.nb`.
+It is assumed that the distribution is a negative binomial.
+We can optionally change the link function, but its default value is `link = log`.
+
+```{r}
+mu <- exp(coef(Mnb))
+```
+
+
+The inferred value of the parameter $r$, as it appeared in our formulas above, is obtained as the value of `theta` from the model.
+```{r, echo=T}
+r <- Mnb$theta
+r
+```
+The coefficients for the regression model are obtained as per usual.
+```{r, echo=T}
+summary(Mnb)$coefficients
+```
+From this, we can see that, for all $i$, $\mu_i$ is
+$$
+\mu = e^{`r round(coef(Mnb), 3)`} = `r round(exp(coef(Mnb)), 3)`.
+$$
+Using the relationship between the probability $\theta$ and $\mu$ and $r$ from above, we have
+$$
+\theta = \frac{r}{r + \mu} = \frac{`r round(r, 3)`}{`r round(r, 3)` + `r round(mu, 3)`} = `r round(r/(r + mu), 3)`.
+$$
+In other words, our model (using no predictor variables) of the distribution of the number of publications by PhD in bio-chemistry is estimated to be a negative binomial distribution with parameters $\theta = `r round(r/(r + mu), 3)`$ and $r = `r round(r, 3)`$.
+This distribution is shown in Figure \ref{fig:negbin_pubs_model}.
+```{r}
+fig_cap <- sprintf('A negative binomial distribution with parameters $\\theta = %2.3f$ and $r = %2.3f$. This is the estimated model of the distribution of the number of publications by PhD students in bio-chemistry.', round(r/(r + mu), 3), round(r, 3))
+```
+
+
+```{r negbin_pubs_model, fig.cap=fig_cap, out.width='0.67\\textwidth', fig.align='center'}
+n <- 10
+width <- 0.2
+
+tibble(x = seq(0, n),
+       p = dnbinom(x, size=r, prob=r/(r + mu))
+) %>% ggplot(aes(x = x, y = p)) + geom_bar(stat = 'identity', width = width)
+
+```
+
+
+
+Now let us use negative binomial regression model with predictors.
+Specifically, we will use `gender` as the predictor of the average of the distribution of the number of publications.
+```{r, echo=T}
+Mnb1 <- glm.nb(publications ~ gender, data=biochemists_df)
+summary(Mnb1)$coefficients
+```
+
+```{r}
+estimates <- coef(Mnb1)
+est_men <- estimates[1]
+est_women <- sum(estimates)
+est_men_exp <- exp(est_men)
+est_women_exp <- exp(est_women)
+```
+
+
+Prediction in negative binomial regression works exactly like in Poisson regression.
+We can extract the estimates of the coefficients using `coef`.
+```{r, echo=T}
+estimates <- coef(Mnb1)
+```
+In this model, the two values for `gender` are `Men` and `Women`, with `Men` being the base level of the binary dummy code that is corresponding to `gender` in the regression.
+Thus, predicted log of the mean of number of publications for men is $`r round(est_men, 3)`$ and for women it is $`r round(est_men, 3)` + `r round(estimates[2], 3)` = `r round(est_women, 3)`$, and so the predicted means for men and women are $e^{`r round(est_men, 3)`} = `r round(est_men_exp, 3)`$ and $e^{ `r round(est_men, 3)` + `r round(estimates[2], 3)`} = `r round(est_women_exp, 3)`$, respectively.
+This predictions can be made more easily using the `predict` or `add_predictions` functions.
+For example, to get the predicted logs of the means, we do the following.
+```{r, echo=T}
+tibble(gender = c('Men', 'Women')) %>% 
+  add_predictions(Mnb1)
+```
+The predicted means can be obtained as follows.
+```{r, echo=T}
+tibble(gender = c('Men', 'Women')) %>% 
+  add_predictions(Mnb1, type= 'response')
+```
+The negative binomial distributions corresponding to these means are shown in Figure \ref{fig:negbin_pubs_model_gender}.
+
+In a negative binomial regression, for any predictor $k$, $e^{\beta_k}$ has the same interpretation as it would have in a Poisson regression, namely the factor by which the mean of the outcome variable increases for a unit change in the predictor.
+The coefficient corresponding to gender is `r estimates[2] %>% round(3)`, and so $e^{`r estimates[2] %>% round(3)`} = `r exp(estimates[2]) %>% round(3)`$ is the factor by which the mean of the number of number of publications increases as we go from mean to women.
+Obviously, this is a value less than 1, and so we see that the mean decreases as we go from men to women.
+
+```{r}
+fig_cap <- 'The estimated negative binomial distributions of the number of publications by male and female PhD students in bio-chemistry.'
+```
+
+
+```{r negbin_pubs_model_gender, fig.cap=fig_cap, out.width='0.67\\textwidth', fig.align='center'}
+n <- 10
+width <- 0.5
+
+mu <- tibble(gender = c('Men', 'Women')) %>% add_predictions(Mnb1, type= 'response') %>% deframe()
+
+tibble(x = seq(0, n),
+       pm = dnbinom(x, size=r, prob=r/(r + mu[1])),
+       pw = dnbinom(x, size=r, prob=r/(r + mu[2])),
+) %>% pivot_longer(cols = -x) %>%
+  ggplot(aes(x = x, y = value, fill = name)) +
+  geom_bar(stat = 'identity', width = width, position = 'dodge') +
+  scale_fill_discrete(name = 'Gender', labels = c("Men", "Women"))
+
+```
+
+
+As in the case of logistic and Poisson regression, we estimate the coefficients using maximum likelihood estimation.
+In addition, we also estimate the value of $r$ using maximum likelihood estimation.
+Once we have the maximum likelihood estimate for all the parameters, we can calculate the log of the likelihood function as its maximum, or the deviance, which is $-2$ times the log likelihood.
+In `glm.nb`, the value of log of the likelihood can be obtained by `logLik`.
+```{r, echo=T}
+logLik(Mnb1)
+```
+The deviance is not the value reported as `deviance` in the summary output, nor by using the function `deviance`.
+Instead, we multply the log-likelihood by $-2$, or equivalent use the negative of the value of the `twologlik` attribute of the model
+```{r, echo=T}
+c(-2 * logLik(Mnb1), -Mnb1$twologlik)
+```
+We can compare nested negative binomial regressions using the generic `anova` function as we did with logistic regression or Poisson regression.
+For example, here we compare models `Mnb` and `Mnb1`.
+```{r, echo=T}
+anova(Mnb, Mnb1)
+```
+This layout is not identical to how it was when we uses `glm` based models.
+However, it is easy to verify that the value of `LR stat.` is the difference of the deviance of the two models.
+```{r, echo=T}
+deviances <- -c(Mnb$twologlik, Mnb1$twologlik) 
+deviances
+deviances[1] - deviances[2]
+```
+Thus we have
+$$
+\Delta_{D} = D_0 - D_1 = `r round(deviances[1], 3) ` - `r round(deviances[2], 3)` = `r round(deviances[1] - deviances[2], 3)`.
+$$
+Under the null hypothesis of equal predictive power of the two models, $\Delta_D$ is distributed a $\chi^2$ distribution with degrees of freedom equal to the difference in the number of parameters between the two models, which is 1 in this case.
+Thus, the p-value for the null hypothesis is
+```{r, echo=T}
+pchisq(deviances[1] - deviances[2], df = 1, lower.tail = F)
+```
+which is value of `Pr(Chi)` reported in the `anova` table.
+
+## Bayesian negative binomial regression
+
+Bayesian negative binomial regression can be done easily using `brms::brms`.
+We use it just like we used it above, and we need only indicate that the `family` is `negbinomial`.
+In the following model, we will use the predictors `gender`, `married`, `children`, `prestige` and `mentor` as predictors of `publications`.
+The variable `children` indicates the number of children the PhD student has, and so we will recode this inplace as a binary variable indicating whether they have children or not.
+The variable `prestige` gives an estimate of the relative prestige of the department where the student is doing their PhD, and `mentor` indicates the number of publications by their PhD mentor in the past three years.
+```{r, cache = T, echo = T}
+Mnb2_bayes <- brm(publications ~ gender + married + I(children > 0) + prestige + mentor, 
+                  data = biochemists_df,
+                  family = negbinomial(link = "log"))
+
+```
+```{r}
+S <- summary(Mnb2_bayes)
+original_width <- getOption('width')
+options(width = 300)
+```
+
+As we did above, we accepted all the defaults for this models.
+This means `r S$chains` chains, each of `r S$iter` iterations, but with the first `r S$warmup` iterations from each chain being discarded.
+The priors are as follows.
+```{r, echo=T}
+prior_summary(Mnb2_bayes)
+```
+This tells us that we use a flat improper prior for coefficient for the predictors, a student t-distribution for the intercept term, and a Gamma distribution for the $r$ parameter of the negative binomial distribution whose shape and rate (or inverse scale) parameters are 0.01 and 0.01.
+The Gamma prior will have a mean of exactly one, a variance of 100, and a positive skew of 20.
+
+The coefficients summary is as follows.
+```{r, echo=T}
+summary(Mnb2_bayes)$fixed
+```
+Like the many cases we have seen above, these results are largely in line with those from classical maximum likelihood based methods, as we can see if we compare the results above to those of `glm.nb` applied to the same data.
+```{r, echo=T}
+Mnb2 <- glm.nb(publications ~ gender + married + I(children > 0) + prestige + mentor, 
+                  data = biochemists_df)
+summary(Mnb2)$coefficients
+```
+The posterior summary for the $r$ parameter is as follows.
+```{r, echo=T}
+summary(Mnb2_bayes)$spec_pars
+```
+We can see that this is very close to that estimated with `glm.nb`.
+```{r, echo=T}
+Mnb2$theta
+```
+
+```{r}
+select <- dplyr::select
+options(width = original_width)
+```
+
+
+# Zero-inflated count models
+
+Zero-inflated models for count data are used when the outcome variable has an excessive number of zeros than we would expect according to our probabilistic model such as the Poisson or negative binomial model.
+As an example of data of these kind, consider the following `smoking_df` data set.
+```{r, echo=T}
+smoking_df <- read_csv('data/smoking.csv')
+smoking_df
+```
+In this, for each of `r nrow(smoking_df)` individual, we have their number of years in formal education (`educ`), their age, and their reported number of cigarettes smoked per day (`cigs`).
+A bar plot of `cigs`, shown in Figure \ref{fig:cigs_barplot}, shows that there are an excessive number of zero values.
+```{r cigs_barplot, out.width='0.67\\textwidth', fig.cap="A bar plot of frequency distribution of the \\texttt{cigs} variable.", fig.align ='center'}
+smoking_df %>% 
+  ggplot(aes(x = cigs)) + geom_bar()
+```
+To model count variables like `cigs`, we can use *zero-inflated* models, such as zero-inflated Poisson or zero-inflated negative binomial models.
+Here, we will just consider the example of zero-inflated Poisson regression, but all the principles apply equal to zero-inflated negative binomial and other count regression models.
+
+
+## Probabilistic mixture models
+
+Zero-inflated Poisson regression is a type of *probabilistic mixture model*, specifically a probabilistic mixture of regression models.
+Let us first consider what a mixture models are.
+Let us assume that our data is $n$ observations $y_1, y_2 \ldots y_n$. 
+A *non* mixture normal distribution model of this data might be simply as follows.
+$$
+y_i \sim N(\mu, \sigma^2), \quad\text{for $i \in 1 \ldots n$},
+$$
+By contrast, a $K=3$ component mixture of normal distributions model assumes that there is a discrete latent variable $z_1, z_2 \ldots z_n$ corresponding to each of $y_1, y_2 \ldots y_n$, where each $z_i \in \{1, 2, 3\}$, and for $i \in 1\ldots n$, 
+$$
+\begin{aligned}
+y_i &\sim 
+\begin{cases}
+N(\mu_1, \sigma^2_1),\quad\text{if $z_i = 1$}\\
+N(\mu_2, \sigma^2_2),\quad\text{if $z_i = 2$}\\
+N(\mu_3, \sigma^2_3),\quad\text{if $z_i = 3$}\\
+\end{cases},\\
+z_i &\sim P(\pi),
+\end{aligned}
+$$
+where $\pi = [\pi_1, \pi_2, \pi_3]$ is a probability distribution of $\{1, 2, 3\}$.
+More generally for any value of $K$, we can write the $K$ mixture of normals as follows.
+$$
+y_i \sim N(\mu_{z_i}, \sigma^2_{z_i}),\quad z_i \sim P(\pi),\quad \text{for $i \in 1,2 \ldots n$},
+$$
+and $\pi = [\pi_1, \pi_2 \ldots \pi_K]$ is a probability distribution over $1 \ldots K$.
+In other words, each $y_i$ is assumed to be drawn from one of $K$ normal distributions whose mean and variance parameters are $(\mu_1, \sigma^2_1), (\mu_2, \sigma^2_2) \ldots (\mu_K, \sigma^2_K)$.
+Which of these $K$ distributions each $y_i$ is drawn from is determined by the value of the latent variable $z_i \in 1\ldots K$, for each $z_i$, $\Prob{z_i = k} = \pi_k$.
+In a model like this, we must infer the values of $(\mu_1, \sigma^2_1), (\mu_2, \sigma^2_2) \ldots (\mu_K, \sigma^2_K)$ and $\pi$ and also the posterior probability that $z_i = k$ for each value of $k$, see Figure \ref{fig:mix_normals} for an illustration of the problem in the case of $K=3$ normal distributions.
+Without delving into the details, the traditional maximum likelihood based approach to this inference is to use the Expectation Maximization (EM) algorithm. 
+
+```{r mix_normals, fig.cap="A probabilistic mixture of $K=3$ normal distributions. A histogram of the observed data is shown in a), and we model each observed value as drawn from one of three different normal distributions, e.g. shown in b). The parameters of the normal distributions, the relative probabilities of the three distributions, as well as the probability that any one observation came from each distribution must be simultaneously inferred.", fig.align='center', fig.height=3}
+N <- 500
+x <- sample(seq(3), size=N, replace = T)
+Df <- tibble(x = c(rnorm(N, mean=-5, sd=2),
+                   rnorm(N, mean=0, sd=1),
+                   rnorm(N*3, mean=10, sd=3)),
+             y = c(rep(1, N),
+                   rep(2, N),
+                   rep(3, N*3)) %>% as.factor()
+) 
+
+p1 <- Df %>% ggplot(aes(x=x)) + geom_histogram(binwidth=1/2, col='white')
+
+p2 <- Df %>% ggplot(aes(x=x, fill=y)) +
+  geom_histogram(binwidth=1/2, col='white', position = 'identity') +
+  guides(fill=FALSE)
+
+plot_grid(p1, p2, labels = 'auto')
+```
+
+The mixture models discussed so far were not regression models.
+However, we can easily extend them description to apply to regression models.
+For this, let us assume our data is  $\{(y_1, \vec{x}_1), (y_2, \vec{x}_2) \ldots (y_n, \vec{x}_n)\}$, just as we have described it repeatedly above.
+In a non-mixture normal linear regression model, we have seen that our model is as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad \mu_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$}.
+$$
+On the other hand, in a mixture of $K$ normal linear models, we assume that there is a latent variable $z_1, z_2 \ldots z_n$ corresponding to each observations, with each $z_i \in K$, and
+$$
+y_i \sim N(\mu_i, \sigma_{z_i}^2),\quad \mu_i = \beta_{0[z_i]} + \sum_{k=1}^K \beta_{k[z_i]} x_{ki},\quad z_i \in \Prob{\pi}\quad\text{for $i \in 1 \ldots n$},
+$$
+where $\pi = [\pi_1, \pi_2 \ldots \pi_K]$ is a probability distribution over $1 \ldots K$.
+Note that here, we have $K$ sets of regression coefficients, $(\vec{\beta}_1, \sigma^2_1),(\vec{\beta}_2, \sigma^2_2) \ldots  (\vec{\beta}_K, \sigma^2_K)$, each one defining a different linear model.
+
+In the mixture of regressions just provided, the probability that $z_i$ takes any value from $1 \ldots K$ is determined by the fixed but unknown probability distribution $\pi$.
+We may, however, extend the mixture of regressions model to allow each $z_i$ to also vary with the predictors $\vec{x}_i$.
+For example, each $z_i$ could be modelled using a categorical logistic regression of the kind we saw in Chapter 10.
+
+As interesting as these mixture of normal linear regression models are, we will not explore them further here.
+However, we have described them in order to introduce zero-inflated Poisson models, which are special type of mixture of regression models.
+Specifically, a zero inflated Poisson regression is $K=2$ mixture regression model.
+There are two component models, and so each latent variable $z_i$ is binary valued, i.e. $z_i \in \{0, \}$.
+Furthermore, the probability that $z_i = 1$ is a logistic regression function of the predictor $\vec{x}_i$.
+The two component of the zero-inflated Poisson model are as follows.
+    1.  A Poisson distribution.
+    2.  A zero-valued point mass distribution (a probability distribution with all its mass at zero).
+
+More precisely, in a zero-Inflated Poisson regression, our data are 
+$$
+(y_1, \vec{x}_1), (y_2, \vec{x}_2) \ldots (y_i, \vec{x}_i) \ldots (y_n,\vec{x}_n),
+$$
+where each $y_i \in 0, 1\ldots$ is a count variable.
+Our model is
+$$
+\begin{aligned}
+    y_i &\sim \begin{cases} 
+              \textrm{Poisson}(\lambda_i)\quad &\text{if $z_i=0$},\\ 
+              0, \quad &\text{if $z_i=1$}
+              \end{cases},\\
+    z_i &\sim \textrm{Bernoulli}(\theta_i),
+\end{aligned}
+$$
+where $\lambda_i$ and $\theta_i$ are both functions of the predictors $\vec{x}_i$, specifically
+$$
+\log(\lambda_i ) = \beta_{0} + \sum_{k=1}^K \beta_k x_{ki},
+$$
+and
+$$
+\log\left(\frac{\theta_i}{1-\theta_i}\right) = \gamma_{0} + \sum_{k=1}^K \gamma_k x_{ki}.
+$$
+In other words, $\lambda_i$ is modelled just as in ordinary Poisson regression and $\theta_i$ is modelled as in logistic regression.
+We are using $\vec{\beta}$ and $\vec{\gamma}$ to make it clear that these are two separate sets of regression coefficients.
+
+## Zero-inflated Poisson in R
+
+We can perform zero-inflated Poisson regression, as well as other zero-inflated count regression model, using functions in the `pscl`.
+Here, we model how `cigs` varies as a function of `educ`.
+```{r, echo=T}
+library(pscl)
+Mzip <- zeroinfl(cigs ~ educ, data=smoking_df)
+```
+The two set of coefficients can be obtained as follows.
+```{r, echo=T}
+summary(Mzip)$coefficients
+```
+```{r}
+M <- zeroinfl(cigs ~ educ, data=smoking_df)
+x_1 <- 6
+x_2 <- 18
+ilogit <- plogis
+```
+```{r}
+coefs <- Mzip$coefficients$zero
+intercept_zero <- coefs['(Intercept)']
+slope_zero <- coefs['educ']
+coefs <- Mzip$coefficients$count
+intercept_count <- coefs['(Intercept)']
+slope_count <- coefs['educ']
+```
+From this, we see that the logistic regression model for each observation is estimated to be 
+$$
+\log\left(\frac{\theta_i}{1-\theta_i}\right) = \gamma_0 + \gamma_1 x_i =  `r round(intercept_zero, 3)` + `r round(slope_zero, 3)` x_i,
+$$
+and the Poisson model is estimated to be 
+$$
+\log(\lambda_i) = \beta_0 + \beta_1 x_i =  `r round(intercept_count, 3)` + `r round(slope_count,3)` x_i,
+$$
+where $x_i$ is the value of `educ` on observation $i$.
+
+Note that the logistic regression model gives the probability that the latent variable $z_i$ takes the value of $1$, which means that $y_i$ is assumed to be drawn from the zero model.
+The zero model means that the corresponding observation is *necessarily* zero.
+In this sense, $z_i = 1$ means that the person is non-smoker.
+Obviously, a non-smoker will necessarily smoke zero cigarettes in a day, but it important to emphasize that the converse is not true.
+A smoker, albeit a light smoker, may smoke zero cigarettes some days and some non-zero number other days.
+Amongst other things, this means that knowing that $y_i = 0$ does *not* entail that $z_i = 1$ necessarily.
+ 
+## Predictions in zero-inflated Poisson regression
+
+There are at least three main types of prediction that can be performed in zero-inflated Poisson regression: predicting the probability that $z_i = 1$ from $\vec{x}_i$, predicting $\lambda_i$ from $\vec{x}_i$ given that $z_i = 0$, and predicting $\lambda_i$ from $\vec{x}_i$ generally.
+
+To simplify matters, let us start by considering two values of `educ`: `r x_1` and `r x_2`.
+For $x_i=`r x_1`$, the probability that $z_i = 1$, and so person $i$ is a non-smoker, is
+$$
+\theta_i = \frac{1}{1+e^{-(`r round(intercept_zero, 3)` + `r round(slope_zero,3) * x_1`)}} = `r round(ilogit(intercept_zero + slope_zero * x_1), 3)`.
+$$
+By contrast, for $x_i=`r x_2`$, the probability that $z_i = 1$, and so person $i$ is a non-smoker, is
+$$
+\theta_i = \frac{1}{1+e^{-(`r round(intercept_zero, 3)` + `r round(slope_zero,3) * x_2`)}} = `r round(ilogit(intercept_zero + slope_zero * x_2), 3)`.
+$$
+From this, we see that as the value of `educ` increases, the probability of being a non-smoker also increases.
+
+For smokers, we can then use the Poisson model to provide the average of the number of cigarettes they smoke.
+For $x_i=`r x_1`$, the average number of cigarettes smoked is
+$$
+\lambda_i = e^{`r round(intercept_count, 3)` + `r round(slope_count,3) * x_1`} = `r round(exp(intercept_count + slope_count*x_1), 3)`.
+$$
+For $x_i = `r x_2`$, the average number of cigarettes smoked is
+$$
+\lambda_i = e^{`r round(intercept_count, 3)` + `r round(slope_count,3) * x_2`} = `r round(exp(intercept_count + slope_count*x_2), 3)`.
+$$
+From this we see that as `educ` increases the average number of cigarettes smoked also increases.
+This is an interesting result. 
+It shows that the effect of education on smoking behaviour is a not a very simple one and that two opposing effects are happening at the same time.
+On the one hand, as education increases, it is more likely that a person does not smoke at all.
+This was revealed by the logistic regression model.
+On the other hand, if the person is a smoker, then they more educated they are, the more they smoke.
+This was revealed by the Poisson model.
+
+These two predictions can be performed more efficiently and with less error using `predict` or `add_predictions`.
+Let us consider the range of values for `educ` from 6 to 18 in steps of 2 years.
+```{r, echo=T}
+smoking_df_new <- tibble(educ = seq(6, 18, by = 2))
+```
+The predictions that $z_i =1$, and hence that person of that level of education is a non-smoker, can be done using `type = 'zero'` as follows.
+```{r, echo=T}
+smoking_df_new %>% 
+  add_predictions(Mzip, type = 'zero')
+```
+
+
+
+The predictions that $\lambda_i =1$, and hence the average smoked by a smoker of that level of education, can be done using `type = 'count'` as follows.
+```{r, echo=T}
+smoking_df_new %>% 
+  add_predictions(Mzip, type = 'count')
+```
+
+
+
+
+Now let us consider the average number of cigarettes smoked by a person, who might be smoker or a non-smoker, given that we know there level of education.
+Put more generally, what is the expected value of $y_i$ given $\vec{x}_i$ in a zero-inflated Poisson model?
+This is the sum of two quantities. 
+The first is the average value of $y_i$ given $\vec{x}_i$ when $z_i = 0$ multiplied by the probability that $z_i = 0$.
+The second is the average value of $y_i$ given $\vec{x}_i$ when $z_i = 1$ multiplied by the probability that $z_i = 1$.
+This second value is always zero: if $z_i = 1$ then $y_i = 0$ necessarily.
+The first value is 
+$$
+\lambda_i \times (1-\theta_i).
+$$
+We can obtain these predictions using `type = 'response'`.
+```{r, echo=T}
+smoking_df_new %>% 
+  add_predictions(Mzip, type = 'response')
+```
+
+We can verify that these predictions are as defined above as follows.
+As we've seen, $\lambda$ and $\theta$ are calculated using `predict` with `type = 'count'` and `type = 'zero'`, respectively.
+Putting these in a data frame, we can then calculate $\lambda \times (1-\theta)$.
+```{r, echo=T}
+smoking_df_new %>% 
+  mutate(lambda = predict(Mzip, newdata = ., type = 'count'),
+         theta = predict(Mzip, newdata = ., type = 'zero'),
+         response = lambda * (1-theta)
+  )
+```
+
+## Bayesian zero-inflated Poisson regression
+
+We can easily perform a zero-inflated Poisson regression using `brms` as follows.
+```{r, echo=T, cache=T, results='hide'}
+Mzip_bayes <- brm(cigs ~ educ,
+                  family = zero_inflated_poisson(link = "log", link_zi = "logit"),
+                  data = smoking_df)
+```
+As we can see, we use `zero_inflated_poisson` family as the `family`.
+The default link functions for the Poisson and the logistic regression are, as we used them above, the $\log$ and the $\textrm{logit}$ functions, respectively.
+From the summary, however, we can see that this model is not identical to the one we used above.
+```{r, echo=T}
+Mzip_bayes
+```
+As may be clear, this model is in fact the following.
+$$
+\begin{aligned}
+    y_i &\sim \begin{cases} 
+              \textrm{Poisson}(\lambda_i)\quad &\text{if $z_i=0$},\\ 
+              0, \quad &\text{if $z_i=1$}
+              \end{cases},\\
+    z_i &\sim \textrm{Bernoulli}(\theta),
+\end{aligned}
+$$
+where $\lambda_i$ is a function of the predictors $\vec{x}_i$, specifically
+$$
+\log(\lambda_i ) = \beta_{0} + \sum_{k=1}^K \beta_k x_{ki},
+$$
+but $\theta$ is a fixed constant that does not vary with $\vec{x}_i$.
+To obtain the model, as we used it above in the classical inference based example, where the log odds of $\theta_i$ is a a linear function $\vec{x}_i$, we must define two regression formulas: one for the Poisson model and the other for the logistic regression model.
+We do so using the `brmsformula` function, which is also available as `bf`.
+```{r, echo = T, cache=T, results='hide'}
+Mzip_bayes <- brm(bf(cigs ~ educ, zi ~ educ),
+                  family = zero_inflated_poisson(link = "log", link_zi = "logit"),
+                  data = smoking_df)
+```
+Note that inside `bf`, there are two formulas.
+The first is as above, and second the logistic regression model for the $z_i$ latent variable.
+
+Again, we have accepted all the defaults.
+Let us look at the priors that have been used.
+```{r, echo=T}
+prior_summary(Mzip_bayes)
+```
+Much of this as similar to previous examples.
+However, we note that the prior on the intercept term for the logistic regression model is a standard logistic distribution.
+We saw this distribution when discussing the latent variable formulation of the logistic regression in Chapter 10.
+It is close to a normal distribution with zero mean and standard deviation of 1.63.
+
+```{r}
+options(width = 300)
+```
+
+The coefficients for both the Poisson and logistic regresion model can be obtained from the `fixed` attribute in the summary output, which we can see is very close to the estimates in classical inference model above.
+```{r, echo=T}
+summary(Mzip_bayes)$fixed
+```
+
+
+# References
+

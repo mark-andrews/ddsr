@@ -1,0 +1,1074 @@
+---
+title: "Chapter 3: Data Wrangling"
+author: "Mark Andrews"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    fig_caption: true
+    keep_tex: false
+    highlight: haddock
+  html_document:
+    highlight: haddock
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+---
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, prompt = FALSE, warning = FALSE, message = FALSE, comment='#>')
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+
+options(scipen=9)
+```
+
+Traditional statistics textbooks and courses routinely assume that the data is ready for analysis.
+Their starting point for any analysis is usually a neat table of rows and columns, with all and only the relevant variables, each with meaningful names, and often accompanied with a useful description or summary of what each variable signifies or measures.
+In reality, on the other hand, the starting point of any analysis is almost always a very messy, unstructured or ill-formatted data set, or even multiple separate data sets, that must first be cleaned up and modified before any further analysis can begin.
+Throughout this book, we will use the term *data wrangling* to describe the process of taking data in its unstructured, messy, or complicated original form and converting it into a clean and tidy format that allows data exploration, visualization, and eventually statistical modelling and analysis to proceed efficiently and relatively effortlessly.
+Other terms for data wrangling include *data munging*, *data cleaning*, *data pre-processing*, *data preparation*, and so on.
+
+The central role of data wrangling in any type of data analysis should not be underestimated.
+Part of lore of modern data science is the belief that up 80% of all data science activities involves data wrangling [see, for example, @nytimes_janitorial], and this 80% figure is backed up surveys of what data scientists do [see, for example, @crowdflower2016;@crowdflower2017].
+Even if this number is not accurate, data wrangling is a necessary and potentially very time consuming and laborious activity for any data analysis.
+As such, developing data wrangling skills is essential for doing data analysis efficiently.
+
+# Data wrangling tools in R
+
+There are many tools in R for doing data wrangling.
+Here, we will focus of a core set of inter-related `tidyverse` tools.
+These include the commands available in the `dplyr` package, particularly its so-called *verbs* such as the following.
+
+* select
+* rename
+* slice
+* filter
+* mutate
+* arrange
+* group_by
+* summarize
+
+In addition, `dplyr` provides tools for merging and joining data sets such as the following:
+
+* inner_join
+* left_join
+* right_join
+* full_join
+
+Next, there are the tools in the `tidyr` package, particularly the following:
+
+* pivot_longer
+* pivot_wider
+
+These and other tools can then be combined together using the `%>%` pipe operator for efficient data analysis *pipelines*.
+
+Most of these tools can be loaded into R by loading the `tidyverse` package of packages.
+
+```{r, echo=T}
+library(tidyverse)
+```
+
+# Reading text file data into a data frame
+
+In principle, raw data can exist in any format in any type file.
+In practice, it is common to have data in a roughly rectangular format, i.e. with rows and columns, either in text files such as `.csv`, `.tsv`, or `.txt` files.
+The `readr` package, which is loaded when we load `tidyvese`, allows us to efficiently import data that are in these files. 
+It has many commands for importing data in many different text file formats.
+The most commonly used include
+
+* `read_csv` for files where the values on each line are separated by commas
+* `read_tsv` for files where the values are separated by tabs
+* `read_delim` for files where the values are separated by arbitrary delimiters such as '|', ':', ';', etc. Both `read_csv` and `read_tsv` are special cases of the more general `read_delim` command.
+* `read_table` for files where the values are separated by one or more, and possible inconsistently many, whitespaces.
+
+These commands usually read from files stored locally on the computer on which R is running.
+For example, if we has a `.csv` file named `data.csv` that is inside a directory called `data` that was in our working directory, we would read this by default as follows.
+```{r, eval=F, echo=T}
+read_csv('data/data.csv')
+```
+However, these commands also can read from files on the internet.
+In this case, we provide a url for the file.
+These commands can also read compressed files if they are compressed in the `.xz`, `.bz2`, `.gz`, or `.zip` compression formats.
+
+As an example data set, we will use the data contained in the file `blp-trials-short.txt`. 
+We will read it in to a data frame named `blp_df` as follows:
+```{r, echo=T}
+blp_df <- read_csv("data/blp-trials-short.txt")
+blp_df
+```
+
+We can use the `dplyr` command `glimpse` to look at resulting data frame.
+```{r}
+glimpse(blp_df)
+```
+
+As we can see, there are `r nrow(blp_df)` rows and `r ncol(blp_df)` variables.
+This data frame gives the trial by trial results from a type of cognitive psychology experiment known as a *lexical decision task*.
+In a lexical decision task, participants are shown a string of characters and they have to indicate, with a key press, whether that string of characters is a word in their language. On each row of the data frame, among other things, we have an identifier of the participant, what string of characters they were shown, what key the pressed, what their reaction time was, and so on.
+
+
+# Manipulating data frames using `dplyr`
+
+The `dplyr` package provides a set versatile inter-related commands for manipulating data frames.
+Chief amongst these commands are `dplyr`'s *verbs* listed above.
+Here, we will look at each one.
+
+## Selecting variables with `select`
+
+In our `blp_df` data frames we have `r ncol(blp_df)` variables.
+Let's say, as is often the case when processing raw data, that we only need some of these.
+The `dplyr` command `select` allows us to select those we want.
+For example, if we just want the participant's id, whether the displayed string was a English word or not, what their key press response was, what their reaction time was, then we would do the following.
+```{r}
+select(blp_df, participant, lex, resp, rt)
+```
+
+Importantly, `select` returns a *new* data frame with the selected variables.
+In other words, the original `blp` data frame is still left fully intact.
+This feature of returning a new data frame and not altering the original data frame is true of all of the `dplyr` verbs and many other wrangling commands that we'll meet below.
+
+
+We can select a range of variables by specifying the first and last variables in the range with a `:` between them as follows.
+```{r}
+select(blp_df, spell:prev.rt)
+```
+We can also select a range of variables using indices as in the following example.
+```{r}
+select(blp_df, 2:5) # columns 2 to 5
+```
+
+We can select variables according to the character or characters that they begin with.
+For example, we select all variables that being with `p` as follows. 
+```{r}
+select(blp_df, starts_with('p'))
+```
+Or we can select variables by the characters they end with.
+```{r}
+select(blp_df, ends_with('t'))
+```
+
+We can select variables that contain a certain set of characters in any position. 
+For example, the following selects variables whose names contain the string `rt`.
+```{r}
+select(blp_df, contains('rt'))
+```
+The previous example selected the variable `participant` because it to contained the word `rt`.
+However, if we had wanted to select only those variables that contained `rt` where it clearly meant reaction time, we could use a *regular expression* match.
+For example, the regular expression `^rt|rt$` will match the `rt` if it begins or ends a string.
+Therefore, we can select the variables that contain `rt`, where the string `rt` means reaction time, as follows.
+```{r}
+select(blp_df, matches('^rt|rt$'))
+```
+
+*Removing variables*: We can use `select` to *remove* variables as well as select them.
+To remove a variable, we precede its name with a minus sign. 
+```{r}
+select(blp_df, -participant) # remove `participant`
+```
+Just as we selected ranges or sets of variables above, we can remove them by preceding their selection functions with minus signs.
+For example, to remove variables indexed 2 to 6, we would do the following.
+```{r}
+select(blp_df, -(2:6))
+```
+Or, as another example, we can remove the variables that contain the string `rt` as follows.
+```{r}
+select(blp_df, -contains('rt'))
+```
+
+*Reordering variables*: When we select variables with `select`, we control their order in the resulting data frame.
+For example, if we select `spell`, `participant`, `res`, the resulting data frame will have them in their selected order.
+```{r}
+select(blp_df, spell, participant, resp)
+```
+However, clearly the resulting data frame only returned those variables that we selected.
+We can, however, include all remaining variables after those we explicitly selected by using `everything()` as follows.
+```{r}
+select(blp_df, spell, participant, resp, everything())
+```
+We can also use `everything` to move some variables to the start of the list, and some to the end, and have the remaining variables in the middle.
+For example, we can move `resp` to the start of the list of variables, move to `participant` to the end, and then have everything else in between as follows.
+```{r}
+select(blp_df, resp, everything(), -participant, participant)
+```
+In this example, we essentially move `resp` to the front of the list, followed by all remaining variables.
+Then we remove remove `participant` by `-participant` and then re-insert it at the end of the list of the remaining variables.
+
+*Selecting by condition with `select_if`*: Thus far, we have selected variables according to properties of their names or by their indices.
+The `select_if` function is a powerful function that allows us to select variables according to properties of their values.
+For example, the function `is.character` will verify whether a vector is a character vector or not, and `is.numeric` will verify if a vector is a numeric vector, as in the following.
+```{r}
+x <- c(1, 42, 3)
+y <- c('good', 'dogs', 'brent')
+is.numeric(x)
+is.numeric(y)
+is.character(x)
+is.character(y)
+```
+By passing the function `is.character` to select the variables that are character vectors as follows.
+```{r}
+select_if(blp_df, is.character)
+```
+Note that in this command, we pass the function itself, i.e. `is.character`. We do not use the function call, i.e. `is.character()`.
+In the following example, we select the numeric variables in `blp`.
+```{r}
+select_if(blp_df, is.numeric)
+```
+
+We can use custom functions with `select_if`.
+In the Chapter 2, we briefly described how to create custom functions in R.
+This is a topic to which we will return in more depth Chapter 6.
+Now, and throughout the remainder of this chapter, we will create some custom functions to use with data wrangling, but we will not describe delve too deep into the details of how theywork.
+
+As an example, the following function will return `TRUE` if the variable is a
+numeric variable with a mean that is less than 700.
+```{r}
+has_low_mean <- function(x){
+  is.numeric(x) && (mean(x, na.rm = T) < 700)
+}
+```
+Now, we can select variables that meet this criterion as follows.
+```{r}
+select_if(blp_df, has_low_mean)
+```
+We can also use an *anonymous* function within `select_if`.
+An anonymous function is a function without a name, and its use is primarily for situations were functions are us  in a once-off manner, and so there is no need to save
+them.
+As an example, the anonymous version of `has_low_mean` is simply the following.
+```{.R}
+function(x){ is.numeric(x) && (mean(x, na.rm = T) < 700) }
+```
+We can put this anonymous function inside `select_if` as follows.
+```{r}
+select_if(blp_df, function(x){ is.numeric(x) && (mean(x, na.rm = T) < 700) })
+```
+We can make a less verbose version of this anonymous function using a syntactic shortcut that is part of the `purrr` package, which is loaded when we load `tidyverse`, as follows.
+```{r}
+select_if(blp_df, ~is.numeric(.) && (mean(., na.rm = T) < 700))
+```
+
+## Renaming variables with `rename`
+
+When we select individual variables with `select`, we can rename them too, as in the following example.
+```{r}
+select(blp_df, subject=participant, reaction_time=rt)
+```
+While this is useful, the data frame that is returned just contains the selected variables.
+If we want to rename some variables, and get a data frame with all variables, including the renamed ones, we should use `rename`.
+```{r}
+rename(blp_df, subject=participant, reaction_time=rt)
+```
+
+Useful variants of `rename` include `rename_all`, `rename_at`, and `rename_if`.
+The `rename_all` function allows us to, as the name implies, rename all the variables using some renaming function, i.e., a function that takes a string as input and returns another as output.
+As an example of such a function, here is a `purrr` style anonymous function function, using the `str_replace_all` function from the `stringr` package, that replaces any dot in the variable name with an underscore.
+```{r}
+rename_all(blp_df, ~str_replace_all(., '\\.', '_'))
+```
+In this example, because `str_replace_all` uses regular expressions for text pattern matching, and in a regular expression a '.' character means "any character", we have to use `\\.` to refer to a literal dot.
+
+The `rename_at` function allows us to select certain variables, and then apply a renaming function just to these selected variables.
+We can use selection functions like `contains` or `matches` that we used above, but it is necessary to surround these functions with the `vars` function.
+In the following example, we select all variables whose names contain `rt` at their start or end, and then replace their occurrences of `rt` with `reaction_time`.
+```{r}
+rename_at(blp_df, 
+          vars(matches('^rt|rt$')), 
+          ~str_replace_all(., 'rt', 'reaction_time'))
+```
+
+Similarly to how we used `select_if`, `rename_if` can be used to rename variables whose values match certain criteria. 
+For example, if we wanted to capitalize the names of those variables that are character variables, 
+we could do the following.
+```{r}
+rename_if(blp_df, is.character, str_to_upper)
+```
+In this example, we use the `str_to_upper` from the package `stringr`, which is also loaded by `tidyverse`, to convert the names of the selected variables to uppercase.
+
+## Selecting observations with `slice` and `filter`
+
+With `select` and `rename`, we were selecting or removing variables.
+The commands `slice` and `filter` allow us to  select or remove observations.
+We use `slice` to select observations by their indices.
+For example, to select rows 10, 20, 50, 100, 500, we would simply do the following.
+```{r}
+slice(blp_df, c(10, 20, 50, 100, 500))
+```
+Given that, for example, `10:100` would list the integers 10 to 100 inclusive, we can select just these observations as follows.
+```{r}
+slice(blp_df, 10:100)
+```
+Just as we did with `select`, we can precede the indices with a minus sign to drop the corresponding observations.
+Thus, for example, we can drop the first 10 observations as follows.
+```{r}
+slice(blp_df, -(1:10))
+```
+
+A useful `dplyr` function that can be used in `slice` and elsewhere is `n()`, which gives the number of observations in the data frame.
+Using this, we can, for example, list the observation from index 600 to the end as follows.
+```{r}
+slice(blp_df, 600:n())
+```
+Likewise, we could list the last 11 rows as follows.
+```{r}
+slice(blp_df, (n()-10):n())
+```
+
+The `filter` command is a powerful means to filter observations according to their values.
+Note that when we say that `filter` filters observations, we mean it filters them *in*, or keeps them, rather than filters them *out*, removes them.
+For example, we can select all the observations where the `lex` variable is `N` as follows.
+```{r}
+filter(blp_df, lex == 'N')
+```
+Notice that here we must use the `==` equality operator.
+We can also filter by multiple conditions by listing each one with commas between them.
+For example, the following gives us the observations where `lex` has the value of `N` and `resp` has the value of `W`.
+```{r}
+filter(blp_df, lex == 'N', resp=='W')
+```
+The following gives us those observations where where `lex` has the value of `N` and `resp` has the value of `W` and `rt.raw` is less than or equal to 500.
+```{r}
+filter(blp_df, lex == 'N', resp=='W', rt.raw <= 500)
+```
+This command is equivalent to making a conjunction of conditions using `&` as follows.
+```{r}
+filter(blp_df, lex == 'N' & resp=='W' & rt.raw <= 500)
+```
+
+We can make a *disjunction* of conditions for filtering using the logical-or symbol `|`.
+For example,  to filter observation where the `rt.raw` was either less than 500 or greater than 1000, we can do the following.
+```{r}
+filter(blp_df, rt.raw < 500 | rt.raw > 1000)
+```
+
+If we want to filter by observations whose values of certain variables are in a set, we can use the `%in%` operator.
+For example, here we filter observations where values of `rt.raw` is in the set on integers 500 to 510.
+```{r}
+filter(blp_df, rt.raw %in% 500:510)
+```
+
+In general, we may filter the observations by creating any complex Boolean conditional using combinations of logical-and `&`, logical-or `|`, logical-not `!`, and other operators.
+For example, here is where the `lex` is `W`, the length of the `spell` is less than 5 and either the `resp` is not equal to `lex` or the `rt.raw` is greater than 900.
+```{r}
+filter(blp_df, 
+       lex == 'W', 
+       str_length(spell) < 5 & (resp != lex | rt.raw > 900))
+```
+
+The `filter` command has the variants `filter_all`, `filter_at`, and `filter_if`.
+In these commands, filtering is applied on the basis of the values of selected sets of variables.
+For example, using `filter_all`, we can filter rows that contain at least one `NA` value.
+```{r}
+filter_all(blp_df, any_vars(is.na(.)))
+```
+In this case, the `.` signifies the variables that are selected, which in the case of `filter_all` is all variables. 
+Thus, this command is filtering observations where any variable contains a `NA`. 
+On the other hand, to apply the filtering rules to a selected set of variables we can use `filter_at`.
+For example, the following filters all observations where the value of all variables that start or end with `rt` are greater than 500. 
+```{r}
+filter_at(blp_df, vars(matches('^rt|rt$')), all_vars(. > 500))
+```
+As another example, the following filters all observations where the value of all variables that start or end with `rt` have values that are less than the median values of those values.
+In other words, all filtered observations have values of the `rt` variables that are lower than the medians of these variables.
+```{r}
+filter_at(blp_df, 
+          vars(matches('^rt|rt$')), 
+          all_vars(. < median(., na.rm=T)))
+```
+
+The `filter_if` variant of `filter`, like `select_if` or `rename_if`, allows us to select variables according to their properties, rather than their names, and then apply filtering commands to the selected variables.
+For example, we can select the numeric variables in the data frames and then filter the observations where all the values of the selected variables are less than the median value of these variables.
+```{r}
+filter_if(blp_df, 
+          is.numeric, 
+          all_vars(. < median(., na.rm=T)))
+```
+
+## Changing variables and values with `mutate`
+
+The `mutate` command is a very powerful tool in the `dplyr` toolbox.
+It allows us to create new variables and alter the values of existing ones.
+
+As an example, we can create a new variable `is_accurate` that takes the value of `TRUE` whenever `lex` and `resp` have the same value as follows.
+```{r}
+mutate(blp_df, acc = lex == resp)
+```
+As another example, we can create a new variable that gives the length of the word given by the `spell` variable.
+```{r}
+mutate(blp_df, len = str_length(spell))
+```
+We can also create multiple new variable at the same time as in the following example.
+```{r}
+mutate(blp_df, 
+       acc = lex == resp, 
+       fast = rt.raw < mean(rt.raw, na.rm=TRUE))
+```
+
+As with other `dplyr` verbs, `mutate` has `mutate_all`, `mutate_at`, `mutate_if` variants. 
+The `mutate_all` variant will apply a transformation function to all variables in the data frame, and then replace the original values of all variables with the results of the function.
+For example, the following will apply the `as.character` function, which converts any vector into a character vector, to all the variables in `blp_df`.
+```{r}
+mutate_all(blp_df, as.character)
+```
+
+The `mutate_at` variant of allows us to apply a function to selected variables.
+For example, we could apply a log transform to all the `rt` variables as follows.
+```{r}
+mutate_at(blp_df, vars(matches('^rt|rt$')), log)
+```
+
+The `mutate_if` variant selects variable by their properties and then applies a function to the selected variables.
+In the following example, we select all variables that are character vectors and convert them to a *factor*, which is a categorical variable vector with an defined set of values or "levels", using the `as.factor` function.
+```{r}
+mutate_if(blp_df, is.character, as.factor)
+```
+
+
+*Recoding*: We have a number of options to use with `mutate` and its variants for recoding the values of variables.
+Perhaps the simplest option is `if_else`. 
+This evaluates a condition for each value of a variable.
+If the result is `TRUE`, it returns one value, other it returns another.
+As an example, the following code creates a new variable `speed` that takes the value of `fast` if `rt.raw` is less than 750, and takes the value of `slow` otherwise.
+```{r}
+mutate(blp_df,
+       speed = if_else(rt.raw < 750,
+                       'fast',
+                       'slow')
+)
+```
+
+Another widely used recoding method is `recode`.
+For example, to replace the `lex` variable's values `W` and `N` with `word` and `nonword`, we would do the following.
+```{r}
+mutate(blp_df, 
+       lex = recode(lex, 'W'='word', 'N'='nonword')
+)
+```
+Given that both `lex` and `resp` are coded identically, we can apply the same recoding rule to both using `mutate_at` as in the following example.
+```{r}
+mutate_at(blp_df,
+          vars(lex, resp),
+          ~recode(., 'W'="word", 'N'="nonword")
+)
+```
+When we are recoding numeric vales using `recode`, we must surround the values we would like to transform using backticks as in the following example.
+```{r}
+mutate(blp_df, rt = recode(rt, `977` = 1000, `562` = 100))
+```
+
+For more complex recoding operations we can use the `case_when` function.
+For example, we could use `case_when` to convert values of `prev.rt` that are below 500 to `fast`, and those above 1500 to `slow`, and those in between 500 and 1500 to `medium`.
+```{r}
+mutate(blp_df,
+       prev.rt = case_when(
+                   prev.rt < 500 ~ 'fast',
+                   prev.rt > 1500 ~ 'slow',
+                   TRUE ~ 'medium'
+       )
+)
+```
+On each line of `case_when` we have a `~`.
+To the left of `~`, we have a condition. 
+To the right, we have the replacement value for those values for which the condition is true.
+Whichever condition first evaluates as true will determine which replacement value is used.
+For example, in the following example, values lower than 500 are classified as `extra-fast` and values lower than 550 are classified as `fast`.
+Clearly, any value that is less than 550 is also less than 500, but whichever condition first evaluates to true will determine the replacement value.
+As such, in the following example, values lower than 500 will be replaced by `extra-fast`. 
+```{r}
+mutate(blp_df,
+       prev.rt = case_when(
+                   prev.rt < 500 ~ 'extra-fast',
+                   prev.rt < 550 ~ 'fast',
+                   TRUE ~ 'not-fast'
+       )
+)
+```
+On the other hand, in the following example, values lower than 500 will be listed as `fast`, rather than `extra-fast`.
+```{r}
+mutate(blp_df,
+       prev.rt = case_when(
+                   prev.rt < 550 ~ 'fast',
+                   prev.rt < 500 ~ 'extra-fast',
+                   TRUE ~ 'not-fast'
+       )
+)
+```
+The final line in the `case_when` above has `TRUE` in place of a condition.
+This ensures that if any value does not meet any of the previous conditions, it will be assigned the corresponding replacement value in this final line.
+Had we left this final line out, then any values not meeting the previous conditions would be replaced by `NA`, as seen in the following example.
+```{r}
+mutate(blp_df,
+       prev.rt = case_when(
+                   prev.rt < 550 ~ 'fast',
+                   prev.rt < 500 ~ 'extra-fast'
+       )
+)
+```
+
+Another useful recoding function is `mapvalues`, which is part of the `plyr` package.
+This allows us to see up two vectors, `from` and `to`, that are of the same length.
+Any value that matches a value in the `from` is mapped to its corresponding value in `to`.
+As an example, if we wanted to map the range of integers from 500 to 1000 to the reverse of this range, i.e. 1000, 999, \ldots 500, we could do the following.
+```{r}
+mutate(blp_df,
+       rt_reverse = plyr::mapvalues(rt, from=500:1000, to=1000:500)
+)
+```
+
+*Transmuting*: A variant of `mutate` is `transmute`, which has the `_all`, `_at`, and `_if` variants too.
+The `transmute` function works like `mutate` except that it only returns the newly created variables, and so drops all the original variables.
+For example, in the following code, we create two new variables and only these are returned by the `transmute` function.
+```{r}
+transmute(blp_df, 
+          speed = rt.raw / 1000, 
+          accuracy = lex == resp)
+```
+
+
+
+## Sorting observations with `arrange`
+
+Sorting observations in a data frame is easily accomplished with `arrange`.
+For example to sort by `participant` and then by `spell`, we would do the following.
+```{r}
+arrange(blp_df, participant, spell)
+```
+
+We can sort by the reverse order of any variable by using the `desc` command on the variable.
+In the following example, we sort by `participant`, and then by `spell` in reverse order.
+```{r}
+arrange(blp_df, participant, desc(spell))
+```
+
+## Subsampling data frames
+
+The `dplyr` package provides two methods to sample from a data frame.
+The `sample_frac` allows us to sample a specified proportion of observations.
+In the following example, we randomly sample 10% of the data frame.
+```{r}
+sample_frac(blp_df, 0.1)
+```
+By default, the sampling will occur without replacement, which we can override as follows.
+```{r}
+sample_frac(blp_df, 0.1, replace=FALSE)
+```
+We may also sample a specified number of observations, as in the following example, where we randomly sample 15 observations.
+```{r}
+sample_n(blp_df, 15)
+```
+
+We may also sample the top or bottom observations according to some variable.
+For example, here we select the top 15 observations by their `rt.raw` values.
+```{r}
+top_n(blp_df, 15, rt.raw)
+```
+
+## Reducing data with `summarize` and `group_by`
+
+The `dplyr` package has a function `summarize` (or, equivalently, `summarise`) that applies summarizing functions to variables.
+A summarizing function is essentially any function that takes a vector and reduces it to a single values.
+The `summarize` function is vital for exploratory data analysis and we will use it extensively in Chapter 5.
+However, for now, especially when used with the `group_by` function, it is an essential tool for data wrangling.
+
+To see how `summarize` works, we may calculate some summary statistics of the particular variables as in the following example.
+```{r}
+summarize(blp_df, 
+          mean_rt = mean(rt, na.rm = T),
+          median_rt = median(rt, na.rm = T),
+          sd_rt.raw = sd(rt.raw, na.rm = T)
+)
+```
+(Note that here it is necessary to use `na.rm = T` to remove the `NA` values in the variables.)
+
+We can use the `summarize_all` variant of `summarize` to apply a summarisation function to all variables, as in the following example.
+```{r}
+summarize_all(blp_df, n_distinct)
+```
+Here, `n_distinct` returns the number of unique values in each variable.
+The `summarize_at` will apply a summary function to selected variables.
+In the following example, we calculate the mean of all the reaction times variables.
+```{r}
+summarize_at(blp_df, vars(matches('^rt|rt$')), ~mean(., na.rm=T))
+```
+The `summarize_if` will apply the summary function to variables selected by their properties, such as whether they are numeric variables, 
+as in the following example.
+```{r}
+summarize_if(blp_df, is.numeric, ~mean(., na.rm=T))
+```
+
+Using the `_all`, `_at`, `_if` variants, we can also apply multiple summary functions simultaneously.
+In the following example, we calculate three summary statistics for `rt` alone.
+```{r}
+summarise_at(blp_df, 
+             vars(rt), 
+             list(mean = ~mean(., na.rm=T), 
+                  median = ~median(., na.rm=T),
+                  sd = ~sd(., na.rm=T)
+             )
+)
+```
+In the following, we calculate the same three summary statistics for two variables.
+```{r}
+summarise_at(blp_df, 
+             vars(rt, rt.raw), 
+             list(mean = ~mean(., na.rm=T), 
+                  median = ~median(., na.rm=T),
+                  sd = ~sd(., na.rm=T)
+             )
+)
+```
+In this case, the name of the summary value is appended to the name of each variable.
+
+The `summarize` command, and its variants, become considerably more powerful when combined with the `group_by` command.
+Effectively, `group_by` groups the observations within a data frame according to the values of specified variables.
+For example, the following command groups `blp_df` into groups of observations according to value of the `lex` variable.
+```{r}
+blp_by_lex <- group_by(blp_df, lex)
+```
+If we view the resulting grouped data frame, it appears more or less as normal.
+```{r}
+blp_by_lex
+```
+Like `blp_df`, it has `r nrow(blp_by_lex)` observations and `r ncol(blp_by_lex)` variables.
+However, in addition, it is comprised of `r n_groups(blp_by_lex)` groups that are defined by the values of the `lex` variable.
+
+If we now apply `summarize` to this grouped data frame, we will obtain summary statistics for each group, as in the following example.
+```{r}
+summarize(blp_by_lex, mean = mean(rt, na.rm=T))
+```
+We may also apply the `_all`, `_at`, `_if` variants as before.
+```{r}
+summarize_at(blp_by_lex,
+             vars(rt),
+             list(mean = ~mean(., na.rm=T),
+                  median = ~median(., na.rm=T),
+                  sd = ~sd(., na.rm=T)
+             )
+)
+```
+
+Using `group_by` and `summarize` together is a powerful way to create new (reduced) data frames.
+For example, in `blp_df`, there are `r blp_df %>% pull(participant) %>% n_distinct()` unique participants.
+For each participant, and for each of the two stimuli types (i.e. the `N` and `W` values of `lex`), we can calculate the number of stimuli they were shown (using the `dplyr` command `n()`, which calculates the number of observations per each group), their number of accurate responses and their average response reaction time.
+```{r}
+summarize(group_by(blp_df, participant, lex),
+          n_stimuli = n(),
+          correct_resp = sum(resp == lex, na.rm=T),
+          reaction_time = mean(rt.raw, na.rm=T))
+```
+The data frame thus produced has `r (blp_df %>% pull(participant) %>% n_distinct()) * 2` observation: two per each of the  `r (blp_df %>% pull(participant) %>% n_distinct())` participants.
+
+Finally, any grouped data framed can be ungrouped by the `ungroup` command, as in the following example.
+```{r}
+ungroup(blp_by_lex)
+```
+
+# The %>% operator
+
+The `%>%` operator in R is known as the *pipe*.
+It was introduced relatively recently to R, and is a simple yet major innovation.
+It allows us to create sequences of functions, sometimes known as *pipelines*, that avoid the use of repeated function nested or temporary data structures.
+The result is usually very clean, readable, and uncluttered code.
+
+The `%>%` pipe, and related operators like `%<>%` and `%$%` are part of the `magrittr` package. 
+The pipe itself is, however, automatically loaded by the `dplyr` package, as well as by `tidyverse`.
+In RStudio, the keyboard shortcut Ctrl+Shift+M types `%>%`.
+
+To understand pipes, let us begin with a very simple example.
+The following `primes` variable is a vector of the first 10 prime numbers.
+```{r}
+primes <- c(2, 3, 5, 7, 11, 13, 17, 19, 23, 29)
+```
+We can calculate the sum of `primes` as follows.
+```{r}
+sum(primes)
+```
+We may then calculate the square root of this sum.
+```{r}
+sqrt(sum(primes))
+```
+We may then calculate the logarithm of this square root.
+```{r}
+log(sqrt(sum(primes)))
+```
+The final calculation is triple nested function.
+In this example, it is not particularly difficult to read, but often when there is excessive nesting, the result appears cluttered and unreadable. 
+Consider the following example where we combine `primes` with a vector of 3 `NA` values, subsample 5 values with replacement, sum the result, removing missing values, then calculate the square root, and its logarithm to base 2.
+```{r}
+log(sqrt(sum(sample(c(primes, rep(NA, 3)), size=5, replace=T), na.rm=T)), base=2)
+```
+We may try to improve the readability of this code by breaking the function over multiple 
+lines.
+```{r}
+log(
+  sqrt(
+    sum(
+      sample(
+        c(primes, rep(NA, 3)), 
+        size=5, 
+        replace=T), 
+      na.rm=T)), 
+  base=2)
+```
+It is questionable whether this improves readability at all.
+An alternative approach to improve readability is to create intermediate variables as in the following code.
+```{r}
+primes_appended <- c(primes, rep(NA, 3))
+primes_subsample <- sample(primes_appended, size=5, replace=T)
+primes_subsample_sum <- sum(primes_subsample, na.rm=T)
+sqrt_primes_subsample_sum <- sqrt(primes_subsample_sum)
+log(sqrt_primes_subsample_sum, base=2)
+```
+Or, alternatively, we could re-use the same temporary variable for the intermediate calculations.
+```{r}
+tmpvar <- c(primes, rep(NA, 3))
+tmpvar <- sample(tmpvar, size=5, replace=T)
+tmpvar <- sum(tmpvar, na.rm=T)
+tmpvar <- sqrt(tmpvar)
+log(tmpvar, base=2)
+```
+In either case, the resulting code is relatively cluttered, and creates some unnecessary temporary variables.
+
+The `%>%` is *syntactic sugar* that reexpresses nested functions as sequences.
+It is binary operator that takes the value of its left hand side and places it inside the function on the right hand side. 
+This is best understood by example.
+If we have a variable `x` and a function `f()`, we can apply the function to the variable with `f(x)`.
+This is equivalent to the following.
+```{.R}
+x %>% f()   # equivalent to f(x)
+```
+If, on the other hand, the nested application of a set of functions `f()`, `g()`, and `h()` would be equivalent to the following.
+```{.R}
+x %>% f() %>% g() %>% h()    # equivalent to h(g(f(x)))
+```
+
+Returning to some of our examples above, we will see how they can be rewritten with pipes.
+In each case, we will precede the piped version with a comment showing its original version.
+```{r}
+# sum(primes)
+primes %>% sum()
+```
+```{r}
+# sum(primes, na.rm=T)
+primes %>% sum(na.rm=T)
+```
+```{r}
+# log(sqrt(sum(primes)))
+primes %>% sum() %>% sqrt() %>% log()
+```
+```{r}
+# log(sqrt(sum(primes, na.rm=T)), base=2)
+primes %>% 
+  sum(na.rm=T) %>%
+  sqrt() %>% 
+  log(base=2)
+```
+
+```{r}
+# log(sqrt(sum(sample(c(primes, rep(NA, 3)), size=5, replace=T), na.rm=T)), base=2)
+primes %>% 
+  c(rep(NA, 3)) %>% 
+  sample(size=5, replace=T) %>% 
+  sum(na.rm=T) %>% 
+  sqrt() %>% 
+  log(base=2)
+```
+
+In each case, we can the pipeline as beginning with some variable or expression, sending that to a function, the output of which is sent as input to the next function in the pipeline, and so on.
+
+When used with the `dplyr` wrangling tools, as well as other tools that we will meet momentarily, we now have a veritable mini-language for data wrangling.
+For example, in the following code, create some new variables, select, rename, and reorder, some of the variables, and sort by `participant` and then by `speed`.
+```{r}
+blp_df %>%
+  mutate(accuracy = resp == lex,
+         stimulus = recode(lex, 'W'='word', 'N'='nonword')
+  ) %>% 
+  select(participant, stimulus, item=spell, accuracy, speed=rt.raw) %>% 
+  arrange(participant, speed)
+```
+
+As another example, in the following code, we filter the data frame by keeping only observations where `lex` takes the value of `W`, then we calculate the word length and the accuracy of the response, rename the `rt.raw` variable, group by word length, calculate the average accuracy and reaction time, select some key variables and sort the result.
+```{r}
+blp_df %>%
+  filter(lex == 'W') %>% 
+  mutate(word_length = str_length(spell),
+         accuracy = resp == lex) %>% 
+  rename(speed = rt.raw) %>% 
+  group_by(word_length) %>% 
+  summarize_at(vars(accuracy, speed), ~mean(., na.rm=T)) %>% 
+  ungroup() %>% 
+  select(word_length, accuracy, speed) %>% 
+  arrange(word_length, accuracy, speed)
+```
+
+
+# Combining data frames 
+
+There are at least three major ways to combine data frames.
+They are what we'll call *binds*, *joins*, and *set operations*
+
+## Combining data frames with binds
+
+A *bind* operation is a simple operation that either vertically stack data frames that share common variables, or horizontally stack data frames that have the same number of observations.
+
+To illustrate, we will create three small data frames.
+Here, we use `tibble` to create the data frame.
+This is very similar to using `data.frame` to create a data frame, like we saw in Chapter 2, but will create a tibble flavoured data frame, which is the common type of data frame in the tidyverse.
+```{r}
+Df_1 <- tibble(x = c(1, 2, 3),
+               y = c(2, 7, 1),
+               z = c(0, 2, 7))
+
+Df_2 <- tibble(y = c(5, 7),
+               z = c(6, 7),
+               x = c(1, 2))
+
+Df_3 <- tibble(a = c(5, 6, 1),
+               b = c('a', 'b', 'c'),
+               c = c(T, T, F))
+```
+
+The `Df_1` and `Df_2` data frames share common variable names.
+They can be vertically stacked using a `bind_rows` operation.
+```{r}
+bind_rows(Df_1, Df_2)
+```
+Note that the variables, which are in different orders in the two data frames, are aligned properly when bound together.
+Any number of compatible data frames can be combined using `bind_rows`, as in the following example.
+```{r}
+bind_rows(Df_1, Df_2, Df_2, Df_1)
+```
+
+The `Df_1` and `Df_3` data frames have the same number of observations and so can be stacked side by side with a `bind_cols` operation.
+```{r}
+bind_cols(Df_1, Df_3)
+```
+As with `bind_rows`, `bind_cols` will bind any number of compatible data frames.
+```{r}
+bind_cols(Df_1, Df_3, Df_3, Df_1)
+```
+In this case, however, as would be the case if the data frames being bound by `bind_cols`, the variable names are appended with digits to make them unique.
+
+
+## Combining data frames by joins
+
+A *join* operation is a common operation in relational databases using SQL.
+It allows us to join separate tables according to shared keys.
+As an example of a join operation on data frames using `dplyr`, consider the `blp_df` data frame.
+It has a variable `spell` that gives the identity of the stimulus shown on each trial of the lexical decision experiment.
+In a separate file, `blp-stimuli.csv` file, we have three additional variables for these stimuli. 
+```{r}
+stimuli <- read_csv('data/blp_stimuli.csv')
+stimuli
+```
+As can be seen, there are four variables in `stimuli`, the `spell` variable that denotes the stimulus string and three others, i.e. `old20`, `bnc`, and `subtlex`, that describe properties of that stimulus string.
+
+We can join these two data frames with `inner_join`.
+An `inner_join` operation, like all the `_join` operations we consider here, always operates on two data frames, which we will refer to as the left and right data frames.
+It searches through the values of variables that are shared by the two data frames in order to find matching values.
+In `blp_df` and `stimuli`, there is just one shared variable, namely `spell`.
+Thus, an`inner_join` of `blp_df` and `stimuli` will find values of `spell` on the left hand data frame that occur as values of `spell` on the right hand side.
+It will then join the corresponding observations of both data frames.
+```{r}
+inner_join(blp_df, stimuli)
+```
+
+In general, in an `inner_join`, if the left hand data frame has no values on the shared variables that match those on the right hand data frame, the observations from the left hand data frame are dropped. 
+In addition, all observations on the right hand data frame that do not have matching observations on the left always get dropped too.
+
+In the example above, all observations of `blp_df` had values of `spell` that matched values of the spell in `stimuli`.
+However, consider the following two data frames.
+```{r}
+Df_a <- tibble(x = c(1, 2, 3), 
+               y = c('a', 'b', 'c'))
+Df_b <- tibble(x = c(2, 3, 4), 
+               z = c('d', 'e', 'f'))
+```
+In this case, the first value of `x` in `Df_a` does not match any value of `x` in `Df_b`, and so the corresponding observation is dropped in an `inner_join`.
+```{r}
+inner_join(Df_a, Df_b)
+```
+
+A `left_join`, on the other hand, will preserve all values on the left and put `NA` as the corresponding values of the right's variables if there are no matching values.
+```{r}
+left_join(Df_a, Df_b)
+```
+A `right_join` preserves all observations from the right, and places `NA` as the corresponding values of variables from the left that are not matched. 
+```{r}
+right_join(Df_a, Df_b)
+```
+
+With `blp_df` and `stimuli`, because all observations of `spell` in `blp_df` match values of `spell` in `stimuli`, the `inner_join` and `left_join` are identical, which we can verify as follows (using `all_equal`).
+```{r}
+all_equal(inner_join(blp_df, stimuli),
+          left_join(blp_df, stimuli)
+)
+```
+On the other hand, there many values of `spell` in `stimuli` that do not match any values of `spell` in `blp_df`. 
+As such, a `right_join` leads to a large number of observations with `NA` values.
+```{r}
+right_join(blp_df, stimuli)
+```
+
+A `full_join` keeps all observation in both the left and right data frames. 
+If used with `blp_df` and `stimuli`, the result is identical to a `right_join`, as we can verify as follows.
+```{r}
+all_equal(full_join(blp_df, stimuli),
+          right_join(blp_df, stimuli)
+)
+```
+For the case of `Df_a` and `Df_b`, where observations in both the left and right data frames do not have matches, a `full_join` is as follows.
+```{r}
+full_join(Df_a, Df_b)
+```
+
+In all of the above examples, the data frames shared only one common variable.
+Consider the following cases.
+```{r}
+Df_4 <- tibble(x = c(1, 2, 3),
+               y = c(2, 7, 1),
+               z = c(0, 2, 7))
+
+Df_5 <- tibble(a = c(1, 1, 7),
+               b = c(2, 3, 7),
+               c = c('a', 'b', 'c'))
+
+```
+The `Df_4` and `Df_5` do not share any common variables.
+In this case, we need to specify pairs of variables to match on.
+We have multiple options for how to do this. 
+For example, in the following example, we look for matches between `x` on the left and `a` on the right.
+```{r}
+inner_join(Df_4, Df_5, by=c('x' = 'a'))
+```
+On the other hand, in the following example, we look for matches between `x` and `y` on the left and `a` and `b` on the right.
+```{r}
+inner_join(Df_4, Df_5, by=c('x' = 'a', 'y' = 'b'))
+```
+
+## Combining data frames by set operations
+
+In `dplyr`, the functions `intersect`, `union`, etc., allow us to combine data frames *that have identical variables* using set operations.
+
+Consider the following data frames. 
+```{r}
+Df_6 <- tibble(x = c(1, 2, 3),
+               y = c(4, 5, 6),
+               z = c(7, 8, 9))
+
+
+Df_7 <- tibble(y = c(6, 7),
+               z = c(9, 10),
+               x = c(3, 4))
+```
+Both data frames have the same variables and happen to share a row of observations, even if the variables are in different orders.
+As such, their intersection and union are as follows.
+```{r}
+intersect(Df_6, Df_7)
+union(Df_6, Df_7)
+```
+We may also calculate the set differences between `Df_6` and `Df_7`.
+```{r}
+setdiff(Df_6, Df_7) # Rows in Df_6 not in Df_7
+setdiff(Df_7, Df_6) # Rows in Df_7 not in Df_6
+```
+
+# Reshaping with `pivot_longer` and `pivot_wider`
+
+A so-called *tidy* data set, at least according to its widespread usage in the context of data analysis using R, is a data set where all rows are observations, all columns are variables, and each variable is a single value.
+Although what exactly counts as an observation may in fact vary from situation to situation, usually whether a data set is *tidy* or not is quite clear immediately.
+For example, consider the following data frame.
+```{r}
+recall_df <- read_csv('data/repeated_measured_a.csv')
+recall_df
+``` 
+In this data frame, for each subject, we have three values, which are their scores on a memory test in three different conditions of an experiment.
+The conditions are `Neg` (negative), `Neu` (neutral), `Pos` (positive).
+Arguably, we could describe each row as an observation, namely the observation of all memory scores from a particular subject.
+However, each column is not a variable. 
+The `Neg`, `Neu`, `Pos` are, in fact, *values* of a variable, namely the condition of the experiment.
+Therefore, to tidy this data frame, we need a variable for the subject, another for the experiment's condition, and another for the memory score for the corresponding subject in the corresponding condition.
+To do so, we perform what is sometimes known as a *wide to long*  transformation.
+The `tidyr` package has a function `pivot_longer` for this transformation.
+
+To use `pivot_longer`, we must specify the variables (using the `cols` argument) that we want to pivot from wide to long.
+In our case, it is the variables `Neg`, `Neu`, `Pos`, and we can select these by `cols = -Subject`, which means all variables except `Subject`.
+Next, using the argument `names_to`, we must provide a name for the column that will indicate the experimental condition.
+We will do this with `names_to = 'condition'`.
+The values of this `condition` variable will consist of the values  `Neg`, `Neu`, `Pos`.
+Finally, using the argument `values_to`, we must provide a name for the column that will indicate the memory scores.
+We will do this with `values_to = 'score'`.
+The values of this `score` variable will consist of the values of the original `Neg`, `Neu`, `Pos` columns.
+Altogether, we have the following.
+```{r}
+recall_long <- pivot_longer(recall_df,
+                            cols = -Subject,
+                            names_to = 'condition', 
+                            values_to = 'score')
+recall_long
+```
+Now, each row is an observation, namely providing the memory score for the given subject in the given condition, and each column is a variable.  
+
+Once the data frame is in this format, other operations, such as those using the `dplyr` functions, become much easier.
+For example, to calculate some summary statistics on the `mem_score` per condition, we would do the following.
+```{r}
+recall_long %>% 
+  group_by(condition) %>% 
+  summarize_at('score', list(median=median, 
+                             mean=mean,
+                             min=min,
+                             max=max)
+  )
+```
+
+The inverse of a `pivot_longer` is a `pivot_wider`.
+It is very similar to `pivot_longer` and we use `names_from` and `values_from` in the opposite sense to `names_to` and `values_to`.
+```{r}
+pivot_wider(recall_long, names_from = 'condition', values_from = 'score')
+```
+
+
+Some `gather` operations are not as simple as the one just described. Consider the following data.
+```{r}
+recall_2_df <- read_csv('data/repeated_measured_b.csv')
+recall_2_df
+```
+
+In this data frame, we have 6 columns that are the values of a combination of two experimental variables.
+One variable is a binary variable that indicates if the experimental condition was `Cued` or `Free` (i.e., was the subject's memory recall cued by some stimuli or was it a free recall).
+The other variable is the condition as in the `recall_df` data frame.
+If we perform a `pivot_longer` as we did before we obtain the following.
+```{r}
+pivot_longer(recall_2_df,
+             cols = -Subject,
+             names_to = 'condition', 
+             values_to = 'score')
+```
+Here, the `condition` is not exactly a variable, but a combination of variables. 
+To `pivot_longer` into two variables, we use two names in `names_to`, and used `names_pattern` to indicate how to split the names `Cued_Neg`, `Cued_Neu`, etc.
+```{r}
+recall_2_long <- pivot_longer(recall_2_df,
+                              cols = -Subject,
+                              names_to = c('cue', 'emotion'),
+                              names_pattern = '(Cued|Free)_(Neg|Pos|Neu)',
+                              values_to = 'score')
+recall_2_long
+```
+
+To perform the inverse of the above `pivot_longer`, we primarily just need to indicate two columns to take the names from.
+```{r}
+pivot_wider(recall_2_long,
+            names_from = c('cue', 'emotion'), 
+            values_from = 'score')
+```
+
+
+
+
+
+
+# References

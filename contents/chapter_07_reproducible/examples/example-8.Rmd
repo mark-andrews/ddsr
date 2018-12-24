@@ -1,0 +1,27 @@
+# Introduction
+
+This is a sentence in the Introduction. 
+
+## Objectives of study
+
+This is a sentence in the first subsection
+of the Introduction.
+
+# Analysis
+
+This is a sentence in the Analysis section.
+
+## Exploratory analysis
+
+This is a sentence of the first subsection
+of the Analysis section.
+
+## Statistical model
+
+This is a sentence of the second subsection
+of the Analysis.
+
+# Conclusion
+
+This is a sentence in the last section 
+of the document.

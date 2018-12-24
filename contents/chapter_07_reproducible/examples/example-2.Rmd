@@ -1,0 +1,45 @@
+
+---
+title: "Data Analysis: A Report"
+author: "Mark Andrews"
+date: "October 25, 2019"
+output: pdf_document
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(message = F, 
+                      warning = F, 
+                      out.width = "45%", 
+                      fig.align='center')
+```
+
+# Introduction
+
+First, we will load the `tidyverse` packages, and read 
+in the the from a `.csv` file. 
+```{r load_packages_data}
+library(tidyverse)
+data_df <- read_csv('example.csv')
+```
+
+# Analysis 
+
+Here, we do a Pearson's correlation analysis.
+```{r analysis}
+(corr_model <- cor.test(~ x + y, data = data_df))
+```
+
+The correlation coefficient is
+`r round(corr_model$estimate, 3)`.
+
+# Visualization
+
+The scatterplot between $x$ and $y$ is shown 
+in Figure \ref{fig:vis}.
+
+```{r vis, echo=F, fig.cap='A scatterplot.'}
+ggplot(data_df, aes(x, y)) + 
+  geom_point() +
+  theme_classic()
+```
+

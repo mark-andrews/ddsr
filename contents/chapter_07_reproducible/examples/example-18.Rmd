@@ -1,0 +1,18 @@
+---
+output: pdf_document
+header-includes:
+  - \pagenumbering{gobble} 
+geometry: margin=7cm
+---
+  
+participant-id
+: An integer that uniquely 
+  codes each participant.
+
+gender
+: A binary variable with 
+  values `female` and `male`.
+
+age 
+: A numeric variable giving 
+  the participant's age in years.

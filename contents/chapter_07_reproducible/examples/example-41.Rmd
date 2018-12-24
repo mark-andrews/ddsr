@@ -1,0 +1,3 @@
+$$
+s_i = 2^i,\quad \text{for $i \geq 0$}
+$$

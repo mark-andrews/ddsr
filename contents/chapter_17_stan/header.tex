@@ -1,0 +1,24 @@
+\usepackage{minted}
+\usepackage{xspace}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{etoolbox}
+
+\newcommand{\data}{\mathcal{D}}
+\newcommand{\Prob}[1]{\mathrm{P}( #1 )}
+\newcommand{\PROB}[1]{\mathrm{P}\left( #1 \right)}
+\newcommand*{\given}{\vert}
+\newcommand{\mcmc}{\textsc{mcmc}\xspace}
+\newcommand{\ppl}{\textsc{ppl}\xspace}
+\newcommand{\mad}{\textsc{mad}\xspace}
+
+%\BeforeBeginEnvironment{minted}{\vspace{2mm}}
+%\AfterEndEnvironment{minted}{\vspace{2mm}}
+
+\definecolor{light-gray}{rgb}{0.96,0.96,0.96}
+\setminted{bgcolor=light-gray}  % this line causes the problem
+
+\makeatletter
+\patchcmd{\minted@colorbg}{\noindent}{\medskip\noindent}{}{}
+\apptocmd{\endminted@colorbg}{\par\vspace{-7mm}\noindent}{}{}
+\makeatother

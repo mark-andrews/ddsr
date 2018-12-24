@@ -1,0 +1,1976 @@
+---
+title: "Chapter 8: Statistical Models & Statistical Inference"
+author: "Mark Andrews"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    fig_caption: true
+    keep_tex: true
+    highlight: haddock
+  html_document:
+    highlight: haddock
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+---
+
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = T, warning = F, message = F)
+
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+
+library(tidyverse)
+library(knitr)
+library(xtable)
+library(kableExtra)
+library(cowplot)
+library(latex2exp)
+library(magrittr)
+library(knitr)
+
+library(brms)
+brm <- function(...) brms::brm(silent = TRUE, refresh = 0, seed = 1011, ...)
+
+theme_set(theme_classic())
+
+```
+
+# Introduction
+
+As important as exploratory analysis is, it is a fundamentally different undertaking to statistical modelling and statistical inference.
+Exploratory data analysis aims to describe and visualize the data and to identify possible trends and patterns in it.
+Statistical models, by contrast, are mathematical models of the *population* from which the data originated.
+The term *population* is here used in a technical sense that is specific to statistics.
+In general, a population is the hypothetical set from which our actual data are assumed to be a random sample.
+From the perspective of statistical modelling, our ultimate interest lies not in the data itself but rather in the population, or more specifically in our mathematical models of the population.
+
+Let us assume that we have the following data set: $y_1, y_2 \ldots y_n$, where each $y_i$ is a single (scalar) value.
+From the perspective of statistical modelling, $y_1, y_2 \ldots y_n$ is a random sample from a population.
+Ultimately, this population is described by a probability distribution.
+More specifically, we treat the values $y_1, y_2 \ldots y_n$ as a *realization* of the random variables $Y_1, Y_2 \ldots Y_n$.
+A random variable has a formal mathematical definition, but informally speaking, it is a variable that can take on different values according to some probability distribution.
+The probability distribution over the variables $Y_1, Y_2 \ldots Y_n$ can be denoted generally by $\Pop{Y_1, Y_2 \ldots Y_n}$.
+This probability distribution is a function over an $n$ dimensional space that gives the probabilities of every possible combination of values of the $n$ variables $Y_1, Y_2 \ldots Y_n$.
+Our observed data $y_1, y_2 \ldots y_n$ is but one realization of the random variables $Y_1, Y_2 \ldots Y_n$, and every possible realization is a random sample from the probability distribution $\Pop{Y_1, Y_2 \ldots Y_n}$.
+Thus, the possible values that $Y_1, Y_2 \ldots Y_n$ can take and their corresponding probabilities formally define the population.
+
+In general, except in artificial scenarios, we do not know the nature of the population probability distribution $\Pop{Y_1, Y_2 \ldots Y_n}$.
+Our aim, therefore, is to first propose a model of this probability distribution, and then use statistical inference to infer the properties of this model.
+The model that we develop is a probabilistic model, which means that it is defines a probability distribution over the variables $Y_1, Y_2 \ldots Y_n$.
+This model is often referred to simply as the statistical model.
+In some contexts, it is also known as the *generative model*, the *probabilistic generative model*, the *data generating model*, and so on.
+Almost always, as we will see, this statistical model is defined in terms of parameters and other variables that are assumed to have fixed but unknown values.
+We use statistical inference, which we will discuss at length below, to infer what the values of these variables are.
+
+\tikzset{
+  every picture/.style = {}
+}
+
+The process of developing a statistical model and inferring its parameters and other unknown variables is, in fact, an iterative process, and is illustrated in the following diagram.
+\begin{center}
+\begin{tikzpicture}
+\node[punkt] (fit) {Fitted model};
+\node[punkt, above=2cm of fit] (model) {Model};
+\draw[->] (fit.west) [bend left=80] to node[left] {evaluation} (model.west);
+\draw[->] (model.east) [bend left=80] to node[right] {inference} (fit.east);
+\end{tikzpicture}
+\end{center}
+First, we propose or assume a statistical model.
+This may be done on the basis of some exploratory data analysis and visualization, as well as by using our scientific knowledge and understanding of the phenomenon being studied.
+Having assumed some model, we then infer its parameters and other unknowns.
+We are now in position to critically evaluate the resulting fitted model.
+Specifically, we evaluate whether or not the predictions of model make sense and whether they are consistent with the data.
+On the basis of this elaboration, we may now need to elaborate or possibly simplify our originally proposed model, which leads to a new proposed model.
+The unknowns of this model are then inferred, and the new fitted model is evaluated.
+This process iterates until we are satisfied that the model is sufficient for practical purposes or that no major alternative models have been overlooked.
+The final fitted model is then used as the model of the population.
+As we will see through examples, this is then effectively a mathematical or probabilistic model of the phenomenon being studied.
+With this model, we can explain and reason about the phenomenon, make predictions about future data, and so on.
+
+As a brief illustrative outline of this modelling process, consider the following `housing_df` data frame.
+```{r}
+housing_df <- read_csv('data/housing.csv')
+housing_df
+```
+This gives the prices (in Canadian dollars) of a set of `r nrow(housing_df)` houses in the city of Windsor, Ontario in 1987.
+We can denote these values as $y_1, y_2 \ldots y_n$ and treat them as a realization of the random variables $Y_1, Y_2 \ldots Y_n$ whose probability distribution is $\Pop{Y_1, Y_2 \ldots Y_n}$.
+This defines the population.
+How best to conceive of this population in real world terms is usually a matter of debate and discussion, rather than a simple matter of fact.
+For example, the population might be conceived of narrowly as the set of house prices in Windsor in 1987, or more widely as the set of house prices in mid-sized cities in Canada in the late 1980s, or more widely still as the set of house prices in North America during the time period, and so on.
+Regardless of how we conceive of the population, we do not know the true nature of $\Pop{Y_1, Y_2 \ldots Y_n}$ and so begin by proposing a model of it.
+Among other things, this initial proposal could be based on exploratory data analysis and visualization, such as that shown in Figure \ref{fig:houseprices}a-d.
+From the histograms and QQ plots shown here, we see that the logarithm of house prices appears to be distributed as a normal distribution.
+```{r houseprices, echo=F, fig.align='center', fig.cap="a) A histogram of house prices (in Canadian dollars) from the city of Windsor, Ontario, Canada, in 1987. b) A histogram of the logarithm of the house prices. c) A QQ plot of the prices compared to a normal distribution whose mean and standard deviation are set to the median and median absolute deviation (\\textsc{mad}) of the prices. d) The QQ plot of log of the prices, again compared to a normal distribution whose mean and standard deviation deviation are set to the median and \\textsc{mad}\\xspace of the log prices.", out.width='\\textwidth', fig.height = 5.0}
+p_1 <- housing_df %>% 
+  ggplot(aes(x= price)
+  ) + geom_histogram(col = 'white', binwidth = 10e3) + geom_rug(alpha = 0.1) + theme_classic()
+
+p_2 <- housing_df %>% 
+  ggplot(aes(x= log(price))
+  ) + geom_histogram(col = 'white', bins = 20) + geom_rug(alpha = 0.1) + theme_classic()
+
+p_3 <- housing_df %>% 
+  mutate(p = ecdf(price)(price),
+         x = qnorm(p, mean = median(price), sd = mad(price))
+  ) %>% ggplot(aes(x = x, y = price)) + 
+  geom_point(size = 0.5) + 
+  geom_abline(intercept = 0, slope = 1, col='red')
+
+p_4 <- housing_df %>% 
+  mutate(price = log(price),
+         p = ecdf(price)(price),
+         x = qnorm(p, mean = median(price), sd = mad(price))
+  ) %>% ggplot(aes(x = x, y = price)) + 
+  geom_point(size = 0.5) + 
+  ylab('log(price)') +
+  geom_abline(intercept = 0, slope = 1, col='red')
+
+plot_grid(p_1, p_2, p_3, p_4, nrow = 2, labels = c('a', 'b', 'c', 'd'))
+```
+
+This leads us to the following proposed model: for each $i \in 1\ldots n$, $Y_i \sim \textrm{logN}(\mu, \sigma^2)$.
+Note that $\textrm{logN}(\mu, \sigma^2)$ is shorthand to denote a log-normal distribution whose parameters are $\mu$ and $\sigma^2$.
+A log-normal distribution is a distribution of a variable whose logarithm is normally distributed.
+In the model statement, the $\sim$ is read as *is distributed as*. 
+This model therefore states that each random variable $Y_i$, for $i \in 1 \ldots N$, is distributed as a log-normal distribution whose parameters are $\mu$ and $\sigma^2$.
+This model is an example of an *independent and identically distributed* (\iid) model: each of the $n$ random variables is modelled as independent of one another, and each one has the same probability distribution.
+
+Having proposed a initial model, we must now infer the values of the unknown variables $\mu$ and $\sigma$.
+As we will discuss at length below, there are two major approaches to doing statistical inference, but in practical terms, both methods effectively lead to estimates of $\mu$ and $\sigma$ as well as measures of the uncertainty of these estimates.
+If we denote the estimates of $\mu$ and $\sigma$ by $\hat{\mu}$ and $\hat{\sigma}$, our fitted model is then the log-normal distribution $\textrm{logN}(\hat{\mu}, \hat{\sigma}^2)$.
+At this point, we may evaluate this fitted model and determine if its assumptions or predictions are consistent with the observed data.
+If, on the basis of this evaluation, the assumed model is deemed satisfactory for present practical purposes, we then can use the fitted model, particularly taking into account the uncertainties in our estimates, to explain, reason about, or make predictions concerning house prices in cities like Windsor during this period. 
+
+
+# Statistical inference
+
+Statistical inference is the inference of the values of unknown variables in a statistical model.
+There are two major approaches to statistical inference.
+The first approach is variously referred to as the *classical*, *frequentist*, or *sampling theory* based approach.
+The second is the Bayesian approach.
+The classical approach is still the dominant one in practice, particularly for the more introductory or medium level topics.
+It is also the principal, or even only, approach taught in most applied statistics courses.
+As such, it is the only approach that most working scientists will have been formally introduced to.
+The Bayesian approach, on the other hand, although having its origins in the 18th century and being used in practice throughout the 19th century, had a long hiatus in statistics until around the end of the 1980s.
+Since then, and as we will see, largely because of the growth in computing power, it has steadily grown in terms of its popularity and widespread usage throughout statistics and data science.
+Throughout the remainder of this book, we will attempt to pay adequate attention to both the classical and Bayesian approaches wherever we discuss statistical models.
+In this section, we aim to provide a brief general introduction to both approaches.
+For this, we will use a simple problem, propose a statistical model for it, and then infer the values of its unknown parameters using the classical and the Bayesian approaches.
+
+**Example problem**: The problem we will consider was described in the Guardian newspaper in January 4, 2002^[https://www.theguardian.com/world/2002/jan/04/euro.eu2]: "Polish mathematicians Tomasz Gliszczynski and Waclaw Zawadowski... spun a Belgian one euro coin 250 times, and found it landed heads up 140 times."
+Here, the data is the observed number of heads, $m=140$.
+The total number of spins $n=250$ is the sample size, and is a fixed and known quantity, and so is not modelled per se.
+From the perspective of statistical modelling, the observed number of heads is treated as a sample from a population.
+In this case, the population is the set of all possible observed number of heads, and their relative frequencies, that would be obtained if Gliszczynski and Zawadowski were to infinitely repeat their study under identical circumstances with the exact same Belgian one euro coin.
+The population is therefore  a probability distribution over the set of possible values of the number of heads in a sample of $n=250$ trials, which is a probability distribution over $0\ldots n$.
+Thus, $m$ is a realization of a random variable $Y$ whose possible values are $0\ldots n$ and whose probability distribution is $\Pop{Y}$.
+We do not know $\Pop{Y}$ and so we begin by proposing a model of it.
+In this case, the only viable option for this model is the binomial distribution: $Y \sim \textrm{Binomial}(\theta, n=250)$.
+While more complex options are possible in principle, they would all go beyond what the data can tell us, and so simply can not be evaluated.
+In general terms, a binomial distribution gives the probability of the number of so-called "successes" in a fixed number $n$ of "trials" where the probability of a success on any trial is fixed quantity $\theta$ and all trials are independent of another.
+Translated into the terms of the current example, the binomial distribution is the probability distribution over the observed number of heads in $n=250$ spins where the probability of a heads on any trial is $\theta$, and where we assume the outcome on each trial is independent of every other trial.
+In this binomial model, the parameter $\theta$ has a fixed but unknown quantity.
+The value of $\theta$ is therefore the objective of our statistical inference.
+
+# Classical statistical inference
+
+Classical statistical inference begins with an *estimator* of the value of $\theta$, denoted by $\hat{\theta}$, and then considers the *sampling distribution* of $\hat{\theta}$ for any hypothetical true value of $\theta$.
+Informally speaking, we can see the estimator $\hat{\theta}$ as an educated guess of what the true value of $\theta$ is.
+There are different methods of estimation available, and each one can be evaluated, as we will see, according to certain criteria, such as *bias*, *variance*, etc.
+One widely used method of estimation, perhaps the most widely used method, is *maximum likelihood estimation*.
+
+## Maximum likelihood estimation
+
+The maximum likelihood estimator of $\theta$ is the value of $\theta$ that maximizes the *likelihood function*.
+The likelihood function is an extremely important function in both classical and Bayesian approaches to statistical inference.
+It is a function over the set of all possible values of $\theta$, which we will denote by $\Theta$. 
+It gives the probability of observing the data given any particular value of $\theta$.
+In order to determine the likelihood function in the case of the binomial distribution model, we first start with the definition of the binomial distribution itself.
+If $Y$ is random variable distributed as a binomial distribution with parameter $\theta$ and sample size $n$, which we can state succinctly as $Y \sim \textrm{Binomial}(\theta, n)$, then the probability that $Y$ takes on the value of $m$ is as follows:
+$$
+\Prob{Y = m \given \theta, n} = \textrm{Binomial}(Y = m \given \theta, n) =
+\binom{n}{m} \theta^m (1-\theta)^{n-m}.
+$$
+Why the binomial distribution has the probability mass function shown on the very right hand side here is not something we will derive here, and we will just take it as a given, but it is relatively straightforward to derive from the above definition of a binomial problem.
+Note that this probability mass function is a function that maps values of $m \in 0\ldots n$ to the interval $[0,1]$ for fixed values for $\theta$ and $n$.
+The corresponding likelihood function takes the same formula, i.e. $\binom{n}{m} \theta^m (1-\theta)^{n-m}$, and treats it as a function of $\theta$ for fixed values of $m$ and $n$.
+In other words, the likelihood function is as follows:
+$$
+L(\theta \given m,n) = \binom{n}{m} \theta^m (1-\theta)^{n-m},
+$$
+where $\theta$ is assumed to takes values in the interval $\Theta = [0,1]$ and where $n$ and $m$ are fixed.
+In other words, the likelihood function gives the probability of the observed data for every possible value of the unknown variable $\theta \in \Theta$.
+Technically speaking, any likelihood function is defined up to a proportional constant.
+What this means is that multiplying, or dividing, any likelihood function by a fixed constant value results in the same likelihood function.
+In practice, therefore, when writing a likelihood function, we usually drop any constant multipliers.
+In the above likelihood function, the binomial coefficient $\binom{n}{m}$ is a constant term that does not change for any value of $\theta$, and so it can be dropped, leading to the likelihood function being written as
+$$
+L(\theta \given m,n) = \theta^m (1-\theta)^{n-m}.
+$$
+
+The likelihood function for $m=140$ and $n=250$ is shown in Figure \ref{fig:loglike}a.
+As we can see from this plot, the likelihood function is concentrated from around $\theta=0.45$ to around $\theta=0.65$.
+Outside of that range, the likelihood of any value of $\theta$ becomes negligible.
+In itself, this is very informative.
+It tells us that the probability of observing the data that we did, i.e., $m=140$ heads in $n=250$ spins, is negligible if $\theta$ is less than around $0.45$ or greater than around $0.65$.
+Therefore, only values in the range of approximately $0.45$ to $0.65$ have evidential support from the data.
+
+
+```{r, loglike, echo=F, fig.align='center', fig.cap='a) The binomial likelihood function for $\\theta$ when $m=140$ and $n=250$. b) The logarithm of the likelihood function.', out.width='\\textwidth', fig.height=2.5}
+m <- 140
+n <- 250
+foo_df <- tibble(x = seq(0, 1, length.out = 1e4),
+       y = x^m * (1-x)^(n-m)
+)
+
+p1 <- foo_df %>% ggplot(aes(x = x, y = y)) + 
+  geom_line() + 
+  theme(axis.ticks.y = element_blank(),
+        axis.text.y = element_blank()) +
+  xlab(TeX('$\\theta$')) +
+  ylab(TeX('$L(\\theta | n, m)$'))
+
+
+p2 <- foo_df %>% ggplot(aes(x = x, y = log(y))) + 
+  geom_line() + 
+  theme(axis.ticks.y = element_blank(),
+        axis.text.y = element_blank()) +
+  xlab(TeX('$\\theta$')) +
+  ylab(TeX('$\\log L(\\theta | n, m)$'))
+
+plot_grid(p1, p2, labels = c('a', 'b'))
+
+```
+
+The value of $\theta$ that maximizes the likelihood function is obtained by the usual procedure of optimizing functions, namely calculating the derivative of the function with respect to $\theta$, setting the derivative equal to zero, and solving for the value of $\theta$.
+We can do this more easily by using the logarithm of the likelihood function, rather than the likelihood function itself.
+The logarithm of the likelihood function is shown in Figure \ref{fig:loglike}b.
+Because the logarithm is a monotonic transformation, the value of $\theta$ that maximizes the logarithm of the likelihood also maximizes the likelihood function.
+The derivative of the log of the likelihood function with respect to $\theta$ is as follows:
+$$
+\begin{aligned}
+\frac{d}{d\theta} \log\left(\theta^m (1-\theta)^{n-m}\right) &= 
+\frac{d}{d\theta} \left\lbrack m\log(\theta) + (n-m)\log(1-\theta)\right\rbrack,\\
+&= \frac{m}{\theta} - \frac{n-m}{1-\theta}
+\end{aligned}
+$$
+Setting this derivative equal to zero and solving for $\theta$ gives us the following.
+$$
+\begin{aligned}
+\frac{m}{\theta} - \frac{n-m}{1-\theta} &= 0,\\
+\theta = \frac{m}{n}.
+\end{aligned}
+$$
+Thus, the maximum likelihood estimator for $\theta$ is $\hat{\theta} = \tfrac{m}{n} = \tfrac{140}{250} = 0.56$.
+This is obviously a very simple and intuitive result.
+It tells us that the best guess for the value of $\theta$, which is the probability of obtaining heads on any given spin, is simply the relative number of heads in the $n$ spins so far.
+
+## Sampling distribution of $\hat{\theta}$
+
+The maximum likelihood estimator can be seen as a random variable.
+It is a deterministic function of the observed data $m$, but $m$ would vary were we repeat the experiment even under identical circumstances.
+For example, if we knew the true value of $\theta$, let's call this true value $\thetatrue$, and we spun the coin $n$ times, and did so ad infinitum, then we know that the distribution of $m$ (the observed number of heads) would be the binomial distribution with sample size $n$ and parameter value of $\thetatrue$.
+Given that the maximum likelihood estimator is always $\hat{\theta} = \tfrac{m}{n}$, the probability that $\thetahat$ takes on the value of $\tfrac{m}{n}$ for any given value of $m$ if the true value of $\theta$ is $\thetatrue$ is  
+$$
+\binom{n}{m} \thetatrue^{m} (1-\thetatrue)^{n-m}.
+$$
+In general, the sampling distribution for $\thetahat$ when the true value of $\theta$ is $\thetastar$ can be written as follows.
+$$
+\Prob{\thetahat \given \thetastar, n} = \binom{n}{\thetahat n} \thetastar^{\thetahat n} (1-\thetastar)^{n-\thetahat n}.
+$$
+The sampling distribution of $\thetahat$ when $n=250$ and for the example value of $\thetastar=0.64$ is shown in Figure \ref{fig:bin_sampling_distribution}.
+```{r, bin_sampling_distribution, echo=F, fig.cap='Sampling distribution of the binomial maximum likelihood estimator $\\thetahat$ when $n=250$ and $\\thetastar=0.64$. Here, we limit the x axis to just beyond those values of $\\thetahat$ that have nontrivial probabilities.',fig.align='center', out.width='0.75\\textwidth'}
+n <- 250
+thetastar = 0.64
+tibble(thetahat = seq(125, 195)/n,
+                 p = dbinom(thetahat * n, size = n, prob = thetastar)
+) %>% 
+  ggplot(aes(x = thetahat, y = p)) + geom_col(fill = "#999999") + xlim(0.5, 0.78) +
+  labs(x = TeX('$\\hat{\\theta}$'),
+       y = TeX('$\\mathrm{P}(\\hat{\\theta} | \\thetastar, n)$')
+  ) + scale_fill_manual(values=c("#E69F00", "#999999", "#56B4E9"))
+
+
+```
+
+The expected value of the sampling distribution of $\thetahat$ is $\thetastar$.
+In other words, on average, $\thetahat$ is equal to $\thetastar$.
+This tells us that the binomial maximum likelihood estimator is an *unbiased* estimator of the true value of $\theta$, i.e. $\thetastar$.
+The variance of the distribution of $\thetahat$ is $\tfrac{1}{n} \thetastar (1-\thetastar)$.
+The lower the variance of the estimator, the less sampling variability there will be in the value of the estimators.
+Here, we see that the variance decreases as $n$ increases, and so as sample size increases, there is less variability in the estimator's values. 
+The standard deviation of the sampling distribution is $\tfrac{1}{\sqrt{n}} \sqrt{\thetastar (1-\thetastar)}$.
+This is known as the *standard error*, and often plays an important role in classical statistical inference, as we will see in later examples.
+
+## \pvalues
+
+Informally speaking, a \pvalue tells us whether the value of an estimator, or more generally, the value of any statistic or function of the observed data, is consistent with some hypothetical value of the unknown variable.
+If the \pvalue is low, the estimator's value is not consistent with the hypothesized value.
+The higher the \pvalue is, the more consistent the estimator's value is with the hypothesized value.
+If the \pvalue is sufficiently low, we can, practically speaking, rule out or reject the hypothesized value. 
+In general, the \pvalue takes values from 0 to 1 and so is an inherently continuous measure of support for a hypothesis.
+Where we "draw the line" on this continuum between low and not-low is a matter of convention, but the almost universally held convention is that a \pvalue must be lower than at most $0.05$ to be considered sufficiently low for the corresponding hypothesized value to be rejected.
+This threshold for rejection/non-threshold is usually signified by $\alpha$.
+
+```{r, echo=F}
+n <- 250
+thetastar <- 0.64
+thetahat_ <- 140
+p_value <- tibble(m = seq(0, 250),
+                  thetahat = m/n,
+                  p = dbinom(m, size = n, prob = thetastar),
+                  is_extreme = abs(thetahat - thetastar) >= abs(thetahat_/n - thetastar)
+) %>% summarise(p_value = sum(p * is_extreme)) %>% unlist()
+```
+
+Technically speaking, \pvalues are tail areas of the sampling distribution of the estimator corresponding to a particular hypothesized value of the unknown variable.
+Once we have the sampling distribution, \pvalues are straightforward to calculate.
+In the current problem, the unknown variable is $\theta$ and we can in principle hypothesize that its true value is any value between 0 and 1.
+If, for example, we hypothesize that the true value of $\theta$ is $\thetastar = 0.64$, the sampling distribution of $\thetahat$ is that shown in Figure \ref{fig:bin_sampling_distribution}.
+On the basis of this sampling distribution, we can see that some values for $\thetahat$ are expected and others are not.
+For example, we see that the $\thetahat$ values are mostly from around $0.58$ to around $0.7$, and values of $\thetahat$ much below or above those extremes rarely occur.
+On the basis of the estimator's value that we did obtain, namely $\thetahat = \tfrac{140}{250} = 0.56$, we can see that this result seems to be outside the range of values of $\thetahat$ that we would expect if $\thetastar = 0.64$.
+In order to be precise in our statement of whether $\thetahat = 0.56$ is beyond what we would expect if $\thetastar = 0.64$, we calculate the tail areas of the sampling distribution defined by values *as or more extreme* than $\thetahat = 0.56$.
+These tail areas are shaded in Figure \ref{fig:pvalue_sampling_distribution}a.
+The total area in these tails defines the \pvalue.
+In other words, the \pvalue is the probability of observing a value of the estimator *as or more extreme* than $\thetahat = 0.56$ if $\thetastar = 0.64$.
+If the \pvalue is low, then we know that $\thetahat = 0.56$ is far into the tails of the sampling distribution when $\theta = 0.64$.
+In this particular example, the area of these tails, and so therefore the \pvalue, is approximately $`r p_value %>% round(3)`$.
+This is clearly low according to the conventional standards mentioned above, and so therefore we say that the result $\thetahat = 0.56$ is not consistent with the hypothesis that $\thetastar = 0.64$, and so in practical terms, we can reject the hypothesis that the true value of $\theta$ is $\thetastar = 0.64$.
+
+```{r, pvalue_sampling_distribution, echo=F, fig.cap='a) Sampling distribution of the binomial maximum likelihood estimator $\\thetahat$ when $n=250$ and $\\thetastar=0.64$. b) Sampling distribution of the binomial maximum likelihood estimator $\\thetahat$ when $n=250$ and $\\thetastar=0.5$. In both cases, as in Figure \\ref{fig:bin_sampling_distribution}, we limit the x axis to just beyond those values of $\\thetahat$ that have nontrivial probabilities. The shaded tail areas correspond to values of $\\thetahat$ that are as or more extreme, relative to the center, than the value of the estimator we observed, which was $\\thetahat = \\tfrac{140}{250} = 0.56$.',fig.align='center', out.width='\\textwidth', fig.height=3}
+n <- 250
+thetastar = 0.64
+p_1 <- tibble(m = seq(125, 195),
+              thetahat = m/n,
+              p = dbinom(thetahat * n, size = n, prob = thetastar),
+              is_extreme = abs(m/n - thetastar) >= abs(140/n - thetastar)
+) %>%  ggplot(aes(x = thetahat, y = p, fill = is_extreme)) + geom_col() + xlim(0.5, 0.78) +
+  labs(x = TeX('$\\hat{\\theta}$'),
+       y = TeX('$\\mathrm{P}(\\hat{\\theta} | \\theta_{*}, n)$')
+  ) + theme(legend.position = "none") +
+  scale_fill_manual(values=c("#999999", "#E69F00", "#56B4E9"))
+
+n <- 250
+thetastar = 0.50
+p_2 <- tibble(m = seq(round(0.36 * n), round(0.64 * n)),
+              thetahat = m/n,
+              p = dbinom(thetahat * n, size = n, prob = thetastar),
+              is_extreme = abs(m/n - thetastar) >= abs(140/n - thetastar)
+) %>%  ggplot(aes(x = thetahat, y = p, fill = is_extreme)) + geom_col() + xlim(0.36, 0.64) +
+  labs(x = TeX('$\\hat{\\theta}$'),
+       y = TeX('$\\mathrm{P}(\\hat{\\theta} | \\theta_{*}, n)$')
+  ) + theme(legend.position = "none") +
+  scale_fill_manual(values=c("#999999", "#E69F00", "#56B4E9"))
+
+plot_grid(p_1, p_2, labels = c('a', 'b'))
+```
+
+In more detail, the \pvalue is the sum of the two tails of the sampling distribution when $\thetastar = 0.64$.
+The lower tail is defined by all those values from $\thetahat = 0$ up to $\thetahat = 0.56$.
+These are values of $\thetahat$ that are less than or equal to the observed $\thetahat$ of $\tfrac{140}{250} = 0.56$.
+The upper tail is defined by all those values from $\thetahat = 0.64 + |0.64 - 0.56| = `r 0.64 + abs(0.64 - 0.56)`$ up to 1.
+These are the values $\thetahat$ that as extreme relative to $\thetastar = 0.64$ as is $0.56$, but in the opposite direction.
+Thus, the \pvalue is calculated as follows.
+$$
+\text{\pvalue} = 
+\underbrace{\int^{0.56}_0 \binom{n}{\thetahat n} \theta^{\thetahat n} (1-\theta)^{n-\thetahat n}\ d\thetahat}_{\textrm{area of lower tail}}
++
+\underbrace{\int^1_{0.72} \binom{n}{\thetahat n} \theta^{\thetahat n} (1-\theta)^{n-\thetahat n}\ d\thetahat}_{\textrm{area of upper tail}}
+\approx 
+`r round(binom.test(140, 250, p = 0.64)$p.value, 3)`.
+$$
+
+More generally speaking, the precise definition of a \pvalue is as follows.
+$$
+\text{\pvalue} = \Prob{ |\thetahat - \theta_{H} | \geq |\thetahat_{\textrm{obs}} - \theta_{H}|  }.
+$$
+Here, for clarity, we distinguish between $\thetahat_{\textrm{obs}}$, which is the actual value of the estimator calculated from the observed data, $\theta_{H}$, which is the hypothetized value of $\theta$, and $\thetahat$, which is the estimator's random variable whose distribution is the sampling distribution when $\theta = \theta_H$.
+
+We can calculate \pvalues for binomial problems like this using R with the `binom.test` command.
+We need to pass in the observed number of "successes", which are heads in this case, as the value of the `x` parameter, and the sample size as the value of `n`.
+The hypothesized value of $\theta$ is passed in as the value of `p`.
+```{r}
+binom_model <- binom.test(x = 140, n = 250, p = 0.64)
+```
+The value of the maximum likelihood estimator is given by the value of the `estimate` element of the output object.
+```{r}
+binom_model$estimate
+```
+The \pvalue is given by the value of `p.value` element.
+```{r}
+binom_model$p.value
+```
+
+## Null hypotheses and significance
+
+In general, we can test any hypothetical value of the unknown variable.
+Often some hypothetical values have a special meaning in that they correspond to values that entail that there is no effect of any interesting kind.
+Hypotheses of this kind are known as *null* hypotheses.
+In the present example, the hypothesis that $\theta = 0.5$ entails that the coin is completely unbiased; it is no more likely to come up heads than tails, and so any differences in the observed numbers of heads and tails in a set of spins or flips is just a matter of chance.
+As such, this hypothesis would usually be seen as a null hypothesis.
+The sampling distribution for $\thetahat$ when $\thetastar = 0.5$ is shown in Figure \ref{fig:pvalue_sampling_distribution}b.
+The total tail area, which is the \pvalue is calculated similarly to the example above.
+$$
+\text{\pvalue} = 
+\underbrace{\int^{`r 0.5 - abs(0.5 - 0.56)`}_0 \binom{n}{\thetahat n} \theta^{\thetahat n} (1-\theta)^{n-\thetahat n}\ d\thetahat}_{\textrm{area of lower tail}}
++
+\underbrace{\int^1_{0.56} \binom{n}{\thetahat n} \theta^{\thetahat n} (1-\theta)^{n-\thetahat n}\ d\thetahat}_{\textrm{area of upper tail}}
+\approx
+`r round(binom.test(140, 250, p = 0.5)$p.value, 3)`.
+$$
+Note that here the lower tail is defined up to $0.5 - \vert 0.5 - 0.56 \vert = `r 0.5 - abs(0.5 - 0.56)`$.
+From this p-value of `r round(binom.test(140, 250, p = 0.5)$p.value, 3)`, we see that this is not sufficiently low to reject the null hypothesis at the conventional $\alpha = 0.05$ threshold, though of course it is quite close to this threshold too.
+We can calculate this \pvalue using `binom.test`.
+```{r}
+null_binom_model <- binom.test(x = 140, n = 250, p = 0.5) # p = 0.5 is default
+null_binom_model$p.value
+```
+
+
+
+
+```{r, echo=F, cache = T}
+births <- c(total= 731213, male  = 375529, female = 355684)
+logsumexp <- function(x) log(sum(exp(x - max(x)))) + max(x)
+
+P <- tibble(m = seq(0, births['total']),
+            thetahat = m/births['total'],
+            p = dbinom(m, size = births['total'], prob = 0.5, log = T),
+            is_extreme = abs(thetahat - 0.5) >= abs(births['male']/births['total'] - 0.5)
+)%>% filter(is_extreme) %>% pull(p) %>% logsumexp() %>% exp()
+
+p_exponent <- floor(abs(log10(P)))
+
+```
+
+As a general point about null hypothesis testing, given that a null hypothesis is a hypothesis of no interesting effect, if we reject that hypothesis, we say the result is *significant*.
+Saying that a result is significant in this sense of the term, however, is not necessarily saying much.
+The estimated effect may be small or even negligible in practical terms, but may still be statistical significant.
+Moreover, even a highly significant \pvalue does not necessarily mean a large effect in practical terms. 
+As an example, there were `r format(births['total'], scientific=F, big.mark = ',')` live births in the United Kingdom in 2018.
+The \pvalue for the null hypothesis that the probability of the birth being a male rather than female is $\approx `r formatC(P, format = "e", digits = 2) %>% as.numeric()`$.
+This is a tiny \pvalue and so is an extremely significant result.
+However, the (maximum likelihood) estimator for the probability of a male birth is `r round(births['male']/births['total'], 3)`.
+Although certainly not practically meaningless, this is nonetheless quite a small effect: it corresponds to around `r p <- round(births['male']/births['total'], 3); abs(diff(c(p, 1-p) * 1000))` more males than females in every 1000 births.
+As such, an extremely statistically significant result corresponds to small effect in practical terms.
+In general, because the \pvalue for a non-null true effect will always decrease as the sample size increases, we can always construct cases of arbitrarily small \pvalues for arbitrarily small effects, and so even practically trivial effects may be highly statistically significant.
+
+
+## Confidence intervals
+
+Confidence intervals are counterparts to \pvalues.
+As we've seen, each \pvalue corresponds to a particular hypothesis about the true value of $\theta$.
+If the \pvalue is sufficiently low, we will reject the corresponding hypothesis. 
+If the \pvalue is not sufficiently low, we can not reject the hypothesis. 
+However, not rejecting a hypothesis does not entail that we should accept that hypothesis; it just simply means that we can not rule it out.
+The set of hypothetical values of $\theta$ that we do *not* reject at the $\alpha$ \pvalue threshold corresponds to the $1-\alpha$ confidence interval.
+Practically speaking, we can treat all values in this range as the set of plausible values for $\theta$.
+
+```{r, echo=F, pvalues_per_estimate, fig.cap='The \\pvalue for each hypothetical value of $\\theta$ from $0.46$ to $0.66$ in steps of $10^{-3}$. Shaded in grey are all those values of $\\theta$ that have \\pvalues less than $\\alpha = 0.05$. These values of $\\theta$ would be rejected in a hypothesis test. All other values of $\\theta$ have \\pvalues greater than $\\alpha = 0.05$ and so would not be rejected by a hypothesis test. These value of $\\theta$ comprise the confidence interval.', fig.align='center', out.width='0.66\\textwidth'}
+get_pvalue <- function(m, n, p) binom.test(x = m, n = n, p = p)$p.value
+
+m_obs <- 140
+n <- 250
+theta_ci_df <- tibble(thetahat = seq(0.46, 0.66, length.out = 1e3)) %>% 
+  rowwise() %>% 
+  mutate(p_value = get_pvalue(m_obs, n, thetahat)) %>% 
+  ungroup() %>%
+  mutate(is_sig = p_value < 0.05)
+
+theta_ci_df %>%
+  ggplot(aes(x = thetahat, y = p_value, fill = is_sig)) + 
+  geom_col() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values=c("#E69F00", "#999999", "#56B4E9")) +
+  labs(x = TeX('$\\theta$'),
+       y = TeX('p-value')
+  )
+
+ci_max <- theta_ci_df %>% 
+  filter(!is_sig) %>%
+  arrange(desc(thetahat)) %>%
+  slice(1) %>%
+  unlist() %>%
+  magrittr::extract(1)
+
+ci_min <- theta_ci_df %>% 
+  filter(!is_sig) %>%
+  arrange(thetahat) %>%
+  slice(1) %>%
+  unlist() %>%
+  magrittr::extract(1)
+
+
+```
+
+In Figure \ref{fig:pvalues_per_estimate}, we shade in yellow all those values of $\theta$ that would not be rejected by a hypothesis test at $\alpha=0.05$.
+Therefore, these values of $\theta$ are in the $1-\alpha = 0.95$ confidence interval.
+The lower and upper bounds of this interval as calculated in this figure, which is based on a discretization of the $\theta$ interval into steps of $10^{-3}$, is $[`r round(ci_min, 3)`, `r round(ci_max, 3)`]$.
+The interval can be calculated exactly by using a relationship between the cumulative binomial distribution and the cumulative Beta distribution, a method known as the Clopper-Pearson method [@clopper1934use].
+Using R, we can calculate this Clopper-Pearson confidence interval as follows.
+```{r}
+c(qbeta(0.025, 140, 250 - 140 + 1),
+  qbeta(1-0.025, 140+1, 250 - 140))
+```
+This will also be returned by the `binom.test`.
+```{r}
+M_binom <- binom.test(x = 140, n = 250)
+M_binom$conf.int
+```
+
+```{r, echo=F}
+clopper_pearson <- function(m, n, conf_level = 0.95){
+  epsilon <- (1-conf_level)/2
+  c(lower = qbeta(epsilon, m, n - m + 1),
+    upper = qbeta(1-epsilon, m+1, n - m))
+}
+set.seed(4242)
+ci_rep_df <- rbinom(100, 250, prob = 0.6) %>%
+  map(~clopper_pearson(., n=250, conf_level = 0.9)) %>%
+  do.call(rbind, .) %>% 
+  as_tibble() %>% 
+  rowid_to_column("id") %>% 
+  mutate(hit = (lower <= 0.6) & (upper >= 0.6))
+```
+
+
+Confidence intervals have the following frequentist property.
+In an infinite repetition of an experiment[^Here, we use the term experiment in sense that it is used in probability theory, which is of a well defined procedure that generates data according to a specified probability distribution.], the 95% confidence interval will contain the true value of the unknown variable 95% of the time.
+What this means in the case of the present problem is that if we were to repeat ad infinitum the original coin spinning experiment under identical conditions, and so the probability of a heads outcome is a fixed though unknown value of $\theta$, and on each repetition calculate the 95% confidence interval, then 95% of these confidence intervals would contain the true value of $\theta$.
+In Figure \ref{fig:ci_coverage}, we provide an illustration of this phenomenon.
+For 100 repetitions, we generate data from a binomial distribution with $n=250$ and $\theta=0.6$.
+From the data on each repetition, we calculate the 90% confidence interval.
+Those intervals that do not contain $\theta = 0.6$ are shaded in grey.
+In this set of 100 repetitions, there are `r ci_rep_df %>% filter(hit) %>% nrow()` intervals out of 100 that contain $\theta = 0.6$.
+
+
+```{r, ci_coverage, fig.cap='The 90\\% confidence intervals in 100 repetitions of a binomial experiment with $n=250$ and $\\theta = 0.6$. Shaded in grey are any confidence intervals that do not contain $\\theta=0.6$.', fig.align='center', out.width='\\textwidth', fig.height=2.5, echo=F}
+ci_rep_df %>% 
+  ggplot() + 
+  geom_segment(aes(x = id, xend = id, y = lower, yend = upper, colour = hit)) +
+  geom_hline(yintercept = 0.6, linetype="dashed") + 
+  labs(y = TeX('$\\theta$'),
+       x = 'repetitions') +
+  theme(legend.position = "none",
+        axis.text.x = element_blank()) +
+  scale_colour_manual(values=c("#999999", "#E69F00", "#56B4E9"))
+
+```
+
+
+# Bayesian statistical inference
+
+Bayesian approaches to statistical inference ultimately aim to solve the same problem as that of classical approaches, namely the inference of the unknown values of variables in a statistical model.
+While the classical approaches is based on calculation of estimators and their sampling distributions, Bayesian approaches rely on an 18th century mathematical result known as *Bayes' rule* or *Bayes' theorem* to calculate a probability distribution over the possible values of the unknown variable.
+This probability distribution, known as the *posterior distribution*, gives us the probability that the unknown variable takes on any given value, contingent on  the assumptions of the model.
+To introduce Bayesian inference, we will continue with the same example problem covered above.
+
+It is important to emphasize that the choice of the statistical model is prior to and not dependent on whether a classical or Bayesian approach to inference is used.
+In other words, we first assume or propose a statistical model for the data at hand and then, in principle, we can choose to use a classical or Bayesian approach to inference of the unknown variables in the model.
+For the problem at hand, as described above, our statistical model is that $Y$ is a random variable with a binomial probability distribution with unknown parameter $\theta$ and sample size $n=250$.
+As we've seen, we can state this as follows:
+$$
+Y \sim \textrm{Binomial}(\theta, n=250).
+$$
+The observed number of heads, $m=140$, is a realization of the random variable $Y$, and the probability that $Y$ takes on the value of $m$ given fixed values of $\theta$ and $n$ is the given by the following probability mass function.
+$$
+\Prob{Y = m \given \theta, n} = \textrm{Binomial}(Y = m \given \theta, n) =
+\binom{n}{m} \theta^m (1-\theta)^{n-m}.
+$$
+As we've also seen, the likelihood function corresponding to this probability distribution is 
+$$
+L(\theta \given m,n) = \theta^m (1-\theta)^{n-m}.
+$$
+As we'll see, the likelihood function plays a major role in Bayesian inference.
+
+## Priors
+
+Having established our statistical model, to perform Bayesian inference on the value of $\theta$, we must first provide a probability distribution for the possible values that $\theta$ can take on in principle.
+This is known as the *prior* distribution.
+As an example, if we assume that $\theta$ can take on any possible value in the interval $[0, 1]$ and each value has equal likelihood, our prior would be a uniform distribution over $\theta$.
+On the other hand, if we assume that $\theta$ values are more likely to be equal to $\theta = 0.5$, but possibly be above or below $\theta=0.5$ too, our prior might be a symmetrical unimodal distribution centered at $\theta=0.5$.
+How wide this unimodal distribution is depends on what we think are the relative probabilities of values close to and far from $\theta=0.5$.
+Likewise, if we assume that $\theta$ is likely to correspond to a bias towards heads, then the prior might be another symmetrical unimodal distribution but centered on some value of $\theta$ greater than $0.5$.
+Examples of priors like this are shown in Figure \ref{fig:thetaprior}.
+
+```{r, thetaprior, echo=F, fig.cap="Examples of priors over $\\theta$. a) A uniform prior. b-c) Priors where $\\theta$ is more likely to be $0.5$ than otherwise but values greater and less than $0.5$ are probable too, and more so in the case of c) whose variance is wider than the prior in b). d) A prior where $\\theta$ is more likely to be $\\theta=0.6$ than any other value and more likely to be above rather than below $0.5$.", fig.align='center'}
+theta_df <- tibble(theta = seq(0, 1, length.out = 1e3),
+                   uniform = dbeta(theta, shape1 = 1, shape2 = 1),
+                   unimodal1 = dbeta(theta, shape1 = 20, shape2 = 20),
+                   unimodal2 = dbeta(theta, shape1 = 5, shape2 = 5),
+                   unimodal3 = dbeta(theta, shape1 = 30, shape2 = 20)
+)
+
+p1 <- theta_df %>% 
+  ggplot(aes(x = theta, y = uniform)) + 
+  geom_line() +
+  labs(x = TeX('$\\theta$'),
+       y = TeX('$P(\\theta)$'))
+
+p2 <- theta_df %>% 
+  ggplot(aes(x = theta, y = unimodal1)) + 
+  geom_line() +
+  labs(x = TeX('$\\theta$'),
+       y = TeX('$P(\\theta)$'))
+
+p3 <- theta_df %>% 
+  ggplot(aes(x = theta, y = unimodal2)) + 
+  geom_line() +
+  labs(x = TeX('$\\theta$'),
+       y = TeX('$P(\\theta)$'))
+
+p4 <- theta_df %>% 
+  ggplot(aes(x = theta, y = unimodal3)) + 
+  geom_line() +
+  labs(x = TeX('$\\theta$'),
+       y = TeX('$P(\\theta)$'))
+
+
+plot_grid(p1,p2,p3,p4, labels = letters[1:4], nrow = 2)
+
+```
+
+
+
+There is a vast literature on what priors are, how to choose them, and the relative merits of, for example, subjective, objective, informative, noninformative, weakly informative, reference, maximum entropy, and other kinds of priors.
+We will not even attempt a summary of this vast literature here.
+Our general advice on the topic is that the choice of a prior should not be automatic, but rather should be treated as a modelling assumption, just like the assumptions that lead to our choice of the original statistical model.
+When choosing the prior, just like when we choose the statistical model, we should follow a number of guiding principles: we should use our general understanding of the problem at hand, and also of the data itself; our choices should be reasonable and justifiable rather than arbitrary; our choices should be seen as tentative and subject to revision if the assumptions or reasoning on which it was based are found to be invalid or wrong.
+More specifically, following @gelman2017prior, we recommend that our choices of priors should be guided by whether the prior could generate the type of data that we expect to see in the problem at hand, that it covers the range of plausible values of the unknown parameter, and most of the prior mass should be the parts of the parameter space that are likely to generate the type of data we are modelling.
+
+It should be emphasised, however, that although in general the choice of priors is always important, it has more practical consequences in some problems than in others.
+In particular, in relatively simple models where the ratio of observed data to unknown variables is relatively high, as is the case with the present problem, most choices of priors, unless they are extreme, will lead to practically similar conclusions.
+In complex models, on the other hand, or models where the amount of data relative to the number of unknown variables is low, the priors play a much more important role in the final fitted model, and so choices of priors in these contexts needs to be more careful and judicious.
+
+For the present problem, the parameter $\theta$ is the probability that the coin lands heads up after a spin.
+The value of $\theta$ is a function of both the physical properties of the coin and also the manner in which it is spun.
+It is arguably difficult to physically bias a coin so that one side is more likely in a flip [@gelman2002you], but experimental results with different materials can lead to outcomes that are as much as 70-30 biased  [@kerrich1946experimental], and precise control over how it is flipped can lead to even 100% biased outcomes [@diaconis2007dynamical].
+Coin spins, as opposed to flips, can be easily biased to as much as 75-25 bias [@gelman2002you].
+From this, it seems to reasonable to have a unimodal and symmetrical prior centered at $\theta=0.5$, but with a relatively wide spread to allow for relatively extreme possibilities.
+For this, we will use the prior displayed in Figure \ref{fig:thetaprior}c.
+Clearly, the most likely value of $\theta$ according to this prior is $\theta=0.5$, but values of $\theta = 0.25$ or $\theta = 0.75$ have substantial prior mass in their vicinity, and even extreme values of greater than $\theta=0.9$ or less than $\theta=0.1$ have non-trivial prior mass.
+
+```{r, echo=F}
+a <- 5
+b <- 5
+E_theta <- a/(a+b)
+V_theta <- (a*b)/((a+b)^2*(a+b+1))
+sd_theta <- sqrt(V_theta)
+```
+
+The prior that we have chosen (displayed in Figure \ref{fig:thetaprior}c) is a beta distribution, which is a probability distribution over the interval from $0$ to $1$.
+There are two parameters in the beta distribution, which we call *hyper*parameters to distinguish them from the parameters of the statistical model, and these are conventionally denoted by $\alpha$ and $\beta$.
+In the particular beta distribution that we have chosen their values are $\alpha = 5$ and $\beta = 5$.
+The density function of any beta distribution is 
+$$
+\Prob{\theta \given \alpha, \beta} = \frac{\Gamma(\alpha + \beta)}{\Gamma(\alpha)\Gamma(\beta)} \theta^{\alpha - 1} (1-\theta)^{\beta - 1},
+$$
+and its mean and variance are
+$$
+\langle \theta \rangle = \frac{\alpha}{\alpha + \beta},\quad
+\textrm{Var}(\theta) = \frac{\alpha\beta}{(\alpha+\beta)^2(\alpha + \beta + 1)}.
+$$
+For our choice of prior therefore, the mean of the distribution is $0.5$ and the variance is `r round(V_theta, 3)` (and so the standard deviation is `r round(sd_theta, 3)`).
+
+
+## Bayes' rule and the posterior distribution
+
+Having specified our statistical model and our prior, we can now write out the full Bayesian model.
+$$
+\begin{aligned}
+Y \sim \textrm{Binom}(\theta, n = 250),\\
+\theta \sim \textrm{Beta}(\alpha = 5, \beta = 5)
+\end{aligned}
+$$
+We can view this model as an expanded generative model of the observed data.
+In other words, to generate hypothetical data sets, first, we sample a value of $\theta$ from a beta distribution with hyperparameters $\alpha = \beta = 5$, and then we sample a value from a binomial distribution with parameter $\theta$ and sample size $n=250$.
+This expanded model therefore defines a joint probability distribution over $Y$ and $\theta$, conditional on $\alpha$, $\beta$ and $n$, i.e. $\Prob{Y, \theta \given \alpha, \beta, n}$.
+We will use this join probability distribution, coupled with the fact that we observe the value of $Y$, to calculate a probability distribution over the possible values of $\theta$ conditional on all the observed data and the assumptions of the model.
+This is known as the *posterior distribution*, and is the central result in Bayesian inference.
+To understand how the posterior distribution is calculated, we must introduce some elementary results from probability theory.
+
+<!-- $$ -->
+<!-- \begin{aligned} -->
+<!-- \Prob{Y, \theta\given \alpha, \beta} &= \Prob{Y \given \theta} \Prob{\theta\given \alpha, \beta}. -->
+<!-- \end{aligned} -->
+<!-- $$ -->
+
+If we have two random variables $A$ and $B$, an elementary probability theory result shows how the joint probability distribution of $A$ and $B$ can be factored into products of *conditional* probability distributions and *marginal* probability distributions:
+$$
+\underbrace{\Prob{A, B}}_{\text{joint}} =
+\underbrace{\Prob{A\given B}}_{\text{conditional}} 
+\underbrace{\Prob{B}}_{\text{marginal}} =
+\underbrace{\Prob{B\given A}}_{\text{conditional}} 
+\underbrace{\Prob{B}}_{\text{marginal}}
+$$
+In other words, the joint probability of $A$ and $B$ is equal to the conditional probability of $A$ given $B$ times the probability of $B$, or equally, it is equal to the conditional probability of $B$ given $A$ times the probability of $A$.
+Another elementary result is how we calculate marginal probability distributions from summations over joint distributions.
+$$
+\begin{aligned}
+\Prob{A} &= \sum_{\{B\}}\Prob{A, B} = \sum_{\{B\}}\Prob{A\given B} \Prob{B}, \\
+\Prob{B} &= \sum_{\{A\}}\Prob{A, B} = \sum_{\{A\}}\Prob{B\given A} \Prob{A},
+\end{aligned}
+$$
+where $\{A\}$ and $\{B\}$ in the summations indicate the set of all values of $A$ and $B$, respectively.
+
+We can illustrate these results easily using any joint probability distribution table.
+For example, we can use the following numbers, which give the number of males and females who survived or not on the *RMS Titanic*.
+```{r, results= 'asis', echo=F}
+options(xtable.booktabs = TRUE,
+        xtable.comment = FALSE,
+        xtable.floating = FALSE,
+        xtable.latex.environments = 'center',
+        xtable.tabular.environment = 'tabular')
+titanicX <- apply(Titanic, c('Sex', 'Survived'), sum) %>% addmargins()
+rownames(titanicX) <- c('Male', 'Female', '')
+colnames(titanicX) <- c('Perished', 'Survived', '')
+titanicX %<>% as.data.frame() %>% rename(` ` = V3)
+titanicX %>%
+  kable('latex', booktabs = T, digits = 0) %>%
+  kable_styling(position = "center")
+
+```
+There were `r sum(Titanic)` people on board, and so we can divide the numbers in each category by `r sum(Titanic)` to obtain a joint probability distribution table.
+```{r, results= 'asis', echo=F}
+titanicX <- apply(Titanic, c('Sex', 'Survived'), sum) %>% addmargins() %>% divide_by(sum(Titanic))
+rownames(titanicX) <- c('Male', 'Female', '')
+colnames(titanicX) <- c('Perished', 'Survived', '')
+titanicX %<>% as.data.frame() %>% rename(` ` = V3)
+titanicX %>%
+  kable('latex', booktabs = T, digits = 3) %>%
+  kable_styling(position = "center")
+
+p_sex_and_survive <- titanicX %>% slice(-n()) %>% select(-` `)
+```
+Note that the column totals and row totals are provided here and these give the probabilities of a person on board *Titanic* being a male or female, or surviving or not, respectively.
+From the joint probability distribution, we can get the two *conditional* probability distributions.
+The first tells us the probability of surviving or not given that we know that the person is a Male or a Female.
+```{r, results= 'asis', echo=F}
+p_survive_given_sex <- apply(Titanic, c('Sex', 'Survived'), sum)%>%
+  addmargins() %>% 
+  as_tibble(rownames = 'Sex') %>% 
+  rowwise() %>% 
+  mutate(No = No/Sum,
+         Yes = Yes/Sum) %>% 
+  select(-Sum) %>%
+  ungroup() %>% 
+  slice(-n()) %>% 
+  rename(Perished = No, Survived = Yes)
+
+p_survive_given_sex %>% 
+  kable('latex', booktabs = T, digits = 3) %>%
+  kable_styling(position = "center")
+```
+The second conditional probability distribution table tells us the probability of being a male or a female given that the person survived or not.
+```{r, results= 'asis', echo=F}
+p_sex_given_survive <- apply(Titanic, c('Sex', 'Survived'), sum)%>%
+  addmargins() %>% 
+  as_tibble(rownames = 'Sex') %>% 
+  select(-Sum) %>%
+  slice(-n()) %>%
+  mutate(No = No/sum(No),
+         Yes = Yes/sum(Yes))%>%
+  rename(Perished = No, Survived = Yes)
+
+p_sex_given_survive %>%
+  kable('latex', booktabs = T, digits = 3) %>%
+  kable_styling(position = "center")
+```
+
+Using the joint table, we can see that the probability of being a person being both a male and a survivor is
+$$
+\Prob{\textrm{Sex} = \textrm{Male}, \textrm{Survival} = \textrm{Survived}} = `r p_sex_and_survive[1,2] %>% round(3)`.
+$$
+This is equal to the probability of being a male given that the person survived times the probability of being a survivor.
+$$
+\Prob{\textrm{Sex} = \textrm{Male} \given \textrm{Survival} = \textrm{Survived}}\Prob{\textrm{Survival} = \textrm{Survived}} = `r p_sex_given_survive[1, 3] %>% round(3)` \times  `r p_sex_and_survive[,2] %>% sum() %>% round(3)` = `r (p_sex_given_survive[1, 3] * (p_sex_and_survive[,2] %>% sum())) %>% round(3)`.
+$$
+It is also equal to the probability of being a survivor given that the person is a male
+$$
+\Prob{\textrm{Survival} = \textrm{Survived} \given \textrm{Sex} = \textrm{Male} }
+\Prob{\textrm{Sex} = \textrm{Male}} = 
+`r p_survive_given_sex[1, 3] %>% round(3)`
+\times
+`r p_sex_and_survive[1,] %>% sum() %>% round(3)`
+= 
+`r (p_survive_given_sex[1, 3] * (p_sex_and_survive[1,] %>% sum())) %>% round(3)`.
+$$
+The same holds for any other element of the joint probability table.
+Using these tables we can also calculate marginal probabilities.
+$$
+\begin{aligned}
+\Prob{\textrm{Sex} = \textrm{Male}} 
+&= 
+\Prob{\textrm{Sex} = \textrm{Male}, \textrm{Survival} = \textrm{Survived}} +
+\Prob{\textrm{Sex} = \textrm{Male}, \textrm{Survival} = \textrm{Perished}},\\
+&=
+\Prob{\textrm{Sex} = \textrm{Male} \given \textrm{Survival} = \textrm{Survived}}\Prob{\textrm{Survival} = \textrm{Survived}}\\
+&\phantom{xxxx} + \Prob{\textrm{Sex} = \textrm{Male} \given \textrm{Survival} = \textrm{Perished}}\Prob{\textrm{Survival} = \textrm{Perished}},\\
+&= `r p_sex_given_survive[1, 3] %>% round(3)` \times  `r p_sex_and_survive[,2] %>% sum() %>% round(3)` + 
+`r p_sex_given_survive[1, 2] %>% round(3)` \times  `r p_sex_and_survive[,1] %>% sum() %>% round(3)`,\\
+&= `r (p_sex_given_survive[1, 3] * (p_sex_and_survive[,2] %>% sum()) + 
+   p_sex_given_survive[1, 2] * (p_sex_and_survive[,1] %>% sum())
+   ) %>% round(3)`
+\end{aligned}
+$$
+
+With these elementary results from probability theory, we end up with the following uncontroversial result known as *Bayes' rule*.
+$$
+\Prob{B\given A} = \frac{\Prob{A \given B}\Prob{B}}{\sum_{\{B\}}\Prob{A \given B}\Prob{B}}.
+$$
+This can be easily derived as follows:
+$$
+\begin{aligned}
+\Prob{B \given A}\Prob{A} &= \Prob{A \given B}\Prob{B},\\
+\Prob{B \given A} &= \frac{\Prob{A \given B}\Prob{B}}{\Prob{A}} 
+= \frac{\Prob{A \given B}\Prob{B}}{\sum_{\{B\}}\Prob{A \given B}\Prob{B}}
+\end{aligned}
+$$
+
+We can use this result to solve elementary probability puzzles like the following^[This problem is taken from *Schaum's Outlines: Probability* (2nd ed., 2000), pages 87-88.].
+
+> Box A has 10 lightbulbs, of which 4 are defective.
+> Box B has 6 lightbulbs, of which 1 is defective.
+> Box C has 8 lightbulbs, of which 3 are defective.
+> If we do choose a nondefective bulb, what is the probability it came from Box C? 
+
+Here, we are being asked for $\Prob{\text{Box}=C\given\text{Bulb}=\text{Working}}$.
+By Bayes' rule this is 
+$$
+\Prob{\text{Box}=C\given\text{Bulb}=\text{Working}} =
+\frac{
+\Prob{\text{Bulb}=\text{Working}\given \text{Box}=C}\Prob{\text{Box}=C}
+}
+{\Prob{\text{Bulb}=\text{Working}}},
+$$
+where the denominator here is
+$$
+\begin{split}
+\Prob{\text{Bulb}=\text{Working}} =
+&\Prob{\text{Bulb}=\text{Working}\given \text{Box} = A}\Prob{\text{Box} = A}\\
+&+\Prob{\text{Bulb}=\text{Working}\given \text{Box} = B}\Prob{\text{Box} = B}\\
+&+\Prob{\text{Bulb}=\text{Working}\given \text{Box} = C}\Prob{\text{Box} = C}.
+\end{split}
+$$
+The conditional probabilities of drawing working bulb from each of box A, B, or C, are given by knowing the number of bulbs in each box and the number of defective bulbs in each, and so are $\tfrac{6}{10}$, $\tfrac{5}{6}$, $\tfrac{5}{8}$, respectively.
+The marginal probabilities of box A, B, and C are $\tfrac{1}{3}$, $\tfrac{1}{3}$, and $\tfrac{1}{3}$.
+From this, we have 
+$$
+\begin{aligned}
+\Prob{\text{Box}=C\given\text{Bulb}=\text{Working}} &= 
+\frac{\tfrac{5}{8} \tfrac{1}{3}}{\tfrac{6}{10} \tfrac{1}{3} + \tfrac{5}{6} \tfrac{1}{3} + \tfrac{5}{8} \tfrac{1}{3}},\\
+&= \frac{\tfrac{5}{8}}{\tfrac{6}{10} + \tfrac{5}{6} + \tfrac{5}{8} },\\
+& = `r round((5/8) / (6/10 + 5/6 + 5/8), 3)`
+\end{aligned}
+$$
+
+Returning now to our joint distribution over $Y$ and $\theta$, i.e., $\Prob{Y, \theta \given \alpha, \beta, n}$, from this, we have the following:
+$$
+\Prob{\theta \given Y, \alpha, \beta, n} 
+= \frac{\Prob{Y \given \theta, n}\Prob{\theta \given \alpha, \beta}}
+{
+\int \Prob{Y \given \theta, n}\Prob{\theta \given \alpha, \beta} d\theta.
+}
+$$
+The left hand side is the posterior distribution.
+There are three components on the right hand side.
+First, there is $\Prob{Y \given \theta, n}$.
+Here, the value of $Y$ and $n$ are known and $\theta$ is a free variable, and so $\Prob{Y \given \theta, n}$ is a function over $\theta$.
+This is the likelihood function over $\theta$ that we have already encountered, and which we can also write as $L(\theta \given Y, n)$.
+Second, there is $\Prob{\theta\given \alpha, \beta}$, which is the prior.
+Like the likelihood function, this is also a function over the set of all possible values of $\theta$.
+The third component is the denominator, which is the integral of the product of the likelihood function and the prior, integrated over all possible values of $\theta$.
+This integral is known as the *marginal likelihood*, and is a single value that gives the area under the curve of the function that is the product of the likelihood function and the prior.
+We can write this as follows.
+$$
+\underbrace{\Prob{\theta \given Y, \alpha, \beta, n}}_{\text{posterior}} 
+=
+\frac{\overbrace{L(\theta \given Y, n)}^{\text{likelihood}}\overbrace{P(\theta\given \alpha, \beta)}^{\text{prior}}}
+{\underbrace{\int L(\theta \given Y, n)P(\theta\given \alpha, \beta) d\theta}_{\text{marginal likelihood}}}.
+$$
+What this tells us is that having observed the data, the probability distribution over the possible values of $\theta$ is the normalized product of the likelihood function and the prior over $\theta$.
+The prior tells us what values $\theta$ could take on in principle.
+The likelihood function effectively tells us the evidence in favour of any given value of $\theta$ according to the data.
+We multiply these two functions together (the numerator above) and then divide by the area under the curve of this product of functions (the marginal likelihood, which is the denominator).
+Dividing by the marginal likelihood ensures that the area under the curve of the posterior is *normalized* so that its integral is exactly $1$.
+
+Filling out the detail of this equation, we have the following.
+$$
+\begin{aligned}
+\Prob{\theta \given Y, \alpha, \beta, n}
+&\propto 
+\frac{L(\theta \given Y, n) P(\theta\given \alpha, \beta)}{\int L(\theta \given Y, n) P(\theta\given \alpha, \beta) d\theta},\\
+&= 
+\frac{
+\theta^m (1-\theta)^{n-m} \cdot \frac{\Gamma(\alpha + \beta)}{\Gamma(\alpha)\Gamma(\beta)}\theta^{\alpha-1} (1-\theta)^{\beta-1}
+}{
+\int \theta^m (1-\theta)^{n-m} \cdot \frac{\Gamma(\alpha + \beta)}{\Gamma(\alpha)\Gamma(\beta)}\theta^{\alpha-1} (1-\theta)^{\beta-1} d\theta
+},\\
+&=\frac{
+\theta^{m + \alpha -1 } (1-\theta)^{n-m+\beta-1}
+}{
+\int \theta^{m + \alpha -1 } (1-\theta)^{n-m+\beta-1} d\theta
+}
+\end{aligned}
+$$
+The integral evaluates as follows.
+$$
+\int \theta^{m + \alpha -1 } (1-\theta)^{n-m+\beta-1} d\theta = 
+\frac{\Gamma(m + \alpha)\Gamma(n-m+\beta)}{\Gamma(n + \alpha + \beta)}
+$$
+From this, we have
+$$
+\Prob{\theta \given Y, \alpha, \beta, n} = \frac{\Gamma(n + \alpha + \beta)}{\Gamma(m + \alpha)\Gamma(n-m+\beta)} \theta^{m + \alpha -1} (1-\theta)^{n-m+\beta-1}.
+$$
+For the case of our data and prior, i.e., $m=140$, $n=250$, $\alpha = \beta = 5$, the posterior, likelihood, and prior are shown in Figure \ref{fig:prior_likelihood_posterior}.
+
+```{r, prior_likelihood_posterior, echo=F, fig.cap='The posterior, likelihood, and prior in a binomial problem with $m=140$ and $n=250$ and where the prior is a beta distribution with $\\alpha=5$, $\\beta=5$. In b) the same functions are plotted as in a) but over a limited range of the x-axis in order to make the difference between the posterior and the likelihood more apparent. Note also that the likelihood function is scaled so that it integrates to 1. This is simply to make it easier to visualize on the same plot at the prior and posterior. Scaling the likelihood by an arbitrary positive quantity does not affect the calculations of the posterior.', fig.align='center', fig.height=5}
+m <- 14
+n <- 25
+
+plot_bin_model <- function(m, n, a, b, xlim=c(0, 1)){
+  tibble(theta = seq(xlim[1], xlim[2], length.out = 1e4),
+         prior = theta^(a-1) * (1-theta)^(b-1),
+         likelihood = theta^m * (1-theta)^(n-m)
+  ) %>% mutate(prior = prior/sum(prior),
+               likelihood = likelihood/sum(likelihood),
+               posterior = prior * likelihood,
+               posterior = posterior/sum(posterior)
+  ) %>% pivot_longer(-theta, names_to = 'model', values_to = 'p') %>% 
+    ggplot(aes(x = theta, y = p, colour = model)) + 
+    geom_line() +
+    labs(x = TeX('$\\theta$'), y = '') +
+    theme(legend.position="bottom",
+          legend.title=element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank())
+}
+
+plot_grid(
+   plot_bin_model(140, 250, 5, 5),
+   plot_bin_model(140, 250, 5, 5, xlim=c(0.4, 0.7)),
+   nrow = 2,
+   labels = c('a', 'b')
+#   plot_bin_model(14, 25, 5, 5),
+#   plot_bin_model(140, 250, 5, 5)
+)
+
+```
+
+
+This formula for the posterior distribution is, in fact, a beta distribution with hyperparameters $m + \alpha$ and $n-m + \beta$, respectively.
+This situation where the posterior distribution is of the same parametric family as the prior is an example of *conjugate prior*.
+A conjugate prior is a prior that when combined with a particular likelihood function yields a posterior distribution of the same probability distribution family.
+In this case, the beta distribution prior, when used with the binomial likelihood, always leads to a posterior distribution that is also a beta distribution.
+
+Having a mathematical formula for the posterior distribution, as we do here, is an example of an *analytic solution* to the posterior distribution.
+This is not always possible.
+In other words, it is not always possible to have an mathematical expression with a finite number of terms and operations that describes the posterior distribution exactly.
+When an analytic solution is not possible, and in fact it is only possible in a relatively limited number of cases, we must rely on numerical methods to evaluate the posterior distribution, and in particular, *Monte Carlo* methods.
+We will return to this important topic in detail below.
+
+## Posterior summaries
+```{r, echo=F}
+a <- 5 + 140
+b <- 5 + 250 -140
+E_theta <- a/(a+b)
+V_theta <- (a*b)/((a+b)^2*(a+b+1))
+sd_theta <- sqrt(V_theta)
+rough_hpd <- E_theta + c(-1, 1) * sd_theta * 2
+
+beta_hpd_interval <- function(alpha, beta){
+  # This will break if either alpha < 1.0 or beta < 1.0
+  # or alpha = beta = 1.0
+  stopifnot(alpha >= 1.0, beta >= 1.0, !((alpha == 1) & (beta ==1)))
+  
+  interval_mass <- function(p.star){
+    # Return the area under the curve for the 
+    # set of points whose density >= p.star.
+    
+    f <- function(val){
+      d <- dbeta(val, alpha, beta)
+      if (d >= p.star){
+        return(d)
+      }
+      else {return(0)}
+    }
+    
+    return(integrate(Vectorize(f), 0.0, 1.0)$value)
+    
+  }
+  
+  err.fn <- function(p.star, hpd.mass=0.95){
+    return((hpd.mass-interval_mass(p.star))^2)
+  }
+  
+  max.f <- dbeta((alpha-1)/(alpha+beta-2), alpha, beta)
+  
+  Q <- optimize(err.fn, 
+                interval = c(0, max.f)
+  )
+  
+  precision <- 3
+  p.star <- round(Q$minimum, precision)
+  
+  inside <- FALSE
+  for (x in seq(0.0, 1.0, by=10^(-precision-1))) {
+    if (round(dbeta(x, alpha, beta), precision) >= p.star) {
+      if (inside){
+        stop.interval <- x
+      } else {
+        start.interval <- x
+        inside <- TRUE
+      }
+    } else
+    {
+      if (inside){
+        inside <- FALSE
+        interval <- c(start.interval, stop.interval)
+      } 
+    }
+  }
+  
+  return(list(alpha = alpha,
+              beta = beta,
+              p.star = p.star, 
+              hpd.interval=interval))
+}
+
+
+
+```
+
+
+The result of any Bayesian inference of any unknown variable is the posterior distribution.
+On the assumption that the statistical model and the prior are valid, the posterior distribution provides us everything that is known about the true value of the variable.
+For the current problem, this is $\Prob{\theta \given Y=m, \alpha=5, \beta=5, n=250}$, which is a beta distribution with hyperparameters $m + \alpha$ and $n-m+\beta$.
+From the properties of the beta distribution mentioned above, the mean and standard deviation of this posterior are as follows.
+$$
+\langle \theta \rangle = \frac{\alpha + m}{n + \alpha + \beta} = `r E_theta %>% round(3)`,\quad
+\textrm{Sd}(\theta) = \sqrt{\frac{\alpha\beta}{(\alpha+\beta)^2(\alpha + \beta + 1)}} = `r sd_theta %>% round(3)`.
+$$
+We can also use the cumulative distribution function of the beta distribution to determine that 2.5th and 97.5% percentiles of the posterior.
+Between these two bounds, there is 95% of the posterior probability mass.
+We can calculate this using R with the `qbeta` command, which is the inverse of the cumulative distribution function of the beta distribution.
+```{r}
+n <- 250
+m <- 140
+alpha <- 5
+beta <- 5
+c(qbeta(0.025, m + alpha, n - m + beta),
+  qbeta(0.975, m + alpha, n - m + beta))
+```
+This is a *posterior interval*, also known as a *credible interval*.
+More precisely, this interval is the *central* or *percentile* posterior interval. 
+
+Another posterior interval of interest is known as the *high posterior density* (\hpd) interval.
+The precise definition of the \hpd is as follows.
+The $\varphi$ \hpd interval for the posterior density function $f(\theta)$ is computed by finding a probability density value $p^*$ such that 
+$$
+\Prob{\{\theta \colon f(\theta) \geq p^*\}} = \varphi.
+$$
+In other words, we find the value $p^*$ such that the probability mass of the set of points whose density is greater than than $p^*$ is exactly $\varphi$.
+By this definition, no value of $\theta$ outside the \hpd has a higher density than any value within the \hpd.
+It will also be the shortest posterior interval containing $\varphi$.
+The \hpd as precisely defined here is not easily calculated, and in general requires an optimization procedure to solve for $p^*$.
+In this model, using a numerical optimization technique, we calculate it to be (`r beta_hpd_interval(140 + 5, 250 - 140 + 5)$hpd.interval`).
+This is obviously very close to the quantile based posterior interval defined above.
+
+```{r, echo=F}
+M_binom <- binom.test(x = 140, n = 250)
+```
+
+The posterior mean and the \hpd interval can be compared to the maximum likelihood estimator and confidence interval in classical inference.
+Recall that the maximum likelihood estimator was `r M_binom$estimate %>% round(3)` and the 95% confidence interval was (`r M_binom$conf.int %>% round(3)`).
+By contrast, the posterior mean and 95% central posterior interval is `r E_theta %>% round(3)` and (`r qbeta(0.025, 140 + 5, 250 - 140 + 5) %>% round(3)`, `r qbeta(0.975, 140 + 5, 250 - 140 + 5) %>% round(3)`), respectively.
+While not identical, these are very close and for practical purposes are probably indistinguishable.
+This illustrates that classical and Bayesian methods can be, especially in simple models, indistinguishable.
+
+## Monte Carlo sampling
+
+```{r, echo=F}
+dlogitnorm <- function(f, y){
+  
+  ginv <- function(y) log(y/(1-y))
+  f(ginv(y)) * abs(- 1/(y * (y-1)))
+  
+}
+
+```
+
+In the example problem that we have been discussing, the prior we chose was a beta distribution.
+As we've seen, when this prior is used with a binomial likelihood function, the posterior distribution is also a beta distribution.
+Thus, we have a relatively simple mathematical expression for the posterior distribution.
+Moreover, we can now use the properties of the beta distribution to determine the posterior mean, standard deviation, posterior intervals, etc.
+As mentioned, this is an example of an analytic solution to the posterior distribution.
+This is not always possible.
+Consider, for example, the posterior distribution when we change the prior to a *logit normal* distribution. This is a normal distribution over $\log\left(\tfrac{\theta}{1-\theta}\right)$, which is the log odds of $\theta$.
+A plot of this prior for the case of a zero mean normal distribution with standard deviation $\tau = 0.5$ is shown in Figure \ref{fig:dlogitnorm}a.
+In Figure \ref{fig:dlogitnorm}b, we show a beta distribution over $\theta$ with parameters $\alpha = \beta = 8.42$, which is virtually identical to the $N(0, 0.5^2)$ distribution over $\log\left(\tfrac{\theta}{1-\theta}\right)$.
+```{r, dlogitnorm, echo=F, fig.align='center', fig.cap='a) A zero mean normal distribution with standard deviation $\\tau=0.5$ over $\\log(\\tfrac{\\theta}{1-\\theta})$. b) A beta distribution with parameters $\\alpha = \\beta = 8.42$.', fig.height=3}
+data_df <- tibble(theta = seq(0, 1, by = 1/1000),
+                  y = dlogitnorm(function(x) dnorm(x, sd=0.5), theta),
+                  z = dbeta(theta, 8.42, 8.42))
+
+plot_grid(
+  data_df %>% ggplot(aes(x = theta, y = y)) + labs(x = TeX('$\\theta$'), y = TeX('$P(\\theta)$')) + geom_line(),
+  data_df %>% ggplot(aes(x = theta, y = z)) + labs(x = TeX('$\\theta$'), y = TeX('$P(\\theta)$')) + geom_line(),
+  labels = c('a', 'b')
+)
+  
+```
+
+Despite the similarities of these two priors, if we use the normal distribution over the log odds, the posterior distribution is as follows
+$$
+\Prob{\theta \given m, n, \tau} = \frac{1}{Z}
+\theta^m (1-\theta)^{n-m}  \tfrac{1}{\theta(1-\theta)} 
+e^{-\tfrac{|\textrm{logit}(\theta)|^2}{2\tau^2}},
+$$
+where
+$$
+Z = \int \theta^m (1-\theta)^{n-m}  \tfrac{1}{\theta(1-\theta)} 
+e^{-\tfrac{|\textrm{logit}(\theta)|^2}{2\tau^2}} d\theta,
+$$
+This does not simplify to an analytic expression, and it is not a known probability density function with well documented properties.
+The problem here arises primarily because of the integral, which does not have an analytic solution.
+In cases like this, we need to resort to numerical alternatives to the analytic solution.
+For simple models such as this one, there are many options for how to do this.
+However, a general approach that applies to all Bayesian models, including and especially complex and high dimensional (i.e. with large numbers of unknown variables) models, is to use *Monte Carlo* sampling methods.
+
+Monte Carlo methods, first introduced by @metropolis.ulam.1949, can be generally defined as numerical mehods for approximating mathematical *expectations* of random variables.
+If $X$ is a random variable of dimensionality $d$ whose probability distribution is $\Prob{X}$, and $\phi(X)$ is a function of $X$, then the expectation or expected value of $\phi(X)$ is
+$$
+\langle \phi(X) \rangle = \int \phi(x) \Prob{X=x} dx.
+$$
+This can be approximated by
+$$
+\left\langle \phi(X) \right\rangle = \frac{1}{n}\sum_{i=1}^n \phi(x_i),
+$$
+where $x_1, x_2 \ldots x_i \ldots x_n$ are $n$ samples from $\Prob{X}$.
+Particularly important is the fact that the error of approximation decreases as a function of the $\sqrt{n}$ and is independent of $d$, the dimensionality of $X$.
+
+Quantities of interest related to the probability distribution $\Prob{X}$ such as the mean, variance, or probabilities of being above or below a certain value can all be expressed as expectations:
+$$
+\langle X \rangle = \int x \Prob{X=x} dx,\quad
+\textrm{V}(X) = \int \left(x-\langle X \rangle\right)^2 \Prob{X=x} dx,\quad
+\Prob{X > x_0} = \int I(x > x_0) \Prob{X=x}dx.
+$$
+They can, therefore, be approximated as follows.
+$$
+\langle X \rangle\approx \bar{x} = \frac{1}{n}\sum_{i=1}^n x_i,\quad
+\textrm{V}(x) \approx  \textrm{var}(x) = \frac{1}{n}\sum_{i=1}^n (x_i - \bar{x})^2,\quad
+\Prob{X > x_0} \approx \frac{1}{n}\sum_{i=1}^n I(x_i > x_0).
+$$
+What this entails for Bayesian inference is that if we can draw samples from the posterior distribution, Monte Carlo methods can be used to calculate all quantities of interest related to the posterior.
+Moreover, this can be done in high dimensional problems without encountering the exponential rise in approximation error known as the *curse of dimensionality*.
+
+There are many Monte Carlo methods for drawing samples from posterior probability distributions.
+Here, we will describe just two: the Metropolis sampler, and the Hamiltonian Monte Carlo (\hmc) sampler.
+Both of these are *Markov Chain Monte Carlo* (\mcmc) samplers, as we will see.
+The Metropolis sampler was one of the earliest \mcmc samplers, introduced by @metropolis1953equation, and has traditionally been one of the most widely used samplers in Bayesian analysis.
+The \hmc sampler is an extension of the Metropolis sampler.
+It is the main sampler that is used the *Stan* probabilistic programming language that we will use extensively throughout the remainder of this book.
+
+In order to discuss this topic generally, rather than just for a specific problem or model, we will assume that our observed data is $\data$ and that the unknown variable(s) that we are trying to infer is a $d$ dimensional variable $\theta$.
+The posterior distribution is
+$$
+\Prob{\theta \given \data} = 
+\frac{L(\theta\given\data)\Prob{\theta}}{\int L(\theta\given\data)\Prob{\theta} d\theta},
+$$
+where $L(\theta\given\data)$ is the likelihood function and $\Prob{\theta}$ is the prior.
+We can rewrite the posterior distribution as 
+$$
+\Prob{\theta \given \data} = f(\theta) \frac{1}{Z},
+\quad f(\theta) = L(\theta\given\data)g(\theta),
+\quad Z = \int L(\theta\given\data)g(\theta) d\theta.
+$$
+Here, $f(\theta)$ is the unnormalized posterior distribution, where for notational simplicity we drop explicit reference to $\data$, $Z$ is the normalisation constant, and $g(\theta)$ is the  prior distribution.
+
+### Metropolis sampler
+
+For the Metropolis sampler, we need only be able to evaluate $f(\theta)$ at any given value of $\theta$, and we do not need to know the value of $Z$.
+Evaluating $f(\theta)$ is often very straightforward even in complex models.
+If we can evaluate the likelihood function at $\theta$ and the (normalized or unnormalized) prior at $\theta$, we simply multiply their values together to obtain $f(\theta)$.
+To draw samples using the metropolis sampler, we begin with an arbitrary initial value $\tilde{\theta}_0$, and then use a *proposal distribution* based around $\tilde{\theta}_0$ to propose a new point in the $\theta$ space, which we will call $\tthetaprop$.
+We can write this proposal distribution $Q(\tthetaprop \given \ttheta_0)$.
+In the standard implementation of the Metropolis sampler, the proposal distribution must be symmetric such that for any two values $\ttheta_i$ and $\ttheta_j$, $Q(\ttheta_i\given\ttheta_j) = Q(\ttheta_j\given\ttheta_i)$.
+In the Metropolis-Hasting variant of the Metropolis sampler, as we will see, the proposal distribution need not be symmetric.
+
+Having sampled $\theta_*$, if $f(\tthetaprop) \geq f(\ttheta_0)$, we accept that proposed new point and set $\ttheta_1 = \tthetaprop$.
+We then propose a new point in $\theta$ space using our proposal distribution centered at $\ttheta_1$.
+If, on the other hand $f(\tthetaprop) < f(\ttheta_0)$, we accept $\tthetaprop$ with probability
+$$
+\frac{f(\tthetaprop)}{f(\ttheta_0)}.
+$$
+If we accept it, then we set $\ttheta_1 = \tthetaprop$ and propose a new point using our proposal distribution centered at $\ttheta_1$.
+If we reject $\tthetaprop$, we new then propose a new point using the proposal distribution centered at $\ttheta_0$, and repeat the above steps.
+
+Continuing in this way, we produce a sequence of samples $\ttheta_0, \ttheta_1, \ttheta_2 \ldots$ that are realizations of random variables $\theta_0, \theta_1, \theta_2 \ldots$.
+Because each variable is dependent on the immediately preceding variable, and not dependent on any variable before that, these random variables form a first-order *Markov chain*.
+The marginal probability distributions of these variables are $\tpi_0(\theta_0), \tpi_1(\theta_1), \tpi_2(\theta_2) \ldots$.
+The first distribution, $\tpi_0(\theta_0)$, is an arbitrary starting distribution.
+The nature of the second distribution, $\tpi_1(\theta_1)$, can be understood as follows.
+If $\theta_0 = \ttheta_a$, then the probability that $\theta_1 = \ttheta_b$ will be the $Q(\tthetaprop = \ttheta_b\given \ttheta_b)$ if $f(\ttheta_b) > f(\ttheta_a)$ and will be $Q(\tthetaprop = \ttheta_b\given \ttheta_b) \times \frac{f(\ttheta_b)}{f(\ttheta_a)}$ otherwise.
+Thus, $\tpi_1(\theta_1)$ is 
+$$
+\tpi_1(\theta_1) = \int 
+\underbrace{\textrm{min}\left(\frac{f(\theta_1)}{f(\theta_0)}, 1\right) Q(\theta_1 \given \theta_0)}_{T(\theta_1\given\theta_0)}
+\tpi_0(\theta_0)
+d\theta_0.
+$$
+By extension, for any $i$, we have
+$$
+\tpi_i(\theta_{i}) = \int T(\theta_{i}\given\theta_{i-1}) \tpi_{i-1}(\theta_{i-1}) d\theta_{i}.
+$$
+
+It can be shown that under some general and minimal conditions^[These are *irreducibility*, which is the non-zero probability of eventually transitioning from any one state to any other, *aperiodicity*, which is having no perfectly cyclic state trajectories, and *non transience*, which is the non-zero probability of returning to any given state.] of Markov chains, the sequence of probability distributions $\tpi_0(\theta_0), \tpi_1(\theta_1), \tpi_2(\theta_2) \ldots$ will converge upon a *unique* distribution that we will label $\pi(\theta)$.
+This is known as the *invariant* or *stationary* distribution of the Markov chain.
+Furthermore, if we have a function $\psi(\theta)$ that satisfies
+$$
+T(\theta_{i} = \ttheta_b \given\theta_{i-1} = \ttheta_a) \psi(\theta_{i-1} = \ttheta_a)
+=
+T(\theta_{i} = \ttheta_a \given\theta_{i-1} = \ttheta_b) \psi(\theta_{i-1} = \ttheta_b)
+$$
+for any two states $\ttheta_a$ and $\ttheta_b$, then $\psi(\theta)$ is this invariant distribution.
+We can see that the $\psi(\theta)$ is the posterior distribution as follows.
+First, we will assume that $f(\ttheta_a) > f(\ttheta_b)$.
+If this is not the case, we simply reverse the labels of $\ttheta_a$ and $\ttheta_b$.
+Then we have the following.
+$$
+\begin{aligned}
+T(\ttheta_b \given \ttheta_a) \psi(\ttheta_a)
+&=
+T(\ttheta_a \given \ttheta_b) \psi(\ttheta_b),\\
+\frac{f(\theta_b)}{f(\theta_a)}
+Q(\ttheta_b\given \ttheta_a)
+\psi(\ttheta_a)
+&=
+Q(\ttheta_a\given \ttheta_b) \psi(\ttheta_b).
+\end{aligned}
+$$
+Because of symmetry of the proposal distribution, we have
+$$
+\begin{aligned}
+\frac{f(\theta_b)}{f(\theta_a)}
+Q(\ttheta_b\given \ttheta_a)
+\psi(\ttheta_a)
+&=
+Q(\ttheta_b\given \ttheta_a) \psi(\ttheta_b),\\
+\frac{f(\theta_b)}{f(\theta_a)} \psi(\ttheta_a)
+&=
+\psi(\ttheta_b),\\
+\frac{f(\theta_b)}{f(\theta_a)} 
+&=\frac{\psi(\ttheta_a)}{\psi(\ttheta_b)}.
+\end{aligned}
+$$
+From this we have 
+$$
+\psi(\theta) = \frac{1}{Z}f(\theta)
+$$
+being the invariant distribution of the Markov chain.
+
+In Figure \ref{fig:converge_to_posterior}, we show some of the sequence of distributions $\pi_0, \pi_1, \pi_2 \ldots$ of a Metropolis sampler as it converges to the true posterior distribution, which is also shown.
+For this illustration, we use a binomial problem like above but where the data is $m=14$ and $n=25$, use a logit-Normal prior, and assume a uniform proposal distribution.
+From this illustration, we see a relatively quick convergence to the true posterior distribution.
+```{r, converge_to_posterior, echo=F, fig.align='center', fig.cap='Convergence of a Metropolis sampler to the posterior distribution having started at an arbitrary distribution.'}
+converge_to_posterior <- function(){
+  
+  logit <- function(x) log(x/(1-x))
+  
+  f <- function(theta, m=140, n = 250, tau = 0.5){
+    theta^(m-1) * (1-theta)^(n-m-1) * exp(-logit(theta)^2/(2*tau^2))
+  }
+  
+  posterior <- function(x, m=14, n=25){
+    f(x, m, n)
+  }
+
+  # assume uniform jumping kernel
+  transition <- function(x_star, x, n=1000){
+    if (posterior(x_star) == posterior(x)){
+      return(1/n)
+    }
+    min(posterior(x_star)/posterior(x), 1) * 1/n
+  }
+  
+  n <- 100
+  eps <- 1/n
+  x <- seq(0 + eps, 1 - eps, length.out = n)
+  
+  m <- matrix(rep(0, n**2), nrow = n, ncol = n)
+  for (i in seq(n)){
+    for (j in seq(n)){
+      m[i,j] <- transition(x_star = x[j], x = x[i], n = n)
+    }
+  }
+  
+  # this bit to ensure to take into account 
+  # "reject" steps that means you stay in original state
+  m <- m + (1-apply(m, 1, sum)) * diag(n)
+
+  FP <- function(p,m, k=10){
+    for(i in seq(k)) {
+      p = p %*% m}
+    as.vector(p)
+  }
+  
+  q <- tibble(
+    p = dbeta(x, 2, 2)
+  ) %>% mutate(p = p/sum(p),
+               p2 = FP(p, m, k=2),
+               p3 = FP(p, m, k=3),
+               p5 = FP(p, m, k=5),
+               pn = FP(p, m, k=50),
+               tp = posterior(x),
+               tp = tp/sum(tp)
+  )
+ 
+  pi_labels <- c(
+    p =  'Initial',
+    p2 =  '2 iterations',
+    p3 =  '3 iterations',
+    p5 =  '5 iterations',
+    pn =  '50 iterations',
+    tp = 'True posterior')
+  
+  q %>%
+    rowid_to_column('t') %>% 
+    pivot_longer(col=-t) %>%
+    ggplot(aes(x=t, y=value, colour=name)) +
+    geom_line() +
+    facet_wrap(~name, labeller = labeller(name = pi_labels)) +
+    theme_minimal() +
+    labs(x = TeX('$\\theta$'),
+         y = TeX('$P(\\theta)$')) + 
+    theme(legend.position = 'none')
+  
+}
+converge_to_posterior()
+
+```
+
+
+
+The Metropolis-Hastings variant of the original Metropolis sampler allows for asymmetric proposal distributions.
+Given an initial sample $\ttheta_i$ and proposed new sample $\tthetaprop$, sampled from the proposal distribution $Q(\tthetaprop \given \ttheta_i)$, then we accept $\tthetaprop$ if
+$$
+f(\tthetaprop) Q(\ttheta_i\given \tthetaprop) \geq 
+f(\ttheta_i) Q(\tthetaprop\given \ttheta_i),
+$$
+and otherwise we accept it with probability
+$$
+\frac{
+f(\tthetaprop) Q(\ttheta_i\given \tthetaprop)
+}{
+f(\ttheta_i) Q(\tthetaprop\given \ttheta_i).
+}
+$$
+Sampling in this way, as with the original Metropolis sampler, we converge upon an invariant probability distribution over $\theta$ that is the posterior distribution $\frac{1}{Z}f(\theta)$.
+
+```{r, echo=F}
+set.seed(10101010)
+```
+
+
+To illustrate the Metropolis algorithm, we will use our binomial problem with the logit normal distribution.
+The likelihood function at any value of $\theta$ is 
+$$
+L(\theta\given m, n) = \theta^{m} (1-\theta)^{n-m}.
+$$
+The unnormalized logit normal prior is 
+$$
+g(\theta) = \tfrac{1}{\theta(1-\theta)} e^{-\tfrac{|\textrm{logit}(\theta)|^2}{2\tau^2}}.
+$$
+From this, we have
+$$
+f(\theta) = \theta^{m-1} (1-\theta)^{n-m-1} e^{-\tfrac{|\textrm{logit}(\theta)|^2}{2\tau^2}}.
+$$
+This can be easily implemented using R as follows:
+```{r}
+logit <- function(x) log(x/(1-x))
+f <- function(theta, m=140, n = 250, tau = 0.5){
+  theta^(m-1) * (1-theta)^(n-m-1) * exp(-logit(theta)^2/(2*tau^2))
+}
+```
+For the proposal distribution, for simplicity, we will use uniform distribution on $(0, 1)$.
+```{r}
+proposal <- function(theta_0){
+  runif(1)
+}
+```
+
+
+
+
+
+The following code implements a Metropolis sampler that draws 100 samples.
+```{r}
+nsamples <- 100
+i <- 1
+theta <- numeric(length = nsamples)
+theta[i] <- runif(1) # initial sample from U(0,1)
+
+while (i < nsamples) {
+  theta_star <- proposal(theta[i]) # proposed sample
+  p <- min(f(theta_star)/f(theta[i]), 1) # prob. of acceptance
+  if (runif(1) <= p){
+    i <- i + 1
+    theta[i] <- theta_star
+  }
+}
+```
+The trajectory of samples from two separate chains, each started at opposite ends of the $\theta$ space, are shown in Figure \ref{fig:traceplot}a.
+These plots are known as *trace-plots*.
+As can be seen, these trajectories both quickly converge upon the same area of $\theta$ space.
+The histogram of samples from one chain is shown in Figure \ref{fig:traceplot}b.
+```{r, traceplot, echo=F, fig.cap = 'a) The trajectory, or \\emph{trace-plot}, of 100 samples from two separate chains of a Metropolis sampler for the binomial problem using a logit-normal prior. b) The histogram of ten thousand samples from one of the samplers.', fig.align='center', out.width='\\textwidth', fig.height=3}
+set.seed(101)
+mh <- function(theta_0, nsamples=100){
+  i <- 1
+  theta <- numeric(length = nsamples)
+  theta[i] <- theta_0
+  
+  while (i < nsamples) {
+    theta_star <- proposal(theta[i]) # proposed sample
+    p <- min(f(theta_star)/f(theta[i]), 1) # prob. of acceptance
+    if (runif(1) <= p){
+      i <- i + 1
+      theta[i] <- theta_star
+    }
+  }
+  theta
+}
+
+p1 <- map(c(0.01, 0.99), mh) %>%
+  bind_cols() %>%
+  rowid_to_column(var = 't') %>%
+  pivot_longer(cols = -t) %>%
+  ggplot(aes(x = t, y= value, col = name)) +
+  geom_point(size = 0.5) +
+  geom_line(size = 0.5) +
+  theme(legend.position = 'none')
+
+p2 <- mh(0.5, 10000) %>% 
+  enframe() %>% 
+  slice(-seq(10)) %>% 
+  ggplot(aes(x=value)) +
+  geom_histogram(binwidth = 0.01/2, colour = 'white') +
+  xlim(0.4, 0.7)
+
+plot_grid(p1, p2, labels=c('a', 'b'))
+```
+
+### Hamiltonian Monte Carlo
+
+The Metropolis algorithm suffers from the fact that its proposal distribution takes random steps in parameter space.
+The *Hamiltonian Monte Carlo* (\hmc), which was originally known as *Hybrid Monte Carlo*, aims to overcome this limitation by taking account of the gradient of the posterior distribution when making its proposals.
+Both theoretically and in terms of its technical details, \hmc is considerably more complex than the Metropolis method [see @betancourt2017conceptual;@neal2011mcmc].
+However, \hmc is extremely efficient and it is now widely used in Bayesian data analysis, and so any contemporary introduction of \mcmc would be incomplete without covering it.
+
+To appreciate \hmc, we return to the fact that in any Bayesian analysis, our results are ultimately expectations of functions according to the posterior distribution.
+Thus, if the posterior distribution over our unknown variables is $\Prob{\theta\given\data}$, the expected value of some function $\phi(\theta)$ according to the posterior is 
+$$
+\langle \phi(\theta) \rangle = \int \phi(\theta) \Prob{\theta\given\data} d\theta.
+$$
+The value of this integral is largely determined by where $\Prob{\theta\given\data}$ is massed.
+In high dimensional spaces, most of this mass is concentrated in a thin shell far from the mode of the distribution that is known as the *typical set* [see @betancourt2017conceptual].
+All \mcmc methods ideally sample from this typical set.
+However, because the typical set is a thin shell, the random proposals made by the Metropolis sampler will be mostly to regions of low probability density outside of it, which will be rejected, leading to inefficiency.
+Likewise, those proposals that will be accepted will often be just those close to the current state of the sampler, and in this sense, the sampler becomes stuck in one region and does not explore the typical set.
+
+\hmc tries to overcome these problems with the random walk Metropolis by using the gradient of the posterior distribution to guide its proposals of new points to sample.
+For any given value of $\theta$, the gradient of the posterior distribution is evaluated. 
+This indicates the directions with higher or lower posterior density.
+Were we to simply follow the gradient, we would end up moving away from the typical set and toward the mode of the distribution.
+While the mode will have high density, it will have infinitesimally low volume in high dimensional problems, and so is not part of the typical set as defined above.
+In order to remain within the typical set, therefore, each point in $\theta$ space is given a *momentum* value denoted by $r$, which gives a direction and velocity to each point.
+This momentum speeds up as the object approaches areas of high density, and slows and reverses in regions of low density.
+
+In order to implement this system, \hmc represents the value of $\theta$ as a point in a physical space that has a *potential energy* and a *kinetic energy*.
+The potential energy is determined by its position, and can seen as the effect of gravity.
+The kinetic energy is determined by the momentum of the point.
+Intuitively, we can imagine this as smooth (frictionless) hilly landscape with a ball with a momentum moving over this landscape.
+If we kick the ball, we give it some momentum and it will move in a certain direction with a certain speed.
+If that direction is downwards, under the effect of gravity, it will speed up and then when it gets to the bottom of the hill, its momentum will allow it to continue moving and it will start to roll up the side of another hill.
+Eventually, the effect of gravity will start to slow it down, and it will then reverse and roll back down the hill, and so on.
+The movement of the ball is physically determined by its position and its momentum and their respective potential and kinetic energies.
+
+In more detail, the *potential energy* at each point is given by 
+$$
+U(\theta) = -\log(f(\theta)),
+$$
+where $f(\theta) \propto \Prob{\theta\given\data}$ as defined above.
+This is equivalent to  
+$$
+\Prob{\theta\given\data} = \frac{1}{Z} e^{-U(\theta)}.
+$$
+From this perspective, the \hmc sampler can seen as a physical system with an infinite number of states, each of which have a potential energy associated with it.
+The probability of the system being in any state is determined by the potential energy associated with that state^[In statistical mechanics, a physical system where the probability of being in any given state is proportional to $e$ to the power of the negative of the energy at that state is said to have a *Boltzmann distribution*.].
+The lower the energy, the more likely the system is to be in that state.
+The higher the energy, the less likely it is to be in that state.
+In addition to its potential energy, each state also has a *kinetic energy*, denoted $K(r)$, which is determined by the momentum with value $r$.
+In one dimension, if the point has unit mass, the kinetic energy is $K(r) = r^2/2$ and in $d$ dimensions, it is
+$$
+K(r) = \frac{1}{2}\sum_{k=1}^d r_k^2.
+$$
+Given this energy function, the probability distribution corresponding to it is $P(r) \propto e^{-K(r)}$, which is a $d$ dimensional standard normal distribution. 
+The total energy in this system is given by the *Hamiltonian* function:
+$$
+H(\theta, r) = U(\theta) + K(r).
+$$
+The change in the position and the momentum is now determined by classical mechanics and is given the Hamiltonian equations:
+$$
+\begin{aligned}
+\frac{d\theta_k}{dt} = &\frac{\partial H}{\partial r_k} &= \frac{\partial K(r)}{\partial r_k},\\
+\frac{d r_k}{dt} = - &\frac{\partial H}{\partial \theta_k} &= -\frac{\partial U(\theta)}{\partial \theta_k},
+\end{aligned}
+$$
+where $\frac{d\theta_k}{dt}$ and $\frac{d r_k}{dt}$ are the rate of change, at dimension $k$, of the position $\theta$ and momentum $r$, respectively.
+The $\frac{\partial H}{\partial r_k}$ and $\frac{\partial H}{\partial \theta_k}$ are the partial derivatives of the Hamiltonian function with respect to $r_k$ and $\theta_k$, respectively.
+Now, if we start at any point in $\theta$ space and give this point a momentum, the Hamiltonian equations will determine how the point will move through this space under the actions of both the potential and kinetic energy.
+
+In order to simulate this continuous dynamical system, which is governed by differential equations, on a computer, we must use a discrete approximation to its dynamics.
+Widely used methods such as *Runge-Kutta methods* or *Euler's method* are possible, but a more suitable method is the *leapfrog* algorithm, which involves taking steps, or half-steps, of size $\delta$ as follows:
+$$
+\begin{aligned}
+r_k &\gets r_k - \frac{\delta}{2} \frac{\partial U(\theta)}{\partial \theta_k},\quad\text{first half-step in $r$ space},\\
+\theta_k &\gets \theta_k + \delta \frac{\partial K(r)}{\partial r_k},\quad\text{step in $\theta$ space},\\
+r_k &\gets r_k - \frac{\delta}{2} \frac{\partial U(\theta)}{\partial \theta_k},\quad\text{second half-step in $r$ space}.
+\end{aligned}
+$$
+
+As a simple example of Hamiltonian dynamics, let us assume that the posterior distribution is a two dimensional normal distribution with a mean $\mu$ and covariance matrix $\Sigma$.
+In this case, we have 
+$$
+U(\theta) = \tfrac{1}{2} (\theta-\mu)^\intercal \Sigma^{-1} (\theta-\mu),
+$$
+and we will assume that $K(r) = \frac{1}{2}\sum_{k=1}^d r_k^2$.
+The partial derivatives are
+$$
+\frac{\partial U(\theta)}{\partial \theta_k} = (\theta-\mu)^\intercal \Sigma^{-1},\quad \frac{\partial K(r)}{\partial r_k} = r_k,
+$$
+and so our leapfrog steps are 
+$$
+r_k \gets r_k - \frac{\delta}{2} (\theta-\mu)^\intercal \Sigma^{-1},\quad \theta_k \gets \theta_k + \delta r_k.
+$$
+Starting with an arbtrary point $\ttheta = (0, 1.5)$, and choosing $r$ at random from a $2d$ standard normal, we simulate the Hamiltonian dynamics for a 45 leapfrog steps with a $\delta = 0.1$.
+This shown in Figure \ref{fig:leapfrog}.
+As we can see, the trajectories move smoothly back and forth through the posterior distribution.
+
+
+```{r, leapfrog, echo=F, fig.align='center', fig.cap="Three trajectories of a Hamitonian dynamical system where the posterior distribution is a $2d$ normal distribution, where each trajectory starts at $\\ttheta = (0, 1.5)$, and where we choose the momentum $r$ at random from a $2d$ standard normal. The system is simulated for a 45 leapfrog steps with a $\\delta = 0.1$.", out.width='\\textwidth', fig.height=2.5}
+sigma <- c(1,1)
+rho <- 0.9
+Sigma <- matrix(c(sigma[1]^2, rho*sigma[1]*sigma[2], rho*sigma[1]*sigma[2], sigma[2]^2), c(2, 2))
+mu <- c(0, 0)
+contour_df <- map(c(0.1, 0.25, 0.5, 0.75, 0.9),
+                  ~ellipse::ellipse(x = Sigma, centre = mu, level = .) %>% 
+                    as_tibble()
+) %>% bind_rows(.id = 'level')
+
+leapfrog <- function(x, Sigma, Tau=100, delta=0.1){
+  A <- solve(Sigma)
+  r <- rnorm(2)
+  X <- x
+  for (tau in seq(Tau)) {
+    # first half step 
+    r <- r - delta/2 * x %*% A %>% as.numeric()
+    x <- x + delta * r
+    # second half s
+    r <- r - delta/2 * x %*% A %>% as.numeric()
+    
+    X <- rbind(X, x)
+  }
+
+  
+  X
+}
+
+plot_it <- function(x = c(0, 1.5), Tau = 45){
+  evolution <- leapfrog(x, Sigma, Tau) %>%
+    as_tibble(.name_repair = ~ c("x", "y"))
+  ggplot() + 
+    geom_path(data = contour_df,
+              mapping = aes(x = x, y = y, group = level), size = 0.5, alpha = 0.5) +
+    geom_path(data = evolution,
+              mapping = aes(x = x, y = y), colour = 'red', size = 0.5, alpha = 0.75, linetype = 2) +
+    labs(x = TeX('$\\theta_0$'),
+         y = TeX('$\\theta_1$'))
+}
+
+set.seed(101)
+p1 <- plot_it()
+p2 <- plot_it()
+p3 <- plot_it()
+
+plot_grid(p1, p2, p3, nrow = 1)
+```
+
+
+The key feature of \hmc that differentiates it from random walk Metropolis is that it replaces the random proposal distribution with the deterministic dynamics of the Hamiltonian system.
+Specifically, a point in $\ttheta$ space is chosen at random, and a value of the momentum variable $r$ is chosen from the probability distribution corresponding to $K(r)$, i.e. $P(r) \propto e^{-K(r)}$, the Hamiltonian system deterministically evolves for period of time to arrive at a new point $\tthetaprop$ and new momentum $r_\prime$.
+The new point $\tthetaprop$ is then accepted if $H(\tthetaprop, r_\prime) > H(\ttheta, r)$.
+Otherwise, $\tthetaprop$ is accepted with probability
+$$
+e^{\displaystyle H(\ttheta, r) - H(\tthetaprop, r_\prime)} = 
+\frac{\Prob{\tthetaprop\given\data}}{\Prob{\ttheta\given\data}}\frac{\Prob{r_\prime}}{\Prob{r}}.
+$$
+This acceptance-step step is essentially identical to the Metropolis-Hastings acceptance-rejection step.
+
+One final issue to address concerns how long the trajectories of the deterministic Hamiltonian dynamics ought to be.
+If the trajectories are too short, the sampler will move slowly through the posterior distribution.
+If the trajectory is longer, as we can see in Figure \ref{fig:leapfrog}, the trajectory may loop back upon itself.
+The extent to which the trajectories will loop around will depend on the curvature of the $U(\theta)$ space: In flat regions, the loop arounds will not happen, but will happen sooner in curved regions.
+The *No-U-Turn* (NUTS) sampler by @hoffman2014no optimally tunes the trajectory lengths according to the local curvature.
+This allows optimal trajectory lengths without manual tuning or without tuning runs of the sampler.
+The probabilistic programming language Stan, to which Chapter 17 is devoted, is a \hmc sampler that uses NUTS.
+
+As an illustration of a \hmc sampler, in fact based on the Stan language, we will use the `brms` package [@burkner:brms].
+```{r, eval=F}
+library(brms)
+```
+This package allows us to implement a very wide range of models using minimal and familiar R command syntax and creates, compiles, and executes the Stan sampler.
+We will use `brms` based models often in the remaining chapters.
+We can implement the logit normal prior based binomial model mentioned above as follows.
+```{r, cache=T}
+M_hmc <- brm(m | trials(n) ~ 1,
+             data = tibble(n = n, m = m), 
+             prior = prior(normal(0, 0.5), class = Intercept),
+             family = binomial)
+```
+By default, this will sample 4 independent chains, each with 1000 post-*warmup* samples.
+The warmup iterations are iterations prior to convergence on the typical set, and during this period, the \hmc sampler is fine tuned.
+The summary of this model is as follows.
+```{r}
+summary(M_hmc)
+```
+The histogram of the 4000 posterior samples of $\theta$ is shown in Figure \ref{fig:brm_logit_normal}.
+```{r, brm_logit_normal, echo=F, fig.cap="Histogram of the samples from the posterior distribution over $\\theta$ from a \\hmc sampler of a \\emph{logit-normal} prior based binomial model.", fig.align='center', out.width='0.66\\textwidth'}
+logit <- function(p) log(p/(1-p))
+M_hmc %>%
+  brms::posterior_samples() %>% 
+  ggplot(aes(x = plogis(b_Intercept))) + geom_histogram(binwidth = 0.01, colour = 'white') +
+  labs(x = TeX('$\\theta$'))
+```
+
+
+
+
+
+
+# Model evaluation
+
+Let us return to the following diagram from the introduction to this chapter.
+\begin{center}
+\begin{tikzpicture}
+\node[punkt] (fit) {Fitted model};
+\node[punkt, above=2cm of fit] (model) {Model};
+\draw[->] (fit.west) [bend left=80] to node[left] {evaluation} (model.west);
+\draw[->] (model.east) [bend left=80] to node[right] {inference} (fit.east);
+\end{tikzpicture}
+\end{center}
+In our coverage of classical and then Bayesian methods of inference, we have dealt with the *inference* arc to right.
+This is where we begin with a statistical model that has variables or parameters whose values are unknown, and then use one general approach or another to effectively obtain estimates, as well as measures of uncertainty of these estimates, of these unknown variables.
+The result is a model that it fitted to the data. 
+However, whether it is a good fit, and more importantly, whether the model is able to generalize to new data, remains to be seen.
+*Model evaluation* is the general term for this stage of the modelling process.
+Model evaluation is ultimately a large and multifaceted topic, involving various quantitative and graphical methods.
+Here, we will focus on the most common methods, and in particular, on *model comparison*, which is where we directly compare two or more models against one another.
+
+
+## Deviance and Log likelihood ratio tests
+
+Let us first consider a widely used approach for model comparison for classical inference based models.
+We will call the model that we are evaluating $\model_1$, whose vector of unknown parameters is $\theta_1$ and the maximum likelihood estimator of these values based on observed data $\data$ is $\hat{\theta}_1$.
+The probability of $\data$ according to $\model_1$ and $\hat{\theta}_1$ is
+$$
+\Prob{\data \given \model_1, \hat{\theta}_1}.
+$$
+Note that this the value of the likelihood function for the model evaluated at its maximum value.
+In itself, this value is actually not very informative about how well $\data$ is predicted by $\model_1$ with parameters $\hat{\theta}_1$.
+It is almost always a very small value based on the fact that there is a very large set of possible values that the model could predict.
+However, it is more informative to compare the relative probabilities of the data according to two models that we wish to compare.
+If we name the comparison model $\model_0$, and name its parameter vector $\theta_0$ and its estimator of these parameters $\hat{\theta}_0$, then the ratio of the probabilities of $\data$ according to these two models is 
+$$
+\frac{\Prob{\data\given\model_0,\hat{\theta}_0}}{\Prob{\data\given\model_1,\hat{\theta}_1}}.
+$$
+This ratio is usually referred to as the likelihood ratio.
+Note that it is specifically the ratio of the maximum values of the likelihood functions of the two models. 
+The logarithm of this likelihood ratio is 
+$$
+\log \left(\frac{\Prob{\data\given\model_0,\hat{\theta}_0}}{\Prob{\data\given\model_1,\hat{\theta}_1}}\right) = 
+\log\Prob{\data\given\model_0,\hat{\theta}_0} - \log\Prob{\data\given\model_1,\hat{\theta}_1}.
+$$
+For reasons that will become clear, we usually multiple this logarithm by $-2$ to obtain the following.
+$$
+\begin{aligned}
+-2 \log \left(\frac{\Prob{\data\given\model_0,\hat{\theta}_0}}{\Prob{\data\given\model_1,\hat{\theta}_1}}\right) &= 
+-2 \log\Prob{\data\given\model_0,\hat{\theta}_0} - -2\log\Prob{\data\given\model_1,\hat{\theta}_1},\\
+&=D_0 - D_1.
+\end{aligned}
+$$
+Here, $D_0$ and $D_1$, which are simply -2 times the logarithm of the corresponding likelihoods, are known as the *deviance* of model $\model_0$ and $\model_1$, respectively.
+Note that because of the negative sign of the multiplier, the larger the deviance the lower the likelihood of the model.
+Thus, if $D_0 > D_1$, model $\model_1$ is better able to predict the data than model $\model_0$.
+
+Differences of deviances, and so the log likelihood ratio, are particularly widely used when comparing *nested models*.
+Nested models are where one model's parameter space is subset of that of another.
+For example, if $\model_1$ is a normal distribution model with mean and variance parameters $\mu_1$ and $\sigma_1^2$, both of which are unknown, and $\model_0$ is also a normal distribution but with fixed mean $\mu_0 = 0$ and only $\sigma_0^2$ being unknown, then $\model_0$ is nested in $\model_1$ because $\{\mu_0=0,\sigma^2_0\} \subseteq \{\mu_1,\sigma^2_1\}$.
+When comparing nested models, we can make use of *Wilks's theorem* that states that, if models $\model_0$ and $\model_1$ predict $\data$ equally well, then asymptotically (i.e., as sample size increases)
+$$
+\Delta_D = D_0 - D_1 \sim \chi^2_{k_1 - k_0},
+$$
+where $k_1$ and $k_0$ are the number of parameters in $\model_1$ and $\model_0$, respectively.
+In other words, if $\model_0$ and $\model_1$ predict the data equally well, then the difference of their deviances, which would be due to sampling variation alone, will be distributed as a $\chi^2$ distribution whose degrees of freedom are equal to the difference of the number of parameters in the two models.
+
+Wilks's theorem is widely used in regression models, as we will see in subsequent chapters.
+However, for now, we can illustrate with a simple example.
+Let us return to the `houseprices_df` data above.
+One model, $\model_1$, of the `price` variable could that its logarithm is normally distributed with some mean $\mu_1$ and variance $\sigma^2_1$, both of which are unknown.
+A nested model, $\model_0$, could be that the logarithm of `price` is normally distributed with a fixed mean $\mu_0 = \log(60000)$ and unknown variance $\sigma^2_0$.
+Without providing too much details of the R commands, which we will cover in more detail in subsequent chapters, we can fit these two models as follows.
+```{r}
+M_1 <- lm(log(price) ~ 1, data = housing_df)
+mu_0 <- rep(log(60000), nrow(housing_df))
+M_0 <- lm(log(price) ~ 0 + offset(mu_0), data = housing_df)
+```
+The logarithms of the likelihoods of `M_1` and `M_0` at the maximum values are as follows.
+```{r}
+logLik(M_1)
+logLik(M_0)
+```
+The corresponding deviances are -2 times these values, which we may also obtain as follows.
+```{r}
+(d_1 <- -2 * logLik(M_1))
+(d_0 <- -2 * logLik(M_0))
+```
+The difference of the deviances $\Delta_D$ is as follows.
+```{r}
+delta_d <- as.numeric(d_0 - d_1)
+delta_d
+```
+Assuming $\model_1$ and $\model_0$ predict the observed data equally well, this difference is distributed as a $\chi^2$ distribution with 1 degree of freedom.
+This value for the degrees of freedom is based on the fact that one model has two parameters and the other has just one.
+We can calculate the \pvalue for $\Delta_D$ by calculating the probability of obtaining a result as or more extreme than $\Delta_D$ in a $\chi^2$ distribution with 1 degree of freedom.
+```{r}
+pchisq(delta_d, df = 1, lower.tail = F)
+```
+Simply put, this result tells us that a value of $\Delta_D = `r round(delta_d, 2)`$ is not an expected result if models $\model_1$ and $\model_1$ predict the data equal well, as so we can conclude that the $\model_1$, which has the lower deviance, predicts the data significantly better than $\model_0$.
+
+## Cross validation and out-of-sample predictive performance
+
+Although widely used and very useful, the deviance based model comparison just described is limited to both classical methods and to nested models.
+It is also limited in that it examines how well any pair of models can predict the observed data on which the model was fitted.
+A more important question is how the any model can generalize to new data that is from the same putative source as the original data.
+This is known as *out-of-sample* predictive performance.
+Any model may in fact predict the data on which it was fitted well, or even perfectly, and yet poorly generalize because it is too highly tuned to the peculiarities or essentially random element of the data.
+This is known as *over-fitting* and it is a major problem, especially with complex models.
+To properly evaluate a model and identify any over-fitting we need to see how well the model can generalize to new data.
+Rather than waiting for new data to be collected, a simple solution is to remove some data from the data that is used for model fitting, fit the model with the remaining data, and then test how well the fitted model predicts the reserved data.
+This is known as *cross-validation*.
+
+One common approach to cross-validation is known as $K$-fold cross-validation.
+The original data set is divided randomly into $K$ subsets.
+One of these subsets is randomly selected to be reserved for testing.
+The remaining $K-1$ are used for fitting and the generalization to the reserved data set is evaluated.
+This process is repeated for all $K$ subsets, and overall cross validation performance is the average of the $K$ repetitions.
+One extreme version of $K$-fold cross-validation is where $K=n$ where $n$ is the size of the data-set.
+In this case, we remove each one of the observations, fit the model on the remaining set, and test on the held out observed.
+This is known as *leave one out* cross-validation.
+
+For leave one out cross-validation, the procedure is as follows, with the procedure for any $K$-fold cross-validation being similarly defined.
+Assuming our data is $\data = y_1, y_2 \ldots y_n$, we divide the data into $n$ sets:
+$$
+(y_1, y_{\neg 1}), (y_2, y_{\neg 2}), \ldots (y_i, y_{\neg i}) \ldots (y_n, y_{\neg n}),
+$$
+where $y_i$ is data point $i$ and $y_{\neg i}$ is all the remaining data except for data point $i$.
+Then, for each $i$, we fit the model using $y_{\neg i}$ and test how well the fitted model can predict $y_i$.
+We then calculate the sum of the predictive performance over all data points.
+In classical inference based models, for each $i$, we calculate $\hat{\theta}^{\neg i}$, which is the maximum likelihood or other estimator of the parameter vector $\theta$ based on $y_{\neg i}$.
+We then calculate $\log \Prob{y_i\given \hat{\theta}^{\neg i}}$, which is the logarithm of the predicted probability of $y_i$ based on the model with parameters $\hat{\theta}^{\neg i}$.
+This then leads to 
+$$
+\textrm{elpd} = \sum_{i=1}^n \log \Prob{y_i\given \hat{\theta}^{\neg i}}
+$$
+as the overall measure of the model's out-of-sample predictive performance, which we refer to as *expected log predictive density* (\elpd).
+In Bayesian approaches, an analogous procedure is followed.
+For each $i$, we calculate the posterior distribution $\Prob{\theta\given y_{\neg i}}$, and the model's overall out-of-sample predictive performance is
+$$
+\textrm{elpd} = \sum_{i=1}^n \log \int \Prob{y_i\given \theta} \Prob{\theta\given y_{\neg i}} d\theta.
+$$
+This can be approximated by
+$$
+\textrm{elpd} \approx \sum_{i=1}^n \log\left( \frac{1}{S}\sum_{s=1}^S\Prob{y_i\given \tilde{\theta}^{\neg i}_s}\right),
+$$
+where $\tilde{\theta}^{\neg i}_1, \tilde{\theta}^{\neg i}_2 \ldots \tilde{\theta}^{\neg i}_S$ are $S$ samples from $\Prob{\theta\given y_{\neg i}}$.
+
+In order to illustrate this, let us use the `price` variable in the `housing_df` data.
+One model for this data that we can consider is, as described in the introduction to this chapter, is as follows
+$i \in 1\ldots n$, $y_i \sim \textrm{logN}(\mu, \sigma^2)$, where $\textrm{logN}(\mu, \sigma^2)$ is a log-normal distribution whose parameters are $\mu$ and $\sigma^2$.
+Using a classical inference based model, this can be implemented in R as follows.
+```{r}
+m1 <- lm(log(price) ~ 1, data = housing_df)
+```
+We can remove any $i \in 1\ldots n$ and fit the model with the remaining data as follows, using $i = 42$ as an example.
+```{r}
+i <- 42
+m1_not_i <- lm(log(price) ~ 1, 
+               data = slice(housing_df, -i)
+)
+```
+The logarithm of the probability of $y_i$ is logarithm of the normal density for $\log y_i$ with the mean and standard deviation based on their maximum likelihood estimators in the fitted model.
+We can extract the maximum likelihood estimators of the mean and standard deviation from `m1_not_i` as follows.
+```{r}
+mu <- coef(m1_not_i)
+stdev <- sigma(m1_not_i)
+```
+Then , the logarithm of normal density of $\log y_i$ based on these estimators is 
+```{r}
+y_i <- slice(housing_df, i) %>% pull(price)
+dnorm(log(y_i), mean = mu, sd = stdev, log = T)
+```
+We can create a function to calculate the logarithm of the prediction for any $\log y_i$ as follows.
+```{r}
+logprediction_m1 <- function(i){
+  m1_not_i <- lm(log(price) ~ 1, 
+                 data = slice(housing_df, -i)
+  )
+  mu <- coef(m1_not_i)
+  stdev <- sigma(m1_not_i)
+  y_i <- slice(housing_df, i) %>% pull(price)
+  dnorm(log(y_i), mean = mu, sd = stdev, log = T)
+  
+}
+```
+We can then apply this to all data points and sum the result.
+```{r}
+n <- nrow(housing_df)
+map_dbl(seq(n), logprediction_m1) %>% 
+  sum()
+```
+Now, let us compare this log-normal model's performance to a normal model, i.e., where we assume that for $i \in 1\ldots n$, $y_i \sim \textrm{N}(\mu, \sigma^2)$.
+The log of the prediction of the held out data point is calculated in almost an identical manner, except that we use the values of the `price` variable directly and not their logarithm.
+```{r}
+logprediction_m0 <- function(i){
+  m0_not_i <- lm(price ~ 1, 
+                 data = slice(housing_df, -i)
+  )
+  mu <- coef(m0_not_i)
+  stdev <- sigma(m0_not_i)
+  y_i <- slice(housing_df, i) %>% pull(price)
+  dnorm(y_i, mean = mu, sd = stdev, log = T)
+  
+}
+
+map_dbl(seq(n), logprediction_m0) %>% 
+  sum()
+```
+It is common to multiply these sums of log predictions by -2 to put the values on a deviance scale.
+This is sometimes known as the leave-one-out-information-criterion (\looic).
+Thus, our measure of the out-of-sample predictive deviance of the log-normal model is `r map_dbl(seq(n), logprediction_m1) %>% sum() %>% multiply_by(-2) %>% round(2) %>% format(scientific = F)`, and for the normal model, it is `r map_dbl(seq(n), logprediction_m0) %>% sum() %>% multiply_by(-2) %>% round(2) %>% format(scientific = F)`.
+The log-normal model is clearly the better model with a much lower deviance score.
+In the next section, we will consider how best to interpret differences in \looic and related quantities.
+
+To perform leave one out cross validation using Stan models, we can make use of an efficient implementation of this based on *Pareto-smoothed importance sampling* [@vehtari2017practical].
+This means that we do not have to manually divide the data set into subsets, as we did in the previous example.
+In fact, this efficient method allows us to effectively implement the leave one out cross validation method without repeatedly re-running the \hmc models, which would be extremely computationally burdensome.
+All we need do is implement the Stan model, which we can do easily using `brm` as follows.
+```{r, cache=T}
+m1_bayes <- brm(log(price) ~ 1, data = housing_df)
+m0_bayes <- brm(price ~ 1, data = housing_df)
+```
+We may then get the \elpd and the \looic using the command `loo`.
+```{r}
+loo(m1_bayes)$estimates
+loo(m0_bayes)$estimates
+```
+Leaving aside `p_loo` (a measure of effective number of parameters) and the standard errors (a measure of uncertainty of the estimates, as defined above), we see here that the `elpd_loo` and the `looic` estimates from the Bayesian models are very similar to those calculated using the classical inference based models above.
+
+## AIC
+
+Cross-validation is an excellent method of model evaluation because it addresses the central issue of out-of-sample generalization, rather than fit to the data, and can be applied to any models, regardless of whether these models are based on classical or Bayesian methods of inference.
+On the other hand, traditionally, cross validation has been seen as too computationally demanding to be used in all data analysis situations.
+This is becoming less of a concern now, both because of the computational power and the development of efficient implementation such as the Pareto smoothed importance sampler method mentioned above.
+Nonetheless, one still widely used model evaluation model, the Akaike Information Criterion (\aic), originally proposed by @akaike1973second, can be justified as a very easily computed approximation to leave one out cross validation [see @stone:aic;@fang2011asymptotic].
+\aic is defined as follows.
+$$
+\begin{aligned}
+\textrm{AIC} &= 2k - 2\log\Prob{\data\given \hat{\theta}},\\
+             &= 2k + \textrm{Deviance},
+\end{aligned}
+$$
+where $k$ is the number of parameters in the model.
+Obviously, for models where the log of the likelihood is available, and where the number of parameters of the model is straightforward to count (which is not always the case in complex models), the \aic is simple to calculate.
+For example, for the log normal and normal models that we evaluated above using cross-validation, both of which have $k=2$ parameters, the \aic is calculated as follows.
+```{r}
+m1 <- lm(log(price) ~ 1, data = housing_df)
+m0 <- lm(price ~ 1, data = housing_df)
+k <- 2
+aic_1 <- as.numeric(2 * k - 2 * logLik(m1))
+aic_0 <- as.numeric(2 * k - 2 * logLik(m0))
+
+c(aic_1, aic_0)
+```
+Clearly, these are very similar to the cross-validation \elpd for these two models.
+
+Like \elpd and other measures, a model's \aic value is of little value in itself, and so we only interpret differences in \aic between models.
+Conventional standards [see, for example, @burnham2003model, Chapter 2] hold that \aic differences of greater than between $4$ or $7$ indicate clear superiority of the predictive power of the model with the lower \aic, while differences of $10$ or more indicate that the model with the higher value has essentially no predictive power relative to the model with the lower value.
+We can appreciate why these thresholds are followed by considering the concept of *Akaike weights* [see @burnham2003model, page 75].
+Akaike weights provide probabilities for each of a set of $K$ models that are being compared with one another.
+They are defined as follows:
+$$
+\rho_k = \frac{e^{-\tfrac{1}{2}\Delta\textrm{AIC}_k}}{\sum_{k=1}^Ke^{-\tfrac{1}{2}\Delta\textrm{AIC}_k}},
+$$
+where $\Delta\textrm{AIC}_k$ is the difference between the \aic of model $k$ and the lowest \aic value in the set of $K$ models.
+These probabilities can be interpreted as the probabilities that any model has better predictive performance than the others.
+If we have just two models, with model $k=1$ being the one with the lower $\aic$, then $\Delta\textrm{AIC}_1 = 0$ and $\Delta\textrm{AIC}_2$ will be some value positive quantity $\delta$.
+Using Akaike weights, the probability that the model with the lower $\aic$ has the better predictive performance is
+$$
+\rho = \frac{1}{1 + e^{-\delta/2}}.
+$$
+For $\delta$ values of $4$, $6$, $9$, the corresponding probabilities are `r (1/(1 + exp(-c(4, 6, 9)/2))) %>% round(2)`.
+These values provide a justification for the thresholds proposed by @burnham2003model.
+
+## WAIC
+
+\aic is appealing because of its simplicity.
+As we have seen, despite its simplicity, it can be a highly accurate approximation to cross-validation \elpd.
+However, this approximation will not hold in all models, especially large and complex ones.
+Addition, in some situations calculating the maximum of the likelihood function is not straightforward, and nor is defining the number of free parameters in the model.
+A more widely applicable version of the \aic is the *Watanabe Akaike Information Criterion* (\waic).
+\waic was introduced in [@watanabe2010asymptotic] by the name *Widely Applicable Information Criterion* rather than *Watanabe Akaike Information Criterion*.
+It has been shown that \waic is more generally or widely applicable than \aic, and is a close approximation to Bayesian leave-one-outcross-validation, yet can be calculated easily from a model's posterior samples. 
+\waic is calculated as follows:
+$$
+\textrm{waic} = -2 \left(
+\sum_{i=1}^n 
+\log\left( 
+\frac{1}{S} 
+\sum_{s=1}^S 
+\mathrm{P}(y_i \vert \theta^s) 
+\right)
+-
+\sum_{i=1}^n V_{s=1}^S 
+\left(\log\mathrm{P}\left(y_i \vert \theta^s\right) \right)
+\right),
+$$
+where $y_i$, $\theta^s$ etc are as they are defined above for the case of Bayesian \elpd.
+The term $V_{s=1}^S(\cdot)$ signifies the variance of its arguments. 
+
+Using Stan based models, \waic is easily calculated using the `loo` package.
+```{r}
+waic(m1_bayes)$estimates
+waic(m0_bayes)$estimates
+```
+As we can see, this is very similar to the Bayesian cross-validation \elpd, but can be calculated directly from posterior samples.
+
+# References
+

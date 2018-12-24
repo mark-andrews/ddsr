@@ -1,0 +1,16 @@
+---
+output: pdf_document
+header-includes:
+- \pagenumbering{gobble} 
+geometry: margin=7cm
+---
+
+* If we start our item 
+on one line,
+and continue to another 
+line with no break,
+it will still appear as one item.
+* The same thing happens
+  if you continue 
+  on the next line after
+  and indention.

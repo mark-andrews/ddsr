@@ -1,0 +1,1804 @@
+---
+title: "Chapter 7: Reproducible Data Analysis"
+author: "Mark Andrews"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    fig_caption: true
+    keep_tex: true
+    highlight: haddock
+  html_document:
+    highlight: haddock
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+---
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r}
+options(knitr.duplicate.label = 'allow')
+
+library(tidyverse)
+
+cat_file <- function(filename, start=NA, end=NA, prepend = '', verbatim=T){
+  lines <- readLines(filename) %>% paste(prepend, ., sep = '')
+  start <- ifelse(is.na(start), 1, start)
+  end <- ifelse(is.na(end), length(lines), end)
+  if (verbatim) cat("\\begin{verbatim}",sep='\n')
+  cat(lines[start:end], sep='\n')
+  if (verbatim) cat("\\end{verbatim}")
+}
+
+cat_bash <- function(filename, start=NA, end=NA, prepend = '', verbatim=T){
+  lines <- readLines(filename) %>% paste(prepend, ., sep = '')
+  start <- ifelse(is.na(start), 1, start)
+  end <- ifelse(is.na(end), length(lines), end)
+  if (verbatim) cat("```bash",sep='\n')
+  cat(lines[start:end], sep='\n')
+  if (verbatim) cat("```")
+}
+
+
+
+
+```
+
+# Introduction
+
+The end product of any data analysis is usually a set of tables, figures, and the seemingly countless statistics and other quantities that specify the results of the statistical modelling or testing and that was performed.
+These results are then usually communicated in reports, including and especially peer-reviewed scientific articles, or through talks and presentations, or through mainstream or social media, and so on.
+These results are the end product of an often long and arduous process, something we will call the *data analysis pipeline*, that began initially with just the raw data.
+For example, the original raw data might have been in the form of a set of `.xlsx` files that were downloaded from a website.
+These might have been wrangled and transformed repeatedly by a long series of operations, such as those described in Chapter 3, to produce various "tidy" data-sets, which themselves might then have been repeatedly and iteratively visualized and statistically analysed and modelled.
+It is not an exaggeration to say that this whole process might have involved hundreds or even thousands of hours of work, taking place intermittently over the course of months or even years, and involving many different people at many different stages.
+We can view the data analysis pipeline as akin to a factory: raw materials, in the form of the raw data, go in; these are worked on and turned into something new and valuable by the combined efforts of human labour and machines (computers); and finally the end products are produced that are to be consumed by others.
+ 
+The aim of *reproducible data analysis*, at its most general, is to make the data analysis factory or pipeline as open and transparent as possible, and to allow all others, including our future selves, to be able to exactly reproduce any of the results that were produced by it.
+In other words, the aim is to make it possible for anyone to determine exactly where and how any given table, figure, or statistical quantity was obtained, and to be able to reproduce any of these results exactly.
+If the pipeline is suitably reproducible, anyone ought to be able to take the original raw data and reproduce all the final results, or alternatively ought to be able to take the raw data and analyse them in new and different ways, thus producing new and interestingly different results.
+  
+Doing reproducible data analysis is often motivated by a general commitment to doing *open science*.
+Since the origin of modern science in the 17th century, part of its defining ethos [see @merton1973sociology] has been the unrestricted sharing of the fruits of research, and also a full disclosure of all details of any research so that they may be scrutinized by others.
+Thus, openness and transparency are core ethical principles in all science.
+Recently, it has become apparent that these ethical principles, although often endorsed in principle, are not usually followed in practice, and that in fact there is a widespread culture of not sharing data [see, for example, @tenopir2011data;@houtkoop2018data;@fecher2015drives], not sharing data analysis and other computer code [see, for example, @stodden2013toward;@shamir2013practices], and that there is a widespread general lack of research transparency in science [see, for example, @iqbal2016reproducible].
+This has lead to repeated calls for major cultural changes related to the sharing of data and code and general research transparency under the banner of doing *open science* [for example, @nosek2015promoting;@munafo2017manifesto;@gorgolewski2016practical;@ioannidis2015make].
+ 
+Reproducible data analysis can also be motivated simply as a means of doing more high quality and robust data analysis, even when this analysis is not being done as part of scientific research per se, such as with confidential analyses that is done in business and industry.
+In these contexts, the raw data and analysis pipeline may always remain confidential and never be shared publicly.
+Nonetheless, doing this analysis using reproducible research practices allows for essential quality control.
+It allows the analysts themselves, those they do the analysis for, or future analysts who inherit the project or are brought on board it later, to scrutinize and double-check every detail of the analysis and reproduce every result.
+These are essential measures to identify errors, increase rigour, and verify the final results and conclusions.
+Even, or especially, outside of academic or scientific research, there can be enormous practical and financial incentives to minimizing errors and increasing analytical rigour in data analysis.
+As an example, it has been argued that a lack of reproducible data analysis techniques was partly to blame for a $9bn loss at the investment bank JPMorgan in 2012 [see @hern_2013].
+
+This chapter is about doing *open*, *transparent*, and *reproducible* research using R and related software tools.
+In particular, we will focus on *RMarkdown* and *knitr* for making reproducible reports, and *Git* for version control of all our files.
+There are other important software tools for reproducible research that we could cover, but do not do so in order to keep our coverage relatively brief and introductory.
+These tools include *Docker* for creating lightweight virtual operating systems, R packages for packaging and distributing code and data, build automation tools like *GNU Make* or the R package `drake` [@drake], continuous integration tools like *Jenkins* (https://www.jenkins.io/) or *Travis CI* (https://travis-ci.com/).
+
+Before we proceed, however, let us briefly discuss some terminology.
+The terms *open*, *transparent*, and *reproducible* are a collection of adjectives that describe a set of data analysis practices.
+These terms are obviously not identical, but they are related.
+It is, however, not trivial to state the extent to which any one depends upon or requires any other.
+While it is not necessary to be pedantic about the definitions and scope of these terms, we will briefly outline our understanding of each term.
+
+Open
+
+:   Open data analysis, like open source software or open science generally, is data analysis where all the data, code, and any other required materials are fully disclosed to and shared with others, usually by being made publicly available.
+    Being publicly available, and in an unrestricted manner, is therefore usually taken to be a defining feature of open data analysis.
+
+Transparent 
+
+:   Transparent data analysis is analysis where, as mentioned above, it is possible to determine exactly where and how any given table, figure, or statistical result was obtained.
+    Making data and code and all other material open is usually a sufficient condition for the analysis to be transparent, but it is possible to conceive of situations where data and code are open and available but are poorly written and organized, or are obfuscated, or require undocumented manual intervention, and so lack transparency.
+    Likewise, as also mentioned above, it is not necessary for data to be open, at least in the sense of publicly available, for it to be transparent.
+ 
+Reproducible 
+
+:   Reproducible data analysis is any data analysis where an independent analyst can exactly reproduce all the results.
+    For an analysis to be reproducible it is necessary that all the data and code is available and in full working condition.
+    Strongly implied, however, is that running the code is essentially a turnkey operation.
+    Software tools, such as *build automation* tools like *GNU make*, are often used, especially with larger projects.
+    For reports and articles, and their myriad tables and figures and in-text quantities, *literate programming* tools, particularly `rmarkdown` with R, are used.
+    Version control software, such as `git`, is often used to organize and keep a log of the development of all the analysis code and scripts.
+    To allow the code to be used across different operating systems and with the correct dependencies, virtual or containerized operating systems using tools such as `docker` are sometimes used.
+    Other tools, such as the `checkpoint::checkpoint()` function in R can be used to ensure the correct versions of R package dependencies are used.
+ 
+
+# Using RMarkdown for reproducible reports
+
+As mentioned, the results of data analyses are communicated through reports such as peer reviewed scientific articles and other manuscripts, slide or poster presentations, webpages, and so on.
+For the results described in these reports to be truly reproducible, every figure, table, or any other value or quantity ought to be reproducible with minimal effort by anyone, including and especially those not directly involved in the analysis.
+For this, it is necessary that the data and code be made available to others. 
+But this alone is not sufficient. 
+Even if the necessary data and code were complete, it might still be challenging or nearly impossible for someone who was not directly involved in the analysis to identify exactly which code produced any given figure, table, or other reported quantity. 
+This is especially the case if the results in the report were generated, as is exceedingly common, by transcribing or copying and pasting results from the output of statistical software, or inserting figures that were exported, into a document such as MS Word or \latex.
+For any given figure or table or quantity, hunting down and verifying which piece of code produced it could be very challenging and time consuming. 
+Moreover, there is a very high probability that the reported results will have some errors somewhere simply because they were all the product of transcription or other manual interventions. 
+Indeed, there is no way of even categorically verifying that all the correct code and data necessary to produce the results has been made available without painstakingly finding and checking each individual piece code for each individual result. 
+
+For a report to be truly reproducible, therefore, the data, code, and resulting document need to be inextricably coupled in a manner that goes beyond how documents are traditionally written.
+This coupling of code, data, and text is based on the concept of *literate programming* [see @knuth1984literate].
+In a *literate program*, the text of the documentation of a computer program and the code of that program are linked in one single file or set of files. 
+These files can be processed by different programs either to generate the documentation manuals or the computer programs that will be compiled and executed like normal programs. 
+While this principle has become a common means of generating documentation for computer code (see, for example, *Roxygen2* for documenting R code, *Doxygen* for documenting C++, *Sphinx* for documenting Python, etc), the same principle can be used to creating reproducible data analysis reports, which are sometimes known as *dynamic documents* [see @xie2017dynamic]
+The most popular, and arguably the best, way of doing this using R is to use *RMarkdown*, or more precisely to use RMarkdown and a combination of tools including *knitr*, *pandoc*, \latex, and others. 
+
+Before we proceed, let us briefly introduce or define a number of key concepts and tools. 
+
+RMarkdown
+
+: RMarkdown itself is simply a text file format, and so an RMarkdown file is essentially a script, not unlike an R script.
+In fact, just like normal R scripts, we usually open, edit, and "run" RMarkdown files inside of RStudio.
+Unlike R scripts, which consist of just R code, possibly including comments, but nothing else, RMarkdown scripts primarily consist of a mixture of two type of code: *Markdown* code and normal R code. 
+As we'll see, the R code in RMarkdown documents occurs in either R *chunks*, which are simply blocks of code, or in *inline* R code, which are small amounts of R code inside Markdown code.
+
+Markdown
+
+: Markdown is a minimal or lightweight markup language.
+It was initially created by John Gruber [@gruber:markdown] primarily as means of allowing web users to create formatted posts, including links, images, lists, etc., on online discussion forums.
+Markdown consists of normal text, just as you would write in an email or any other document, as well some minimal syntax that instructs how this text should be formatted when it is rendered into some output document, such as a html page, pdf or Word document. 
+
+Knitr
+
+: Knitr [see @xie2017dynamic] is a general tool for dynamic documentation generation using R. 
+In brief and put very simply, knitr extracts R code from RMarkdown documents, runs this code, and then, by default, inserts copies of this code and the code's output into a Markdown document.
+Knitr then runs *pandoc* to create a document, such as a pdf, MS Word document, etc, from this Markdown file. 
+
+Pandoc
+
+: Pandoc [@pandoc] is, in general, a document converter that can convert a large number of input document types to an equally large number of output document types.
+For present purposes, it is the means by which Markdown documents generated by knitr are converted into their final output formats such as pdf, MS Word, html, etc.
+
+\latex
+
+: \latex [@lamport1994latex] is a document preparation system that is specialized for creating high quality technical and scientific documents, especially those containing mathematical formulas and technical diagrams.
+It is widely used for creating academic and research manuscripts in mathematically oriented fields such as statistics, computer science, physics, etc. 
+\latex documents are created by first writing a `.tex` source code file, which is mixture of \latex and \TeX\ code, markup syntax, and plain text. 
+This `.tex` file is then rendered to, usually, a pdf using a \latex rendering engine, of which there are many but the most widely is the default `pdflatex` engine.
+
+## Installation
+
+If using RStudio, the necessary R packages including `rmarkdown` and `knitr` are automatically installed. 
+Likewise, the external pandoc program is also automatically installed when `rmarkdown` is installed. 
+While this set of tools will allow you to create html and MS Word documents, \latex must be installed to create pdf outputs.
+Installation and configuration of \latex, because it is a large external program, may not always be straightforward.
+It may seem, therefore, that this \latex installation step is not worthwhile, especially given that many people unquestionably and happily use MS Word to write their manuscripts.
+However, we *highly* recommend installing \latex and using the \latex-ed pdf document output over MS Word for writing manuscripts.
+At the very least, the typesetting quality of the resulting \latex-ed document will be considerably higher than that of the MS Word.
+Moreover, by using \latex with RMarkdown, we can avail of all the power of \latex to create the final document.
+This includes the use of all \latex packages for creating and styling mathematical and technical content, including technical diagrams, fine control of figures and tables, their look and feel, and their placement,  internal cross referencing to refer to individual pages, sections, figures, etc., automatic index generation, and many more. 
+Even if these features may seem unnecessary at the beginning, in our opinion, it is nonetheless still worthwhile to use \latex with RMarkdown from the beginning, so that all these features can be used as one's experience with RMarkdown grows.
+
+To install \latex for the purposes of using with RMarkdown, we can install the R package `tinytex`. 
+```r
+install.packages("tinytex")
+tinytex::install_tinytex()
+```
+This installation will take some time.
+After it completes, you should restart RStudio.
+After you restart, type the following command (note the three `:`'s after `tinytex`):
+```r
+tinytex:::is_tinytex()
+```
+After this installation completes, we can test that `rmarkdown` (which will have be installed by `tidyvese`) will render pdf documents using LaTeX with the following code.
+```r
+writeLines("Hello $x^2$", 'test.Rmd')
+rmarkdown::render("test.Rmd", output_format = "pdf_document")
+```
+The `writeLines` creates a tiny `.Rmd` file named `test.Rmd`.
+The `rmarkdown::render` command then attempts to render this as pdf document, which will require \latex etc be properly working.
+If this works as expected, we will have a pdf document named `test.pdf` in our working directory. 
+
+
+## A minimal RMarkdown example
+
+As just mentioned, an RMarkdown file is essentially a script containing two types of code: Markdown and normal R code. 
+The following is the contents of small RMarkdown file, named `example.Rmd`.
+```{r echo = FALSE, results='asis'}
+cat_file("examples/example-1.Rmd", prepend = '    ')
+``` 
+
+This example contains one R *chunk*. 
+This is the portion of R code between the opening ```` ```{r} ```` and the closing ```` ``` ````.
+It also has two pieces of inline R code. 
+These are the code segments between the opening ``` `r ``` and closing `` ` ``.
+The remainder of the code in this example is plain Markdown code.
+
+As we will see, we could open this file in the RStudio editor and then *knit* it to, for example, a pdf document.
+This can be accomplishes by clicking on the small arrow to the right of the ![](include_graphics/knitDocument.png) icon on the Rmarkdown file editor, and choosing `Knit to PDF`.
+Alternatively, in the console, we could do the following, assuming that `example.Rmd` is in the current working directory.
+```{r, eval=F}
+rmarkdown::render('example.Rmd', output_format = 'pdf_document')
+```
+A pdf document `example.pdf` will be produced and its contents will be as follows.
+
+------
+  
+```{r, echo=T, child = 'examples/example-1.Rmd'}
+```
+
+------
+
+The key features to notice here are that the Markdown code within the RMarkdown file is formatted according to its instructions. 
+For example, the appropriate words are italicized and emboldened. 
+Also, the R code in the chunk is appropriately formatted as code, using a monospaced font, and is syntax highlighted.
+Finally, and most interestingly in this example, the *values* returned by the R commands in the two pieces of inline code are inserted at the locations of, and thus replace, the original two pieces of inline code. 
+In other words, in the final document, the values of ```r mean(x)``` and ```r min(y)``` replace ``` `r ``` ````` mean(x)` ````` and ``` `r ``` ````` min(y)` `````, respectively.
+
+Although this is a very simple example, a lot has happened to produce the final pdf output. 
+The procedure is roughly as follows:
+
+* First, `knitr` extracts out the R code from `example.Rmd` and runs them in a separate R session. 
+The code is run in the order in which it appears in the document. 
+So, first, the R chunk is run, which creates two vectors, `x` and `y`. 
+Then, the R commands `mean(x)` and then `min(y)` are executed.
+* Next, all the Markdown code in `example.Rmd` is extracted out and inserted into a new temporary file `example.md`. 
+Likewise, by default, copies of the R code in the chunk, though not the inline code, are inserted into this `example.md` Markdown file. 
+Any R code that is inserted into `example.md` is marked-up as R code so that it will be properly rendered, including with syntax highlighting, in the final output document.
+* Next, any *output* from the R code, whether the R chunk or the R inline code is inserted into the `example.md` file. 
+In the example above, there is no output from the R chunk.
+However, obviously the commands `mean(x)` and `min(y)` both return numbers, and so these two numbers are inserted into the `example.md` Markdown file at the exact locations of where the two pieces of inline R code occurred.
+* Now, *knitr* calls *pandoc*. 
+Pandoc firsts convert the `example.md` Markdown into a \latex source code file named `example.tex`.
+This file is essentially just another script whose contents would be easily understandable to anyone who knows \latex. 
+* Next, pandoc calls a \latex rendering engine, such as `pdflatex`, and converts the \latex source code file `example.tex` into the pdf document `example.pdf`. 
+* Finally, the intermediate files, including `example.md` and `example.tex` are, by default, removed so that the only remaining files are the original RMarkdown source file `example.Rmd` and the final output document `example.pdf`.
+
+## An extended RMarkdown example
+
+```{r, echo=F, results='hide'}
+knitr::opts_chunk$set(echo = T, message = F, warning = F)
+rmarkdown::render('examples/example-2.Rmd')
+knitr::opts_chunk$set(echo = F, message = F, warning = F)
+system("./crop_pdf --margins '0 15 0 0' examples/example-2.pdf examples/example-2-cropped.pdf")
+```
+\begin{figure}
+\begin{center}
+\scriptsize
+\begin{minipage}{.45\textwidth}
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd')
+```
+\end{minipage}\hfill
+\begin{minipage}{.55\textwidth}
+\begin{center}\includegraphics{{examples/example-2-cropped.pdf}}\end{center}
+\end{minipage}
+\normalsize
+\end{center}
+\caption{An example of a RMarkdown file on the left, and its corresponding pdf output on the right.
+The pdf output is generated by \emph{knitting} the RMarkdown file. In RStudio, this can be
+accomplished by \texttt{rmarkdown::render("example-2.Rmd")}, where \texttt{example-2.Rmd} is
+the RMarkdown file.}\label{fig:example_2_rmd}
+\end{figure}
+
+In Figure \ref{fig:example_2_rmd}, we shown the code of an RMarkdown file on the left and its corresponding pdf output on the right.
+This example shows many of the features of a typical RMarkdown document. 
+We will discuss these features by looking through each section of the RMarkdown code.
+
+### The YAML header 
+
+The first few lines of the document, specifically those lines that are delimited by the lines with the three dashes (i.e., `---`) constitute its *YAML* header.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 1, end = 7)
+```
+YAML (a recursive acronym for *Y*AML *A*in't a *M*arkup *L*anguage) is itself a minimal markup language that is now often used for software configuration files. 
+As is perhaps clear from this example, in this header we specify the title, author, date, and output format of the document.
+This information is used when rendering the output document. 
+At its simplest, YAML consists of *key*-*value* mappings where the term on the left of the `:` is the key, and the term or statement on the right is the value. 
+Thus, `author: "Mark Andrews"` indicates that the `author` is `"Mark Andrews"`, and when the final document is being generated, the `"Mark Andrews"` will be inserted as the value of the author in output document's template.
+Note that although we use use double quotation marks as the values of the `title`, `author`, and `date` keys, neither single nor double quotation marks are always necessary. 
+In this example, we would only require the quotations for the value of `title`. 
+This is to ensure that the colon within `Data Analysis: A Report` is not mistakenly parsed by the YAML parser as indicating a key-value mapping. 
+
+We specify the document output type in the header by `output: pdf_document`. 
+As mentioned above, when writing manuscripts, we recommend always using the pdf based output document option as this will be generated by \latex. 
+However, had we preferred to create an MS Word output document, we would state `output: word_document`.
+Likewise, had we preferred a HTML output document, which can obviously be viewed in any browser or used to create a webpage, we would do `output: html_document`.
+
+### The setup R chunk
+
+It is common, though not necessary to have a setup R chunk like the following at the beginning of our RMarkdown file.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 9, end = 14)
+```
+In addition to including a common configuration statement, this example also has some important general RMarkdown features.
+First, in the minimal RMarkdown example in the previous statement, the R chunk was defined by starting with the opening ```` ```{r} ```` and ending with the closing ```` ``` ````.
+Here, the chunk statement begins with 
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 9, end = 9)
+```
+The term `setup` after the initial `r` is simply a label for this chunk.
+It is not necessary to have a label for chunks but it can be used for file navigation purposes in the RStudio editor, and is used for cross referencing purposes, especially for so-called *floating* figures and tables, as we will see.
+As such, it is probably a good habit to always use a (unique) label for each R chunk.
+
+After the chunk label, we have the chunk configuration option `echo=FALSE`. 
+This indicates the the R code in this chunk should not be displayed in the output document.
+Next, we have the following R statement.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 10, end = 13)
+```
+Here, we are set the values of `opts_chunk` list of global options used by `knitr`.
+For example, in this case, we start by indicating that, by default, all subsequent chunks in the RMarkdown document should have the options: `message = FALSE` and `warning = FALSE` (because these are R statements, we can use `F` for `FALSE`).
+Setting `message = FALSE` entails that the messages, which can be verbose, produced by R commands are not shown.
+As an example of this, consider the usual output when we load a package, in this case using `lme4`.
+```{r, echo = T, message=TRUE}
+library(lme4)
+```
+Therefore, globally setting `message = FALSE` can considerably reduce clutter in the output document.
+Likewise, it is often preferable to globally suppress R warnings to avoid clutter in the final document.
+Although not used in this example, another commonly set global option at this point is `echo=FALSE`.
+Often, especially in manuscripts for peer-reviewed articles, we do not wish to display all, or even any, of the R code used in the analysis. 
+Rather, we just want to display the results of the analysis in tables, figures, etc, and so globally setting `echo=FALSE` avoids having to set `echo=FALSE` on each subsequent chunk.
+
+The next two settings, `out.width = "45%"` and `fig.align='center'`, pertain to how figures should be displayed by default.
+The `out.width = "45%"` indicates that the figure should occupy 45% of the width of the page, and `fig.align='center'` indicates that it should be centered on the page.
+
+### Markdown sections 
+
+The use of the `#` followed by some text at the start of a line in the Markdown language indicates a section header.
+Thus, in our case, the following line indicates we should have a section entitled *Introduction* in our document.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 16, end = 16)
+```
+While the single `#` is for a section, subsections are indicated by `##`, and subsubsections are indicated by `###`. 
+Here is an example with three levels of sections.
+```
+# This is a section
+
+## This is a subsection
+
+# This is another section
+
+## This is a subsection 
+
+### This is a subsubsection 
+```
+In principle, further nested subsections, e.g. subsubsubsections and so on, are possible.
+However, this does depend on both the output document type and also the templates for this documents that are used by `knitr` or pandoc.
+
+### R chunk outputs
+
+Just as we see the output of R commands when those commands are run in the console, the output of R commands will appear in the output document unless we specify request otherwise.
+Consider the following lines from our example RMarkdown file.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 28, end = 30)
+```
+In this case, the assignment statement is surrounded by `(` and `)` and in general in R, this causes the output of the expression in this statement to be shown.
+In other words, the output that will be shown will be identical to what would be shown had be just typed.
+```{r, echo=T, eval=F}
+cor.test(~ x + y, data = data_df)
+```
+By default, this output will have each line beginning with `##` (because they are part of the R chunk's output are not interpreted as subsection headers).
+Should we wish use alternative symbols at the beginning of the output, we can indicate this by setting the value of the `comment` chunk option.
+For example, if we wanted all R output to start with '>', we set `comment = '>'`, as in the following code.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-4.Rmd')
+```
+This code would then be rendered as follows.
+```{r, child='examples/example-4.Rmd'}
+```
+
+### \latex mathematical typesetting
+
+On the following line
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 37, end = 37)
+```
+we have the terms `$x$` and `$y$`. 
+The dollar symbols indicate that `x` and `y` should be parsed using \latex and typeset according.
+In this example, this will simply make the `x` and `y` be shown in a different and italicized font compared to normal letters.
+However, in general, there is a vast number of mathematical notations, formulae, and symbols that can be used here.
+For example, consider the following Markdown code.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-5.Rmd')
+```
+This code would then be rendered as follows.
+
+---------
+
+```{r, child='examples/example-5.Rmd'}
+```
+
+---------
+
+
+In these examples, all the \latex code occurs in its *inline mode*, and this obtained by using `$` delimiters. 
+In addition to inline mode, there is \latex *display* mode.
+This is obtained by using `$$` delimiters.
+\latex display mode is used to display mathematical formulae and other notation on newlines.
+Consider the following example.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-6.Rmd')
+```
+This would then be rendered as follows.
+
+---------
+
+```{r, child='examples/example-6.Rmd'}
+```
+
+---------
+
+\latex provides a very large number of mathematical symbols, notations, and formulae. 
+It is beyond the scope of this chapter to even provide an overview of all of these features.
+However, we will provide an overview of some of the more widely used examples in a later section of this chapter.
+
+### Figures 
+
+If the R code in the a chunk generates a figure, for example by using `ggplot`, then that figure is inserted into the document immediately after the location of the chunk. 
+These figures can optionally have figure captions by setting the value of `fig.cap` in the chunk header.
+When the `fig.cap` is set, at least when using the `pdf_document` output, the figures then *floats*.
+A floating figure is one whose placement location in the final document is determined by an algorithm that attempts to minimize a large number of constraints, such as the amount of whitespace on the page, the number of figures on one page, and so on.
+
+In our example file, we have the following lines.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 40, end = 44)
+```
+This chunk will create a `ggplot` figure that will float. 
+Because of the global settings of `out.width = 40%` and `fig.align = 'center'`, the figure will be relatively small and centered on the page. 
+Because there is sufficient space, the figure will be placed at the bottom of the page.
+However, were we to increase the width of the figure to even `out.width = 50%`, the default settings of the float placement algorithm would place the figure alone on the following page. 
+Often, the choices made by \latex's float placement algorithm are initially unappealing. 
+The recommendation, however, is to not attempt any fine control until the document is complete. 
+As each new text block, or figure, or table is added to the document, the floats are relocated.
+When the document is complete, it is possible to influence float placement by changing parameter settings on the float placement algorithm. 
+
+It should be noted that if figures do not float, they are placed exactly where the chunk's output would otherwise occur. 
+In some cases, especially if the figures are relatively small, this can be satisfactory.
+
+## An additional RMarkdown example
+
+\begin{figure}
+\begin{center}
+\scriptsize
+\begin{minipage}{.49\textwidth}
+```{r, echo=F, results='asis'}
+cat_file('examples/example-3.Rmd', start = 1, end = 40)
+```
+\end{minipage}\hfill
+\begin{minipage}{.49\textwidth}
+```{r, echo=F, results='asis'}
+cat_file('examples/example-3.Rmd', start = 42)
+```
+\end{minipage}
+\normalsize
+\end{center}
+\caption{An additional RMarkdown file example. The rendered pdf output document is shown in Figure \ref{fig:rmarkdown_example_rendered}.}
+\label{fig:rmarkdown_example}
+\end{figure}
+
+
+```{r, echo=F, results='hide'}
+knitr::opts_chunk$set(echo = T, message = F, warning = F)
+rmarkdown::render('examples/example-3.Rmd')
+knitr::opts_chunk$set(echo = F, message = F, warning = F)
+system("./crop_pdf --margins '0 15 0 -150' examples/example-3.pdf examples/example-3-cropped.pdf")
+```
+\begin{figure}
+\begin{center}
+\includegraphics[width=0.75\textwidth]{{examples/example-3-cropped.pdf}}
+\caption{The pdf document output corresponding to the RMarkdown code shown in Figure \ref{fig:rmarkdown_example}.}
+\label{fig:rmarkdown_example_rendered}
+\end{center}
+\end{figure}
+
+In Figure \ref{fig:rmarkdown_example}, we provide the code of another RMarkdown file.
+This example provides some additional important RMarkdown features that were not covered in the previous example.
+The pdf output document corresponding to this document is shown in Figure \ref{fig:rmarkdown_example_rendered}.
+
+### Additional YAML header options 
+
+In this example file, we have set some additional settings in the YAML header.
+For example, we have the following lines.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-3.Rmd', start = 5, end = 9)
+```
+The latter two lines relate to the bibliography, and we will return to these below.
+The first two lines indicates that the \latex command `\usepackage{booktabs}` should be included in the header of the resulting `.tex` file prior to be rendered to pdf by the \latex engine.
+Recall that as mentioned above, the rendering process to produce the final `.pdf` document is that `knitr` takes the `.Rmd` file and creates a `.md` file, with R code and R code output inserted into it.
+If the final output is to be pdf, pandoc converts the `.md` file to a `.tex` file, and that is then rendered to `.pdf` by a \latex engine such as `pdflatex`.
+When pandoc creates the `.tex` file from the `.md`, it uses `.tex` file templates that load some of the more widely used \latex packages. 
+However, if any other \latex packages are required to create the final pdf document, they may be listed as we have done here in the YAML header using the `header-includes` option. 
+It should be noted that there are many thousands of additional \latex packages that can be installed.
+
+Another option to include addition \latex functionality in your RMarkdown is to include a block of \latex code into the header.
+For example, we might have a file named `include.tex` with the following \latex command.
+```
+\newcommand{\Prob}[1]{\mathrm{P}( #1 )}
+```
+If we had the following YAML header in our RMarkdown document, the commands in `include.tex` would be available to use in the body of the RMarkdown file.
+```
+output:
+  pdf_document:
+    includes:
+      in_header: include.tex
+```
+For example, in this case, we could now write `\Prob{X = x} = 0.25` in our RMarkdown file, and this would eventually be rendered as $\Prob{X = x} = 0.25$.
+The file `include.tex` can have an extensive number of custom commands, including numerous `\usepackage{}` statements.
+
+### Formatted tables
+
+When writing reports, we often wish to present results of statistical analyses in tables.
+Naturally, we would ideally like these tables to be formatted to a high standard.
+As we've seen, we can always simply display the standard output of R commands that produce tables and data frames, but the resulting unformatted monospaced font text is not of an acceptable standard for most manuscripts and reports, especially those that are intended for eventual publication.
+As an example, consider the table produced by the following R commands that use the built in `swiss` data set.
+```{r, echo=T}
+(swiss_df <- swiss %>% 
+  select(Fertility:Examination) %>% 
+  slice(1:5))
+```
+Clearly, this output is not sufficient for all but informal reports.
+
+Fortunately, we have a number of options for formatting tables. 
+For example, to use `kable` to create a table specifically for use in the `pdf_document` output, we can do the following.
+```{r, echo=T}
+library(knitr)
+swiss_df %>%
+  kable(format = 'latex',
+        booktabs = TRUE, 
+        align = 'c')
+```
+Here, we use `booktabs = TRUE` and in the YAML header, as mentioned, we ensured that the `booktabs` \latex package is loaded. 
+By loading the `booktabs` package, the typesetting of the tables in \latex is often improved over the default options.
+The `align = 'c'` option ensures that the values in each column in the table are centered. 
+If we want to center the table produced by the above `kable` command, we can use the `kable_styling` function in the `kableExtra` package as follows.
+```{r, echo=T}
+library(kableExtra)
+swiss_df %>%
+  kable(format = 'latex',
+        booktabs = TRUE, 
+        align = 'c') %>% 
+  kable_styling(position = 'center')
+```
+
+[^1]: See http://tex.stackexchange.com/q/276699/9128.
+
+### Display maths
+
+In this example, we provide some examples of *display* mode mathematics. 
+As mentioned, this is where the mathematical statements are on separate lines. 
+In this example, we use the `aligned` environment in \latex, which allows us to align multiple mathematical statements.
+Specifically, the example we use is as follows.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-3.Rmd', start = 58, end = 63)
+```
+This is rendered as follows.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-3.Rmd', start = 58, end = 63, verbatim = F)
+```
+The `&` symbol on each line is used to align the lines, so that the $\sim$ on the first line is aligned with the $=$ on the second line.
+Here, we need to add `\\` at the end of the first line to force a line break.
+The `aligned` environment is widely used in \latex, especially for showing algebraic derivations.
+For example, the following 
+```
+$$
+\begin{aligned}
+y &= \frac{e^x}{1+e^x},\\
+  &= \frac{e^x}{e^x (e^{-x} + 1)},\\
+  &= \frac{1}{1 + e^{-x}}
+\end{aligned}
+$$
+```
+is rendered as follows.
+$$
+\begin{aligned}
+y &= \frac{e^x}{1+e^x},\\
+  &= \frac{e^x}{e^x (e^{-x} + 1)},\\
+  &= \frac{1}{1 + e^{-x}}.
+\end{aligned}
+$$
+
+### Formatted inline R output
+
+In this RMarkdown example, we display the $R^2$ of the linear model as well as it accompanying F statistic and p-value with the following code.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-3.Rmd', start = 77, end = 80)
+```
+Here, we make use of some quantities, i.e., `R_sq`, `f_stat`, `p_value`, created earlier in the file.
+In addition, we place some of inline R code inside `$` so that they will be formatted as mathematical notation.
+Placing inline R code inside either \latex mathematical environments is always possible.
+Consider the following example.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-7.Rmd')
+```
+This will produce the following output.
+```{r, echo=F, child='examples/example-7.Rmd'}
+```
+
+Note that also in this example, we also avail of the R function `format.pval`. 
+This function can be used to return an inequality when the p-value is lower than a certain threshold named `eps`.
+For example, consider the following example.
+```{r, echo=T}
+p <- c(0.05, 0.02, 0.011, 0.005, 0.001)
+format.pval(p, eps = 0.01)
+```
+
+### Bibliography 
+
+In the YAML header, we have included the following statements.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-3.Rmd', start = 10, end = 11)
+```
+The first line tells RMarkdown to use the bibliographic information contained in the file `refs.bib`, which is assumed to be present in the working directory.
+The second line tells RMarkdown to format the citations and the references in the bibliography using APA style. 
+
+The `refs.bib` file is just a plain text file, and can be named anything. 
+In this example, its content is minimal and contains just the following content.
+```{r, echo=F, results='asis'}
+cat_file('examples/refs.bib')
+```
+The `@book{ .... }` content is a \textsc{Bib}\TeX\ bibliographic entry for a book, with \textsc{Bib}\TeX\ being the primary bibliography manager used with \latex. 
+As this is a simple text file, these bibliographic entries can be relatively easily created. 
+However, because \textsc{Bib}\TeX\ is such a widely used bibliographic manager, \textsc{Bib}\TeX\ bibliographic entries are provided in many scholarly article data bases, including Google Scholar. 
+It is therefore very easy to build up a personal bibliography file, which can then be re-used in all of one's reports.
+
+Having defined a bibliography in the YAML header as we have done, we can now use the \textsc{Bib}\TeX\ *keys* to perform citations. 
+The *key* for \textsc{Bib}\TeX\ entry is the text after the first `{` and before the first comma. 
+Consider the following 3 \textsc{Bib}\TeX\ entries.
+```
+@book{xie2017dynamic,
+  title={Dynamic Documents with R and knitr},
+  author={Xie, Yihui},
+  year={2017},
+  publisher={Chapman and Hall/CRC}
+}
+
+@article{knuth1984literate,
+  title={Literate programming},
+  author={Knuth, Donald Ervin},
+  journal={The Computer Journal},
+  volume={27},
+  number={2},
+  pages={97--111},
+  year={1984},
+  publisher={Oxford University Press}
+}
+
+@book{wickham:2019,
+  Author = {Hadley Wickham},
+  Title = {Advanced R},
+  Publisher = {Chapman and Hall/CRC},
+  Year = {2019},
+  edition = 2
+}
+```
+The keys here are `xie2017dynamic`, `knuth1984literate`, and `wickham:2019`. 
+Should we wish to refer to, say, Wickham's book in our RMarkdown file, we would simply write `@wickham:2019`.
+For example, the following statement in RMarkdown
+```
+  As is described in @wickham:2019, R is a functional programming language.
+```
+would result in "As in described in Wickham (2019), R is a functional programming language." in the output document.
+Alternatively, had we written
+```
+  R is a functional programming language [@wickham:2019].
+```
+this would result in "R is a functional programming language (Wickham 2019)." in the output document.
+
+In either case, the following line would then be inserted at the end of the output document. 
+$$
+\text{Wickham, Hadley. 2019.}\ \textit{Advanced R}.\ \text{2nd ed. Chapman; Hall/CRC}
+$$
+If we had multiple citations, they would all be listed at the end of the output document in alphabetical order. 
+By default in RMarkdown, this list of bibliographic references are not given a section name.
+Therefore, as we have done in this example RMarkdown document, we simply end the document with a section named *References* by using the following line as the last line.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-3.Rmd', start = 86, end = 86)
+```
+All the references will now be inserted after this section header.
+Should we prefer the name *Bibliography*, or another other option here, we simply change the name of this section. 
+
+## Brief guide to Markdown
+
+As a minimal markup language, there are not too many Markdown commands to learn.
+Here, we provide an overview of the main ones.
+
+### Headers
+
+```{r, echo=F, results='hide'}
+rmarkdown::render('examples/example-8.Rmd', output_format = 'pdf_document')
+system("./crop_pdf --margins '0 15 0 -380' examples/example-8.pdf examples/example-8-cropped.pdf")
+```
+\begin{figure}
+\begin{center}
+\scriptsize
+\begin{minipage}{.49\textwidth}
+```{r, echo=F, results='asis'}
+cat_file('examples/example-8.Rmd')
+```
+\end{minipage}\hfill
+\begin{minipage}{.51\textwidth}
+\begin{center}\includegraphics{{examples/example-8-cropped.pdf}}\end{center}
+\end{minipage}
+\normalsize
+\end{center}
+\caption{An example of a Markdown file on the left, and its corresponding pdf output on the right.
+The Markdown file has sections, indicated by lines beginning with \texttt{\#}, and subsections, indicated
+by lines beginning with \texttt{\#\#}.}\label{fig:example_8_rmd}
+\end{figure}
+
+
+We have already seen section headers above. 
+Section headers begin with the `#` at the start of a new line followed by the section title. 
+These lines are preceded and followed by a blank line. 
+The number of `#` symbols indicate the level of the section: `#` indicates a section, `##` is a subsection, `###` is a subsubsection, and so on.
+Note that there should be a space after the `#` symbol or symbols at the start of the line. 
+For example, `# Introduction` will create a section entitled *Introduction*, but `#Introduction` will produce a line with #Introduction on it.
+In Figure \ref{fig:example_8_rmd}, on the left, we see a Markdown file with multiple sections and subsections. 
+On the right, we see this file rendered as a pdf document.
+
+
+### Font style and weight
+
+As we've seen above in a few examples, we can produce italicized text by surrounding the text with `*`, and we obtain bold text by surrounding it with `**`.
+Here are some examples.
+
+* `*this is italicized text*` produces *this is italicized text*
+* `**this is bold text**` produces  **this is bold text**
+* `***this is bold and italicized text***` produces ***this is bold and italicized text***
+
+Underscores, i.e. `_`, have the same effect as `*`. 
+
+* `_this is italicized_` produces _this is italicized_
+* `__this is in bold__` produces __this is in bold__
+* `___this is in bold and in italics___` produces ___this is in bold and in italics___
+
+We can also mix `_` and `*`. 
+
+* `*__this is italicized bold text__*` produces *__this is italicized bold text__*
+* `__*this is italicized bold text*__` produces __*this is italicized bold text*__
+* `_**this is italicized bold text**_` produces _**this is italicized bold text**_
+
+In Markdown, there is no general way of producing underlined text.
+However, if we are using `pdf_document` output, we can use the \latex `\underline` command. 
+For example, `\underline{this text is underlined}` gives \underline{this text is underlined}.
+
+### Code 
+
+Often in technical documents, we need to display computer code.
+If we simply surround the code block by ```` ``` ````, we will obtain monospace typed text.
+For example, the following Markdown code shows Python code.
+```{r, echo=F, results='asis'}
+cat_file('examples/python_code_1.Rmd')
+```
+This is rendered as follows.
+```{r, echo=F, child='examples/python_code_1.Rmd'}
+```
+
+However, ideally we would prefer the code to be syntax highlighted.
+We can do so by indicating the code's language after the initial  ```` ``` ````.
+In the following Markdown code, we state that the code is Python.
+```{r, echo=F, results='asis'}
+cat_file('examples/python_code_2.Rmd')
+```
+This is then rendered as follows.
+```{r, child='examples/python_code_2.Rmd'}
+```
+
+When we wish to display R code, we have another option.
+We can use a normal R code chunk, but set the chunk parameter `eval` to `FALSE`, and set `echo` to `TRUE`, assuming it is not globally set to `TRUE`.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-9.Rmd')
+```
+This is then rendered as follows.
+```{r, child='examples/example-9.Rmd'}
+```
+
+### Lists 
+
+<!-- itemized lists -->
+```{r, echo=FALSE, results='hide'}
+rmarkdown::render('examples/example-10.Rmd')
+system("./crop_pdf --margins '0 0 0 0' examples/example-10.pdf examples/example-10-cropped.pdf")
+```
+
+There are three types of lists that are possible with the pdf document output: Itemized lists, enumerated lists, and definition lists.
+
+#### Itemized lists
+
+In itemized lists, also known as unordered lists or even bullet-point lists, each item begins on a new line that begins with `*` followed by a space.
+The list has to be both preceded and is followed by a blank line.
+For example, we have Markdown code with an listed list on the left, and its rendered output on the right.
+\begin{minipage}{.49\textwidth}
+```{r, echo=F, results='asis'}
+cat_file('examples/example-10.Rmd', start = 7)
+```
+\end{minipage}\hfill
+\begin{minipage}{.51\textwidth}
+\begin{center}\includegraphics{{examples/example-10-cropped.pdf}}\end{center}
+\end{minipage}
+
+<!-- Items with long lines -->
+```{r, echo=FALSE, results='hide'}
+rmarkdown::render('examples/example-11.Rmd')
+system("./crop_pdf --margins '0 0 0 0' examples/example-11.pdf examples/example-11-cropped.pdf")
+```
+
+Items in a list do not need to be written using only one line of Markdown code.
+A single item may be spread over multiple lines as in the following example.
+\begin{minipage}{.4\textwidth}
+```{r, echo=F, results='asis'}
+cat_file('examples/example-11.Rmd', start = 8)
+```
+\end{minipage}\hfill
+\begin{minipage}{.6\textwidth}
+\begin{center}\includegraphics{{examples/example-11-cropped.pdf}}\end{center}
+\end{minipage}
+
+<!-- Nested itemized lists -->
+```{r, echo=FALSE, results='hide'}
+rmarkdown::render('examples/example-12.Rmd')
+system("./crop_pdf --margins '0 0 0 0' examples/example-12.pdf examples/example-12-cropped.pdf")
+```
+
+We can also create nested lists by using indented lines that themselves begin with `*`, as in the following example.
+\begin{minipage}{.49\textwidth}
+```{r, echo=F, results='asis'}
+cat_file('examples/example-12.Rmd', start = 7)
+```
+\end{minipage}\hfill
+\begin{minipage}{.51\textwidth}
+\begin{center}\includegraphics{{examples/example-12-cropped.pdf}}\end{center}
+\end{minipage}
+
+In general in Markdown, the indentation should be made with four spaces or a tab. 
+In some cases, fewer spaces than 4 will suffice, but it is generally better to use four spaces.
+Also, beware that some editors, including the RStudio editor, map the Tab key to 2 spaces.
+
+<!-- Enumerated lists -->
+```{r, echo=FALSE, results='hide'}
+rmarkdown::render('examples/example-13.Rmd')
+system("./crop_pdf --margins '0 0 0 0' examples/example-13.pdf examples/example-13-cropped.pdf")
+```
+
+#### Enumerated lists
+
+Enumerated lists are defined and behave just like itemized lists except that instead of an item or sub-item defined by a line beginning with a `*` (followed by a space), it is defined by a line beginning a number followed by a `.` and then space.
+In the following example, our items begin with `1.` followed by a space.
+\begin{minipage}{.49\textwidth}
+```{r, echo=F, results='asis'}
+cat_file('examples/example-13.Rmd', start = 7)
+```
+\end{minipage}\hfill
+\begin{minipage}{.51\textwidth}
+\begin{center}\includegraphics{{examples/example-13-cropped.pdf}}\end{center}
+\end{minipage}
+
+<!-- Start enumerated lists with numbers other than 1. -->
+```{r, echo=FALSE, results='hide'}
+rmarkdown::render('examples/example-14.Rmd')
+system("./crop_pdf --margins '0 0 0 0' examples/example-14.pdf examples/example-14-cropped.pdf")
+```
+
+We do not need to always use `1.` to obtain an enumerated list. 
+Any other numbers will suffice, as in the following example.
+\begin{minipage}{.49\textwidth}
+```{r, echo=F, results='asis'}
+cat_file('examples/example-14.Rmd', start = 7)
+```
+\end{minipage}\hfill
+\begin{minipage}{.51\textwidth}
+\begin{center}\includegraphics{{examples/example-14-cropped.pdf}}\end{center}
+\end{minipage}
+
+<!-- Enumerated list with first item greater than 1 -->
+```{r, echo=FALSE, results='hide'}
+rmarkdown::render('examples/example-15.Rmd')
+system("./crop_pdf --margins '0 0 0 0' examples/example-15.pdf examples/example-15-cropped.pdf")
+```
+
+However, if we use a number greater than `1` as the first item, then that will be used as the starting value of the numbering of the list as in the following example.
+\begin{minipage}{.49\textwidth}
+```{r, echo=F, results='asis'}
+cat_file('examples/example-15.Rmd', start = 7)
+```
+\end{minipage}\hfill
+\begin{minipage}{.51\textwidth}
+\begin{center}\includegraphics{{examples/example-15-cropped.pdf}}\end{center}
+\end{minipage}
+
+<!-- Nested enumerated lists. -->
+```{r, echo=FALSE, results='hide'}
+rmarkdown::render('examples/example-16.Rmd')
+system("./crop_pdf --margins '0 0 0 0' examples/example-16.pdf examples/example-16-cropped.pdf")
+```
+
+Enumerated lists can be nested just like itemized lists.
+\begin{minipage}{.49\textwidth}
+```{r, echo=F, results='asis'}
+cat_file('examples/example-16.Rmd', start = 7)
+```
+\end{minipage}\hfill
+\begin{minipage}{.51\textwidth}
+\begin{center}\includegraphics{{examples/example-16-cropped.pdf}}\end{center}
+\end{minipage}
+
+<!-- Mixed itemized/enumerated lists -->
+```{r, echo=FALSE, results='hide'}
+rmarkdown::render('examples/example-17.Rmd')
+system("./crop_pdf --margins '0 0 0 0' examples/example-17.pdf examples/example-17-cropped.pdf")
+```
+
+We may also mix enumerated and itemized lists when using nestings as in the following example.
+\begin{minipage}{.49\textwidth}
+```{r, echo=F, results='asis'}
+cat_file('examples/example-17.Rmd', start = 7)
+```
+\end{minipage}\hfill
+\begin{minipage}{.51\textwidth}
+\begin{center}\includegraphics{{examples/example-17-cropped.pdf}}\end{center}
+\end{minipage}
+
+#### Definition lists
+
+```{r, echo=FALSE, results='hide'}
+rmarkdown::render('examples/example-18.Rmd')
+system("./crop_pdf --margins '0 0 0 0' examples/example-18.pdf examples/example-18-cropped.pdf")
+```
+
+
+Definition lists, when rendered, begin with an emboldened term followed by a definition or description.
+This can be useful for definitions per se, but also when we need to elaborate on or describe certain terms. 
+For example, they could be used to describe the meaning of different variables in a data set.
+We create a definition list by beginning a new line with some text, which is usually brief, such as a name.
+The subsequent line then begins with a `:` followed by the definition or description.
+For example, in the following code, we provide a definition list elaborating upon the variables in a dataset.
+
+\begin{minipage}{.49\textwidth}
+```{r, echo=F, results='asis'}
+cat_file('examples/example-18.Rmd', start = 7)
+```
+\end{minipage}\hfill
+\begin{minipage}{.51\textwidth}
+\begin{center}\includegraphics{{examples/example-18-cropped.pdf}}\end{center}
+\end{minipage}
+
+
+
+
+## Brief guide to mathematical typesetting with \latex
+
+```{r, echo=FALSE}
+library(reticulate)
+use_virtualenv('./chapter_07_venv', required = TRUE)
+```
+
+```{python, echo=FALSE}
+# We need to use Python 3.* 
+import sys
+assert sys.version_info.major == 3, 'Use Python 3 FFS!'
+import utils
+```
+
+
+
+RMarkdown provides an extensive set of commands for typesetting mathematical formulas, symbols, and other notation.
+These commands are in fact \latex commands, but are available regardless of the output document format.
+In other words, even if we are not using the `pdf_document` output format, which is ultimately rendered by a \latex typesetting engine, we may still avail of these \latex commands for mathematical typesetting.
+
+
+```{r, echo=FALSE, results='hide'}
+rmarkdown::render('examples/example-20.Rmd')
+system("./crop_pdf --margins '0 0 0 0' examples/example-20.pdf examples/example-20-cropped.pdf")
+
+rmarkdown::render('examples/example-21.Rmd')
+system("./crop_pdf --margins '0 0 0 0' examples/example-21.pdf examples/example-21-cropped.pdf")
+```
+
+As we have seen above, there are two *modes* in which mathematical formulas and notation can appear: *inline* mode, and *display* mode. 
+Inline model is where the mathematical notation appears within a line of normal text. 
+It is obtained by surrounding the code a `$`.
+For example, the following code
+```{r, echo=F, results='asis'}
+cat_file('examples/example-20.Rmd', start = 2, end = 2)
+```
+is rendered as follows:
+```{r, child='examples/example-20.Rmd'}
+```
+On the other hand, display mode is where the mathematical formulas or notation appear on a line on their own.
+It is obtained by surrounding the code by `$$`.
+For example, the following code
+```{r, echo=F, results='asis'}
+cat_file('examples/example-21.Rmd', start = 1, end = 4)
+```
+is rendered as follows:
+```{r, child='examples/example-21.Rmd'}
+```
+
+In what follows, we provide a brief and minimal introduction to the main mathematical typesetting commands that are available in RMarkdown.
+To able to appreciate all of the mathematical typesetting options in RMarkdown, we would have to provide a thorough introduction to mathematical typesetting in \latex.
+This is well beyond the scope of this book, but there are many books that provide extensive details about mathematical typesetting in \latex. 
+For example, one highly recommended comprehensive and up to date book is @gratzer2016math.
+
+
+### Symbols for variables
+
+In mathematical formulas and notation, there are a large number of symbols that are commonly used as variables.
+These include the upper and lower case letters of the English alphabet, which can be typed directly.
+For example, `$x$` becomes $x$, `$A$` becomes $A$, etc.
+It also very common to use the upper and lower case letters of the Greek alphabet.
+The lowercase Greek symbols are in the following table.
+```{python, echo=FALSE, results = 'asis'}
+symbols = r'''
+\alpha \beta \gamma \delta \epsilon \zeta \eta \theta 
+\iota \kappa \lambda \mu \nu \xi \pi \rho \sigma \tau
+\upsilon \phi \chi \psi \omega
+'''.split()
+
+print(utils.mktable(symbols, nrow=8))
+```
+Given that some uppercase Greek letters are identical to uppercase letters in English, only those that are different to English letters have \latex commands or even \latex{} to render them.  
+These are shown in the following table.
+```{python, echo=FALSE, results = 'asis'}
+symbols = r'''
+\Gamma \Delta \Theta \Lambda \Xi \Pi \Sigma 
+\Upsilon \Phi \Psi \Omega
+'''.split()
+
+print(utils.mktable(symbols, nrow=3))
+```
+Calligraphic or *blackboard bold* fonts of English uppercase letters commonly appear too. 
+The following calligraphic uppercase English letters are often used in mathematical formulas and notation.
+```{python, echo=FALSE, results = 'asis'}
+import string
+calletters = [r'\mathcal{%s}' % s
+             for s in string.ascii_uppercase]
+print(utils.mktable(calletters, nrow=6))
+```
+Likewise, the following *blackboard bold* fonts are widely used.
+```{python, echo=FALSE, results = 'asis'}
+bbletters = [r'\mathbb{%s}' % s
+             for s in string.ascii_uppercase]
+print(utils.mktable(bbletters, nrow=6))
+```
+As examples of where these fonts are used, $\mathbb{N}$, $\mathbb{Z}$, $\mathbb{Q}$, $\mathbb{R}$, $\mathbb{Q}$ are used to denote the natural numbers, integers, rational, real, and complex numbers, respectively.
+
+### Subscripts and superscripts
+
+Subscripts or superscripts are widely used in mathematical notation. 
+For example, all symbols for variables commonly occur with subscripts and superscripts.
+In addition, subscripts and superscripts occur in mathematical operators and functions, as we will see below.
+As we've seen in passing in many examples above, we obtain a subscript by using `_` and a superscript using the `^`.
+For example, `$x_1$` is $x_1$ and `$x^2$` is $x^2$.
+When we need to use more than just a single character or command for the subscript or superscript, we need to surround it with braces.
+For example, if want $10^{100}$, we need to write `$10^{100}`.
+Writing `$10^100$` will lead to $10^100$.
+Likewise with subscripts. 
+For example, for $x_{ijk}$, we write `$x_{ijk}$` and not `$x_ijk$`, which would give $x_ijk$.
+
+We may also use braces to nest sub and superscripts as in the following example.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-22.Rmd', start = 2, end = 2)
+```
+This is rendered as follows:
+```{r, child='examples/example-22.Rmd'}
+```
+It should be noted that not using the brace here would simply lead to a `! Double superscript` or `! Double subscript` error.
+
+It is also possible to mix sub and superscripts. 
+For example, `$2^i_j$` gives $2^i_j$. 
+Likewise, `$2_j^i$` also gives $2_j^i$.
+
+### Arithmetic operations and fractions.
+
+For arithmetic, plus and minus are obtained by `+` and `-`, respectively.
+For example, `$x + y$` gives $x + y$, `$x - y$` gives $x - y$, and so on.
+The command `\pm` is used to produce the *plus or minus* symbol $\pm$.
+For exponents, we use superscripts just as we saw above.
+For multiplication, it is conventional that the absence of any operator implies multiplication.
+For example, $x$ times $y$ is conventionally often written simply as $xy$. 
+However, if we prefer to use a symbol to explicitly mark multiplication, we may use `\cdot` or `\times`.
+For example, `$a \cdot b$` gives $a \cdot b$, and `$a \times b$` gives $a \times b$.
+
+For division, if we are simply dividing one symbol by another, we can use `/` or `\div`. 
+For example, `$a / b$` gives $a / b$, and `$a \div b$` gives $a \div b$.
+However, for formulas that involve ratios of set of symbols or larger statements, we need to used `\frac{}{}`, as we see in the following example.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-24.Rmd', start = 1, end = 3)
+```
+This is rendered as follows:
+```{r, child='examples/example-24.Rmd'}
+```
+While it is perhaps more common to use `\frac{}{}` in display mode, it may be used in inline mode as well, as in the following example. 
+```{r, echo=F, results='asis'}
+cat_file('examples/example-25.Rmd', start = 2, end = 2)
+```
+This is rendered as follows:
+```{r, child='examples/example-25.Rmd'}
+```
+We may also nest fractions using `\frac{}{}`, as in the following example.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-26.Rmd', start = 1, end = 3)
+```
+This is rendered as follows:
+```{r, child='examples/example-26.Rmd'}
+```
+
+### Sums, products, integrals, etc
+
+Summation over multiple variables is denoted using a variant of the uppercase Sigma symbol.
+However, for this, we use `\sum` and not `\Sigma`.
+For example, to denote the sum over a set of numbers $x_1, x_2 \ldots x_n$, we would write this as follows.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-27.Rmd', start = 1, end = 3)
+```
+This is rendered as follows:
+```{r, child='examples/example-27.Rmd'}
+```
+The limits of the sum are not strictly necessary.
+Thus, we could omit them as follows.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-28.Rmd', start = 1, end = 3)
+```
+This appears as follows:
+```{r, child='examples/example-28.Rmd'}
+```
+However, this summation notation is ambiguous at best, and so including the limits of the sum is highly recommended at all times.
+
+We write products using the uppercase Pi symbol, but again, we should not use `\Pi` but use `\prod` instead.
+Just like `\sum`, `\prod` should always be used with limits, as in the following example.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-29.Rmd', start = 1, end = 3)
+```
+This appears as follows:
+```{r, child='examples/example-29.Rmd'}
+```
+
+Note that when sums or products are used in inline mode, they appear in a more compact form.
+For example, `$\sum_{i=1}^n x_i$` appears as $\sum_{i=1}^n x_i$, and `$\prod_{i=1}^n x_i$` appears as $\prod_{i=1}^n x_i$.
+
+Integrals are written using the `\int` command. 
+Like `\sum` and `\prod`, they may include limits, as in the following example, which gives the area under the curve defined by the function $f(x)$ between the the values of $x=0$ and $x=1$. 
+```{r, echo=F, results='asis'}
+cat_file('examples/example-30.Rmd', start = 1, end = 3)
+```
+This appears as follows:
+```{r, child='examples/example-30.Rmd'}
+```
+When limits on the integral are given, it is known as a *definite integral*.
+In the absence of limits, we have an *indefinite integral* and this is the integral over all values of the variable of integrand. 
+
+### Roots
+
+We obtain the square root symbol by the `\sqrt` command. 
+To use this properly, we must include the expression with the `{}` after the command.
+In other words, to obtain $\sqrt{2}$, we must use `$\sqrt{2}$`.
+Had we written `$\sqrt 2$` or even `$\sqrt(2)$`, we would have obtained $\sqrt(2)$, which is not the desired result.
+Note that `\sqrt` produces square root that stretches to enclose the expression to which it applies, as we see in the following example that gives the formula for a sample standard deviation.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-43.Rmd', start = 1, end = 3)
+```
+This will appear as follows.
+```{r, child='examples/example-43.Rmd'}
+```
+
+To obtain the $n$-th root, we place the value of $n$ in square brackets after `\sqrt` and before the `{}`, as we see in the following example, which displays the cubed root.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-44.Rmd', start = 1, end = 3)
+```
+This will appear as follows.
+```{r, child='examples/example-44.Rmd'}
+```
+
+### Equalities, inequalities, set operators
+
+Equality and inequalities can be denoted using `=` and `<` or `>`. 
+For example, `$x = y$` gives $x = y$, and `$x < y$` gives $x < y$, and so on.
+However, there are many other commonly symbols used to denote equalities, equivalences, or inequalities.
+Likewise, there are many commonly used symbols for set theoretic operations.
+Some of the more widely used examples are shown in the following table.
+```{python, echo=FALSE, results = 'asis'}
+symbols = r'''
+= < > \leq \geq \ll \gg \approx \sim \propto \equiv \triangleq \doteq \in \ni \subset 
+\supset \subseteq \supseteq \cap \cup
+'''.split()
+
+print(utils.mktable(symbols, nrow=3))
+```
+Many of these operators can be negated using the `\not` command before the operator symbol or command.
+For example, `$x \not= y$` gives $x \not= y$, `$x \not< y$` gives $x \not\ll y$, and so.
+
+
+
+### Multiline and aligned formulas
+
+We may create multiline formulas that are vertically aligned at designated points using `\begin{aligned}`, `\end{aligned}`, as in the following example.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-37.Rmd', start = 1, end = 6)
+```
+This appears as follows.
+```{r, child='examples/example-37.Rmd'}
+```
+Note that similarly to the case of the `matrix` environment, we use `&` for alignment and `\\` for newlines.
+
+We may use the `aligned` environment even when we do not need alignment per se, but just require multiline equations, as in the following example.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-38.Rmd', start = 1, end = 6)
+```
+This appears as follows.
+```{r, child='examples/example-38.Rmd'}
+```
+
+
+# Git
+
+Version control software (\vcs) is an essential tool for the efficient management and organization of source code.
+In the case of data analysis using R, the relevant source code files will primarily include `.R` and `.Rmd` scripts, but even in small and routine projects, there are many other possibilities too.
+\vcs allows us to keep track of all the versions or revisions to a set of files in an efficient and orderly manner. 
+As a simple example to motivate the use of a \vcs system, let us say that we are working on a relatively small data analysis project initially involving some `.R` and `.Rmd` scripts, with names like `preprocessing.R`, `exploration.R`, `analysis.R`, and `report.Rmd`.
+Let's say that we work with these files, adding new code, editing or deleting old code, etc., every few days in a normal R session.
+If we were to simply save the files after each session, we would obviously only ever have their most recent versions. 
+All the previous versions would be lost. 
+In order to avoid loss of previous versions in case they are needed, we could periodically *save as*, creating versions like `preprocessing_v1.R`, `analysis_oct23.R`, and so on.
+As time goes by, it is highly likely too that new files will appear.
+Some of these may have been only intended to be temporary files, but others might be intended to be vital parts of the project.
+Some new file might be *branches* of other files, where we copy the original, and work on some new feature of the code in the copy with the intention of merging the changes back if and when necessary.
+By proceeding in this manner, there is a usually an eventual proliferation of new files and different versions of files with sometimes ambiguous or inscrutable names like `analysis_v1_tmp.R`, `analysis_v1_tmp_new.R`, `preprocessing_tmp_foo.R`, and so on. 
+If files are being copied between different devices or to cloud based storage, and edited on different devices, the situation can get ever more disorganized, with files of similar names but perhaps slightly different contents or different time-stamps across different machines. 
+At this point, especially if we return to this work after a period of time, it is not usually not clear even what each file does, where the latest version of any file is, not to mention what all the previous or temporary versions contain and when and why they were made. 
+If we collaborate with others, things usually become even worse. 
+First, we must decide on a means of sharing files, with email attachments still probably being the default and most widely used method of doing so. 
+Sending back and forth emails with modifications creates yet more versions to manage, and multiple people working independently the same files introduces conflicts that need to be manually resolved.
+Eventually, we have multiple files and versions, on multiple devices, being edited independently by multiple different people. 
+Knowing what each file and version is or does, and who did what and when and where is usually lost as as a result.
+
+This level of disorganization is frustrating, wasteful of time and effort, and obviously bad for reproducibility. 
+The authors themselves may find it difficult or impossible to pick through their files to recover and reproduce all the steps involved in any analyses.
+Moreover, even if they were only working on one file such as an RMarkdown file from which their final report was generated, the proliferation of versions across different devices and owners would still occur, making it difficult to pick up and resume their work after a period of inactivity.
+In addition, they may lose track of which version of the `.Rmd` produced which version of the rendered manuscript. 
+It is all very well knowing that a manuscript was produced by knitting a `.Rmd`, and hence that all its reported results are reproducible in principle, but if we have lost track of the `.Rmd` that produced it, it is obviously no longer reproducible in practice. 
+
+\vcs systems allow us to manage our source files in an orderly and efficient manner. 
+There are many \vcs systems available, both proprietary and open source, and while precise information on usage worldwide is hard to establish definitively, almost all surveys of \vcs usage show that *Git* is now by far the most popular and widely used \vcs system.
+Git is open-source software was originally developed in 2005 for version control of the development of the Linux operating system, something for which it is still used.
+It gradually became more widely used in the open source community and within a few years had become popular than the previously very widely used open source *subversion* \vcs system.
+With the growing popular of Git hosting sites like GitHub, which currently hosts over 100 million Git based projects, Git is now the most widely used \vcs system worldwide.
+
+In what follows, we aim to provide a brief introduction to some of the main features of Git. 
+Obviously, it is beyond the scope of this section to provide a comprehensive introduction to Git. 
+Here, we just provide an introduction to installing and configuring Git, initializing a Git repository, adding files and editing files in the repository, and using a remote repository such as GitHub.
+These are the *must knows* to get up and running with Git at the start.
+We do not cover important topics such reverting or resetting changes, branching, merging, rebasing, and so on.
+This topics, and many others, can be found in books such as @chacon2014pro, which is available in its entirety online at https://git-scm.com/book/en/v2.
+tory
+
+## Installation
+```{r}
+knitr::opts_chunk$set(comment = '')
+```
+
+Git is available for Windows, MacOs, Linux.
+Git is first and foremost a command driven software. 
+There are graphical interfaces, i.e. GUIs, to Git, but we will not consider them here and do not recommend them either given that there is only a small number of core commands to learn and they allow Git to be used both efficiently and identically across all different devices.
+
+For Windows, we highly recommend installing and using the *Git Bash* shell available from https://gitforwindows.org/.
+This provides a Bash Unix shell^[https://en.wikipedia.org/wiki/Bash_(Unix_shell)] from which Git can be used just as it would be used on other Unix systems like Linux^[Strictly speaking, Linux is not Unix, but rather a \*nix or Unix-like operating system. However, it is essentially a free and open-source re-implementation of Unix, and so can be seen as Unix for all practical purposes.] and MacOs. 
+
+For MacOS, Git is already preinstalled on recent versions of MacOS. 
+While this may be perfectly adequate, the preinstalled Git on MacOS is based on a build of Git by Apple and is usually not up to date with the latest version of Git.
+More recent versions of Git for MacOS are available elsewhere, such as https://git-scm.com/download/mac.
+
+For Linux, given the role of Git in the development of Linux, Git is seen as a vital Linux tool. 
+It is easily installed using the package managers of any Linux distribution, see https://git-scm.com/download/linux.
+
+Once Git is installed, it is available for use using the command `git` in an operating system terminal. 
+For Windows, this means that it is available in the DOS shell using the command `git`. 
+However, if Git is installed, as we recommended, as the Git Bash shell, that Bash shell should be always used instead of the DOS shell.
+For MacOS and Linux, Git will be available in the system terminal, and will work identically in the Bash, sh, zsh, etc., shells. 
+
+For what follows, we will assume users are using a Unix shell, and so all of this will be equally applicable to users of Linux, MacOS, and Windows users assuming they use Git Bash.
+
+To establish that Git has been successfully installed and is available for use, type the following
+```{bash, echo=TRUE, eval=F}
+git --version
+```
+The output of this command on a relatively up to date (as of `r format(lubridate::today(), '%B, %Y')`) version could appear as follows.
+```{bash, echo=FALSE, eval=T}
+git --version
+```
+
+## Configuration
+
+Before we start using Git, we need to perform some minimal configuration. 
+Specifically, we first need to set our name and email address.
+Git requires that each time we *commit* to the repository, as we will see below, we have the name and email address of the person doing the committing.
+This information could be set on a per commit basis.
+However, it is more common and easier to set this information as a global configuration setting and then it will be used whenever the user performs a commit.
+This can be done using `git config` as in the following code.
+```{bash, echo=TRUE, eval=T}
+git config --global user.name 'Mark Andrews'
+git config --global user.email 'mjandrews.org@gmail.com'
+```
+
+It is recommended that we also need to set the text editor that we will use for writing our commit messages, which is also something we will see below.
+By default, the text editor is the `vi` or `vim` editor. 
+These editors are standard Unix editors.
+They are loved by some and loathed by others. 
+To the uninitiated, these editors are likely to seen as difficult and probably annoying to use. 
+In any case, it is certainly not necessary to use them as any text editor can be used instead. 
+If a user already has a preference, they should use this. 
+If not, one recommended editor, which is open-source editor and available across the Windows, MacOS, and Linux platforms, is the *Atom* editor, see https://atom.io/.
+Atom can be set as the default editor to be used with Git as follows.
+```{bash, echo=TRUE, eval=F}
+git config --global core.editor "atom --wait"
+```
+
+Once set, this configuration information is stored in a *dot file* named `.gitconfig` in the user's home directory.
+Dot files are a standard Unix file system feature. 
+They are simply files, or possibly even directories, that begin with a dot. 
+They are hidden by default in file listings, and are primarily intended to be used for configuration information.
+The `.gitconfig` file can be edited at any time to change global configuration settings.
+
+
+## Creating and initiating a Git repository
+
+A Git repository is simply a directory (i.e., a folder) in which all the files, including those in subdirectories, are being tracked and managed, or potentially tracked and managed, by Git.
+Sometimes, as we will see, we obtain a Git repository by *cloning* it. 
+However, we can always turn any directory on our computer into a Git repository using a single command, as we will see momentarily. 
+
+```{bash}
+if [ -d ~/Documents/project101 ]  
+  then rm -rf ~/Documents/project101
+fi
+
+mkdir ~/Documents/project101
+```
+
+```{r}
+chapter_wd = getwd()
+home <- system("echo $HOME", intern = T)
+project101_path <- paste0(home, '/Documents/project101')
+knitr::opts_knit$set(root.dir = project101_path)
+```
+
+
+Now let us create a Git repository from a newly created empty directory.
+There is no necessity for the directory to be newly created and empty, that's just what we use this example.
+First, let us create a new empty directory `project101` inside of the `Documents` directory in our home directory. 
+We will assume that the directory `Documents` already exists in our home directory, but this is quite common across different platforms.
+We will use the standard Unix commands `mkdir` to make the `project101` directory, and then use the Unix command `cd` to change directory into it.
+```{bash, echo=TRUE, eval=F}
+mkdir ~/Documents/project101
+cd ~/Documents/project101
+```
+We may list the contents of `project101` using the Unix `ls` command. 
+Here, we use `-1aF` option to `ls`. 
+The `-1` asks for the information to be shown with one file or directory per line.
+The `-a` option will show so-called "hidden" files and directories.
+Hidden files and directories, also known as *dot* files or directories, begin with `.`.
+They are intended to contain configuration information and, by default, not shown in lists of files and directories. 
+The `-F` option is used primarily to indicate whether the items in a directory are files or subdirectories.
+Directories are listed by ending their name with a '/'. 
+```{bash, echo=T}
+ls -1aF
+```
+From this listing, we see that the directory is empty. 
+The two items that are listed, `./` and `../`, are always present in a listing where we show hidden files.
+They are merely references to the present (`.`) and parent (`..`) directory.
+
+Now, we create a Git repository in `project101` as follows.
+```{bash, echo=T}
+git init
+```
+From this, we see that Git initializes a repository in `project101`, and created a directory therein named `.git`.
+We may now look at the contents of `project101` again.
+```{bash, echo=T}
+ls -1aF
+```
+We see now that there is a hidden or *dot* directory named `.git`. 
+The presence of the `.git` subdirectory is a necessary and sufficient condition for the directory to be Git repository.
+
+We can now run the `git status` command to see what is the current state of the repository.
+```{bash}
+git status
+```
+From the output of this command, we see a number of important pieces of information.
+First, it tells us that we are on the `master` branch of the repository.
+What branches are and how to use them is something to which we will return in due course below.
+Suffice it to say for now that they are a major feature of Git repositories.
+Next, we see that there are `No commits yet`. 
+This means that we have not yet *committed* anything to the repository and so nothing is being tracked or managed by Git yet.
+Finally, we also see that there is currently `nothing to commit`. 
+In other words, there are no files in `project101` that could potentially be committed to the repository.
+
+```{bash}
+cat << EOF > script.R
+library(tidyverse)
+
+survivors <- Titanic %>%
+  apply(c('Sex', 'Survived'), sum)
+EOF
+
+cat << "EOF" > readme.md
+The project contains an R script, `script.R`, for processing the `Titanic` data set.
+EOF
+```
+
+Now, let us put some files into `project101`. 
+These files could be any type of file, but because Git is intended for the management of source code, ideally the files should be text files rather than binary files.
+For this example, we will put one R script, `script.R`, and one other text file, `readme.md`, into `project101`.
+These files could be simply moved or copied from some other directory or could be written in an editor, such as RStudio, and then saved into `project101`.
+
+
+For this example, we will assume that the contents of `script.R` is the following.
+
+------
+
+```{bash}
+cat script.R
+```
+
+------
+
+We will assume that the contents of `readme.md` is as follows.
+
+-------
+
+```{bash}
+cat readme.md
+```
+
+------
+
+After we have put these files in `project101`, we can do a file listing as we did above.
+```{bash, echo=TRUE}
+ls -1aF
+```
+We see that `script.R` and `readme.md` are there.
+Next, we can do a `git status` as above.
+```{bash, echo=TRUE}
+git status
+```
+Much of the information here is as it was previously, but now we are told that there are two `Untracked files`, namely `readme.md` and `script.R`.
+Files listed as *untracked* mean that they are present in the directory but not as yet being tracked or managed by Git.
+As the output indicates, however, we can use the command `git add ` to get Git to track them, as we do in the following command.
+```{bash, echo=TRUE}
+git add readme.md script.R
+```
+Now, let us check the status of the repository again.
+```{bash, echo=TRUE}
+git status
+```
+We see from the output that there are new files, `readme.md` and `script.R`, that *can* be committed.
+This is an important point.
+The files are not yet committed to the repository, they are *staged* for commitment. 
+When files are staged, they are in an intermediate area, kind of like a departure lounge in an airport.
+To commit them, we must run the `git commit` command as follows.
+```{bash, eval=F}
+git commit 
+```
+This will open your editor, and it will contain the following text exactly.
+```{r, echo=F, results='asis'}
+system2('git',
+        args = c('config', 'core.editor', 'cat')
+)
+
+system2('git', 
+        args = c('commit', '-a'), 
+        stdout = '../git_editor_message.txt', 
+        stderr = '../err.txt')
+
+
+cat_file('../git_editor_message.txt')
+
+# system2('git',
+#         args = c('config', 'core.editor', 'atom', '--wait')
+# )
+```
+In other words, the lines beginning with `#` provide information to you as you write your commit message, but they will not be part of the message itself.
+You write your message above these `#` lines.
+It is conventional and recommended^[See https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html] that the first line of this message is no more than 50 characters long and is followed by a blank line and then followed by more elaboration.
+The first line is treated as a subject line. 
+Its first character should be capitalized, and it should not end in a full-stop/period.
+It is also recommended that this subject line be written in imperative tense and not past tense.
+For example, it is recommended that we write something like "Add new function ..." rather than "Added new function ...".
+Admittedly, this is probably initially an unnatural way to write for most people. 
+After the subject line, there must be a blank line. 
+Without it, some features of Git can be affected. 
+Then, a more elaborate message can be written.
+Here, the imperative tense is no longer necessary. 
+In fact, it is not necessary to have a body at all, but it is highly recommended to provide a message body and to use it provide details about what the code being committed does. 
+It will be helpful for others, including your future self, to understand what was being added and why.
+The character line of the body text is recommended to to 72. 
+Most Git-aware editors, like Atom, will indicate if the subject line is over 50 characters, and if there is not a blank line after the subject, and will wrap the body at 72 characters.
+```{bash, results='hide'}
+cat << "EOF" > ../first_message.txt
+Initialize the repository
+
+Two files are added.
+  * `script.R` is an R script summarizing the `Titanic` data-set
+  * `readme.md` is the project's readme file.
+
+EOF
+
+git commit -F ../first_message.txt --date="4 hour ago"
+```
+
+
+In this example, because this commit is our first commit, our subject line should acknowledge that this is the beginning of the project. 
+As such, a message like the following can be used.
+```{r, results='asis'}
+cat_file("../first_message.txt")
+```
+Let us assume, therefore, that we this is what we have typed into the editor after we ran the `git commit` command the editor was opened. 
+After we save this file and quit the editor, the commit is completed. 
+
+Before proceeding, we should note that it is also possible to write one-liner commit messages using the option `-m` as follows.
+```{bash, echo=T, eval=FALSE}
+git commit -m 'Do something to something'
+```
+Here, no editor opens and there's no body to the message.
+For simplicity, we will use this method below sometimes. 
+However, using this method is probably to be avoided as it will, by necessity, lead to minimal and probably poorly thought out commit messages.
+
+We can now view at the Git log of the repository with the following command.
+```{bash, echo=TRUE, eval=F}
+git log
+```
+The output of `git log` would be something like this.
+```{bash}
+git log
+```
+As we can see, our commit message is there, as is our name, email address, and the date and time stamp of the commit.
+A crucial additional piece of information is the *commit hash*, which in this case is
+```{bash}
+git rev-parse HEAD
+```
+The commit hash is a vital feature of Git. 
+It is a 40 hexadecimal character (160 bit) cryptographic hash of the contents and other defining information about each commit. 
+In other words, it can be seen as essentially a fingerprint of the commit, but not just an arbitrarily assigned identifier, but one that is calculated using a hashing algorithmic from the contents of the commit. 
+It can therefore be used to uniquely identify the commit and to do a file integrity check of its contents.
+
+Having performed the commit, we can now again check the status of the repository.
+```{bash, echo=TRUE}
+git status
+```
+As we can see, now the repository is in a clean state. 
+All the original files have been committed.
+There are as yet no new files in the directory, and no edits to the existing files yet either.
+
+
+As an interim summary, thus far, we have seen a number of essential and regularly used Git commands.
+
+`git init`
+
+  : Create a Git repository in the current working directory of the shell. 
+  
+`git status` 
+
+  : Report the current working status of the repository. 
+    Specifically, are there untracked files in the repository or files in the staging area that have not yet been committed.q
+  
+`git add <file> ...`
+
+  : Add the files `<file> ...` to the staging area. 
+    The staging area is like the departure lounge of an airport.
+    The files therein are going scheduled for committal, though they may be taken out of the staging area too.
+    
+`git commit`
+
+  : Commit the files in the staging area.
+    This command opens an editor and a commit message is entered there.
+    
+## Adding and editing files
+
+As with any data analysis project, as it progresses, new files will be made and edits will be made to existing one.
+With Git, we can choose whether and when to add new files to the repository. 
+In other words, for example, if new files are added to the directory `project101`, they will be treated as *untracked* files.
+They will never be automatically added to the repository. 
+We must explicitly add them, using `git add`.
+Moreover, as we've seen above, adding files with `git add` only puts them in the staging area for committal. 
+They are not committed until we explicitly commit them with `git commit`.
+Something similar occurs with edits to the existing files.
+After any edits, Git identifies that files have be modified. 
+However, for these changes to be committed to the repository, they must first be added to the staging area with the `git add` command.
+Then, they must be explicitly committed with a `git commit` command.
+This double step process allows us to build up the staging area gradually as we work, and then committing all its contents when we they are all ready.
+This intended purpose of this is that we can then commit a set of files and edits that are all related to one another and together effectively do one main thing, such as fix a bug or a new feature, etc.
+These are known as *atomic commits*.
+
+```{bash, echo=TRUE}
+cat << "EOF" > models.R
+model <- lm(Fertility ~ Catholic, data = swiss)
+model_summary <- summary(model)
+```
+```{bash}
+sed -i 's/sum/mean/' script.R 
+```
+Continuing with our very simple example project, let us now add a new file named `models.R` whose contents is as follows.
+
+-------
+
+```{bash}
+cat models.R
+```
+
+-------
+
+In addition, let us edit the `script.R` file by changing the function `sum` for `mean` in the `apply` function.
+
+Now, let us check the working state of the repository.
+```{bash, echo=TRUE}
+git status
+```
+From this, we see that there is, as expected, one untracked file, `models.R`, and one modified file, `script.R`.
+
+We may now add both of these files, and the commit them both to the repository at the same time using a single commit.
+Alternatively, we could add and commit them individually.
+Whether we proceed one way or another should be based on whether the commit is atomic, i.e. has one main unitary function or purpose.
+In this example, because the new file and the change to `script.R` are not related to one another, we will perform two separate commits.
+First, we will add the modified `script.R` to staging.
+```{bash, echo=TRUE}
+git add script.R
+```
+Before we proceed, let us check the working state of the repository.
+```{bash, echo=TRUE}
+git status
+```
+As we can see, `script.R` is now in the staging area ready to be committed.
+We now can do the commit.
+```{bash, echo=TRUE, eval=FALSE}
+git commit
+```
+```{bash}
+rm ../git_editor_message.txt
+rm ../err.txt
+touch ../git_editor_message.txt
+touch ../err.txt
+```
+
+This will bring up our editor with the following contents.
+```{r, echo=F, results='asis'}
+system2('git',
+        args = c('config', 'core.editor', 'cat')
+)
+
+system2('git', 
+        args = c('commit'), 
+        stdout = '../git_editor_message.txt', 
+        stderr = '../err.txt')
+
+
+cat_file('../git_editor_message.txt')
+```
+
+```{bash, results='hide'}
+cat << "EOF" > ../second_message.txt
+Change function used in the apply functional
+
+The functional now calculates the mean number of men and
+women who survived the Titanic, not the total number.
+EOF
+
+git commit -F ../second_message.txt --date="3 hour ago"
+
+
+
+```
+As before, we should write our commit message above the lines beginning with `#`, following the conventions and recommendations for good git messages.
+We will add the following text to the commit message in the editor.
+```{r, results='asis'}
+cat_file("../second_message.txt")
+```
+Then, as before, when we save and quit, the staged changes are committed.
+If we look at the logs, we will now see the following.
+```{bash, echo=TRUE}
+git log
+```
+
+
+Let us again check the repository's status.
+```{bash, eval=TRUE}
+git status
+```
+As expected, we now see that there is just one untracked file, `models.R`, in the directory.
+We first add this file to put it in the staging area.
+```{bash, echo=TRUE}
+git add models.R
+```
+```{bash, results='hide'}
+cat << "EOF" > ../second_message.txt
+Add new lm script named `models.R`
+
+This script performs a linear regression analysis of the 
+built-in `swiss` data-set.
+EOF
+
+git commit -F ../second_message.txt --date="3 hour ago"
+```
+Then, we commit it with the following message.
+```{r, results='asis'}
+cat_file("../second_message.txt")
+```
+The status of the repository should confirm that everything is now clean.
+```{bash, echo=TRUE}
+git status
+```
+We can also check the logs.
+```{bash, echo=TRUE}
+git log
+```
+As expected, we now have three commits in the log now.
+
+## Using remote repositories
+
+Thus far, we have been using Git locally on one computer, and there has been only one user.
+However, one of the key reasons for using Git, or any other \vcs system, is for sharing and collaborating on projects.
+For this, we need to use *remote* repositories.
+It is both inexpensive, or possibly even free, and not technically difficult to host your own private Git server, which can then be used for either private team work or for sharing projects with the public.
+The required software, including the operating system of the server, i.e. Linux, is open-source and free, and so the only expense is hiring a server from a hosting company^[From companies such as https://www.digitalocean.com/, this may be between \$5-\$10 USD per month.]
+However, we will not consider this option further here.
+Instead, we will consider special purpose Git hosting sites, particularly GitHub.
+GitHub is extremely popular, with around over 40 million users and 100 million repositories as of early 2020.
+
+```{r github_new, out.width="\\textwidth", fig.cap="A screenshot of a GitHub page for creating a new repository.", fig.align='center'}
+knitr::include_graphics(file.path(chapter_wd, "include_graphics/github_screenshot.png"))
+```
+
+To share your Git repository, the first step is to create a new repository on GitHub.
+This assumes that you already have a GitHub account.
+GitHub provides free (no cost) and paid-for accounts.
+For most purposes, the free accounts are more than sufficient. 
+
+Assuming we have a GitHub account and have logged in, we then can browse to the following url.
+```
+https://github.com/new
+```
+This will bring up a web page that will allow us to create a new empty repository.
+See Figure \ref{fig:github_new} for a screenshot of this page.
+When asked for the repository name, you can use any name.
+In Figure \ref{fig:github_new}, we use `project101`, but it is not necessary to use the same name for the remote and local repository. 
+The contents of the repository will define it, not its name.
+You can then add a description. 
+This is just something for the GitHub listing itself. 
+This description will not part of the repository in general.
+Then, assuming you've already created a local repository that you wish to push to GitHub, leave everything else on this page at its default. 
+Specifically, do *not* add a `readme`, or a licence, or a `.gitignore` file.
+As important as these are, we can add them later using Git commands.
+
+After we click the "Create repository", we are then brought to a page that provides some Git commands for different situations.
+We already have an existing repository, so we want the code listed under the heading *…or push an existing repository from the command line*, which is
+```{bash, echo=T, eval=F}
+git remote add origin git@github.com:mark-andrews/project101.git
+git push -u origin master
+```
+
+There are two important commands here, and so we will look at them individually.
+The first command adds `github.com:mark-andrews/project101.git` as a remote host of the repository we have created.
+In this repository, this remote repository will be named `origin`. 
+The name `origin` is the default name for remote repositories from which other repositories are *cloned*. 
+However, we do not have to use this name, and in fact another name, such as `github`, might be more useful, especially if we have multiple remote repositories. 
+The second command *pushes* the contents of the master branch of local repository to the remote repository named `origin`.
+When you run this second command, you will be asked for your GitHub password, unless you have set up passwordless GitHub authentication using ssh keys, which is a very convenient feature when frequently using GitHub.
+
+Remember that we must run these command in the Git shell in the, in this example, `project101` repository that we have been using above.
+After we run them, if we then browse in a web browser to https://github.com/mark-andrews/project101
+we will see that our repository and all its history and other vital information is being now hosted there.
+
+### Cloning remotes
+
+If you create a public GitHub repository, as we did above, anyone can now *clone* your repository.
+For example, in a MacOS or Linux terminal or the Windows Git Bash shell, anyone can type the following command and then clone `project101`.
+```{bash, echo=T, eval=F}
+git clone git@github.com:mark-andrews/project101.git
+```
+Alternatively, they could use this version of the clone command.
+```{bash, echo=T, eval=F}
+git clone https://github.com/mark-andrews/project101.git
+```
+The difference between these two versions is simply the internet protocol that is being used.
+Having cloned `project101`, they will have access to everything that you pushed to GitHub, i.e. the master branch and all the history and other vital features of the repository.
+They will be able to do everything you can do with the repository: view the logs, make changes, commit changes, undo changes, roll back history, etc.
+All the logs, commit messages, commit hashes etc will be identical in the clone as in the original.
+However, as is probably obvious, whatever actions they take, they will not be able to affect your local repository in any way. 
+Moreover, they will not be able to affect your remote repository on GitHub either. 
+They would only be able to `push` to your GitHub repository if they had a GitHub account and you explicitly gave them `push` permission. 
+
+# References

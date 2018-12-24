@@ -1,0 +1,40 @@
+\begin{figure}
+\begin{center}
+\begin{tikzpicture}[mynode/.style={draw,circle, minimum width=5mm,align=center}]
+\node[mynode, fill=red!10] (m_1) {$m_1$};
+\node[mynode, fill=red!10, above left=0.5cm and 0.5cm of m_1] (n_1) {$n_1$};
+\node[mynode, above=1cm of m_1] (p_1) {$\beta_1$};
+\node[mynode, fill=red!10, right=2cm of m_1] (m_2) {$m_2$};
+\node[mynode, fill=red!10, above left=0.5cm and 0.5cm of m_2] (n_2) {$n_2$};
+\node[mynode, above=1cm of m_2] (p_2) {$\beta_2$};
+\draw[->] (p_1) -- (m_1);
+\draw[->] (n_1) -- (m_1);
+\draw[->] (p_2) -- (m_2);
+\draw[->] (n_2) -- (m_2);
+\node[right=2cm of n_2] (dots) {$\cdots$};
+\node[mynode, fill=red!10, right=6cm of m_1] (m_j) {$m_j$};
+\node[mynode, fill=red!10, above left=0.5cm and 0.5cm of m_j] (n_j) {$n_j$};
+\node[mynode, above=1cm of m_j] (p_j) {$\beta_j$};
+\draw[->] (p_j) -- (m_j);
+\draw[->] (n_j) -- (m_j);
+\node[right=2cm of n_j] (dots_2) {$\cdots$};
+\node[mynode, fill=red!10, right=3cm of m_j] (m_J) {$m_J$};
+\node[mynode, fill=red!10, above left=0.5cm and 0.5cm of m_J] (n_J) {$n_J$};
+\node[mynode, above=1cm of m_J] (p_J) {$\beta_J$};
+\draw[->] (p_J) -- (m_J);
+\draw[->] (n_J) -- (m_J);
+\node[mynode, above left =3cm and 1cm of dots] (b) {$b$};
+\node[mynode, above right=3cm and 1cm of dots] (tau) {$\tau$};
+\draw[->] (b) to (p_1);
+\draw[->] (b) -- (p_2);
+\draw[->] (b) -- (p_j);
+\draw[->] (b) to (p_J);
+\draw[->] (tau) to  (p_1);
+\draw[->] (tau) -- (p_2);
+\draw[->] (tau) -- (p_j);
+\draw[->] (tau) to  (p_J);
+\end{tikzpicture}
+\end{center}
+\caption{Inferring the log odds of a tumour $\beta_j$ in each of the $J$ batches is identical to $J$ independent binomial models.}
+\label{fig:multilevel_binomial}
+\end{figure}

@@ -1,0 +1,412 @@
+country,year,alcohol
+Russia,1985,13.31
+Russia,1986,10.77
+Russia,1987,10.96
+Russia,1988,11.57
+Russia,1989,12.04
+Chile,1990,9.43
+Ecuador,1990,8.4
+Greece,1990,12.51
+Russia,1990,12.29
+Russia,1991,12.67
+Macedonia [FYROM],1992,12.66
+Russia,1992,13.23
+Moldova,1993,18.1
+Russia,1993,13.6
+Slovenia,1993,24.19
+Ukraine,1993,13
+Austria,1994,12.62
+Denmark,1994,14.36
+Finland,1994,9.79
+Iceland,1994,5.52
+Norway,1994,6.26
+Russia,1994,13.3
+Estonia,1995,10.74
+Hungary,1995,14.52
+New Zealand,1995,9.19
+South Africa,1995,10
+Brazil,1996,14.01
+Sweden,1996,8
+Sweden,1998,8.2
+Sweden,2000,8.4
+Sweden,2001,9.1
+Sweden,2002,9.9
+Sweden,2003,10.2
+Sweden,2004,10.5
+Afghanistan,2005,0.02
+Albania,2005,6.68
+Algeria,2005,0.96
+Andorra,2005,15.48
+Angola,2005,5.4
+Antigua and Barbuda,2005,7.22
+Argentina,2005,10
+Armenia,2005,11.35
+Australia,2005,10.02
+Austria,2005,13.24
+Azerbaijan,2005,10.6
+Bahamas,2005,8.76
+Bahrain,2005,3.66
+Bangladesh,2005,0.17
+Barbados,2005,6.91
+Belarus,2005,15.13
+Belgium,2005,10.77
+Belize,2005,6.07
+Benin,2005,2.15
+Bhutan,2005,0.55
+Bolivia,2005,5.12
+Bosnia and Herzegovina,2005,9.63
+Botswana,2005,7.96
+Brazil,2005,9.16
+Brunei,2005,2.01
+Bulgaria,2005,12.44
+Burkina Faso,2005,6.98
+Burundi,2005,9.47
+Cambodia,2005,4.77
+Cameroon,2005,7.57
+Canada,2005,9.77
+Cape Verde,2005,4.96
+Central African Republic,2005,3.35
+Chad,2005,4.38
+Chile,2005,8.55
+China,2005,5.91
+Colombia,2005,6.17
+Comoros,2005,0.36
+Congo [DRC],2005,3.3
+Congo [Republic],2005,4.2
+Cook Islands,2005,3.7
+Costa Rica,2005,5.55
+Côte d'Ivoire,2005,6.48
+Croatia,2005,15.11
+Cuba,2005,5.51
+Cyprus,2005,9.26
+Czech Republic,2005,16.45
+Denmark,2005,13.37
+Djibouti,2005,1.87
+Dominica,2005,7.84
+Dominican Republic,2005,6.41
+Ecuador,2005,9.38
+Egypt,2005,0.37
+El Salvador,2005,3.61
+Equatorial Guinea,2005,6.08
+Eritrea,2005,1.54
+Estonia,2005,15.57
+Ethiopia,2005,4.02
+Fiji,2005,2.43
+Finland,2005,12.52
+France,2005,13.66
+Gabon,2005,9.32
+Gambia,2005,3.39
+Georgia,2005,6.4
+Germany,2005,12.81
+Ghana,2005,2.97
+Greece,2005,10.75
+Grenada,2005,10.35
+Guatemala,2005,4.03
+Guinea,2005,0.76
+Guinea-Bissau,2005,3.68
+Guyana,2005,9.5
+Haiti,2005,6.61
+Honduras,2005,4.48
+Hungary,2005,16.27
+Iceland,2005,6.31
+India,2005,2.59
+Indonesia,2005,0.59
+Iran,2005,1.02
+Iraq,2005,0.4
+Ireland,2005,14.41
+Israel,2005,2.89
+Italy,2005,10.68
+Jamaica,2005,5
+Japan,2005,8.03
+Jordan,2005,0.71
+Kazakhstan,2005,10.96
+Kenya,2005,4.14
+Kiribati,2005,3.71
+Kuwait,2005,0.1
+Kyrgyzstan,2005,5.09
+Laos,2005,6.73
+Latvia,2005,12.5
+Lebanon,2005,2.23
+Lesotho,2005,5.55
+Liberia,2005,5.06
+Libya,2005,0.11
+Lithuania,2005,15.03
+Luxembourg,2005,13.01
+Macedonia [FYROM],2005,8.51
+Madagascar,2005,1.33
+Malawi,2005,1.74
+Malaysia,2005,0.82
+Mali,2005,1.04
+Malta,2005,4.27
+Mauritania,2005,0.11
+Mauritius,2005,3.72
+Mexico,2005,8.42
+Micronesia,2005,5.5
+Moldova,2005,18.22
+Mongolia,2005,3.24
+Morocco,2005,1.46
+Mozambique,2005,2.38
+Myanmar [Burma],2005,0.57
+Namibia,2005,9.62
+Nauru,2005,4.83
+Nepal,2005,2.41
+Netherlands,2005,10.05
+New Zealand,2005,9.62
+Nicaragua,2005,5.37
+Niger,2005,0.34
+Nigeria,2005,12.28
+Niue,2005,9.85
+North Korea,2005,18.28
+Norway,2005,7.81
+Oman,2005,0.94
+Pakistan,2005,0.06
+Palau,2005,10.1
+Panama,2005,6.85
+Papua New Guinea,2005,3.49
+Paraguay,2005,7.88
+Peru,2005,6.9
+Philippines,2005,6.38
+Poland,2005,13.25
+Portugal,2005,14.55
+Puerto Rico,2005,5.75
+Qatar,2005,1.25
+Romania,2005,15.3
+Russia,2005,15.76
+Rwanda,2005,9.8
+Saint Kitts and Nevis,2005,9.43
+Saint Lucia,2005,11.85
+Saint Vincent and the Grenadines,2005,5.44
+Samoa,2005,4.8
+São Tomé and Príncipe,2005,8.74
+Saudi Arabia,2005,0.25
+Senegal,2005,0.6
+Serbia,2005,11.09
+Seychelles,2005,10.59
+Sierra Leone,2005,9.72
+Singapore,2005,1.55
+Slovakia,2005,13.33
+Slovenia,2005,15.19
+Solomon Islands,2005,1.66
+Somalia,2005,0.5
+South Africa,2005,9.46
+Spain,2005,11.62
+Sri Lanka,2005,0.79
+Sudan,2005,2.56
+Suriname,2005,6.09
+Swaziland,2005,5.7
+Sweden,2005,10.1
+Switzerland,2005,11.06
+Syria,2005,1.43
+Tajikistan,2005,3.39
+Tanzania,2005,6.75
+Thailand,2005,7.08
+Timor-Leste,2005,0.86
+Togo,2005,1.99
+Tonga,2005,3.78
+Trinidad and Tobago,2005,6.28
+Tunisia,2005,1.29
+Turkey,2005,2.87
+Turkmenistan,2005,4.63
+Tuvalu,2005,2.44
+Uganda,2005,11.93
+Ukraine,2005,15.6
+United Arab Emirates,2005,0.54
+United Kingdom,2005,13.37
+United States,2005,9.44
+Uruguay,2005,8.14
+Uzbekistan,2005,3.54
+Vanuatu,2005,0.93
+Venezuela,2005,8.23
+Vietnam,2005,3.77
+Yemen,2005,0.2
+Zambia,2005,3.85
+Zimbabwe,2005,5.08
+Sweden,2006,9.8
+Sweden,2007,9.8
+Afghanistan,2008,0.03
+Albania,2008,7.29
+Algeria,2008,0.69
+Andorra,2008,10.17
+Angola,2008,5.57
+Antigua and Barbuda,2008,8.17
+Argentina,2008,9.35
+Armenia,2008,13.66
+Australia,2008,10.21
+Austria,2008,12.4
+Azerbaijan,2008,13.34
+Bahamas,2008,8.65
+Bahrain,2008,4.19
+Bangladesh,2008,0.17
+Barbados,2008,6.42
+Belarus,2008,18.85
+Belgium,2008,10.41
+Belize,2008,5.92
+Benin,2008,2.08
+Bhutan,2008,0.54
+Bolivia,2008,5.78
+Bosnia and Herzegovina,2008,9.6
+Botswana,2008,6.97
+Brazil,2008,10.08
+Brunei,2008,1.86
+Bulgaria,2008,11.4
+Burkina Faso,2008,7.32
+Burundi,2008,9.65
+Cambodia,2008,4.71
+Cameroon,2008,7.9
+Canada,2008,10.2
+Cape Verde,2008,4.98
+Central African Republic,2008,3.17
+Chad,2008,4.39
+Chile,2008,8.81
+China,2008,5.56
+Colombia,2008,6.59
+Comoros,2008,0.28
+Congo [DRC],2008,3.39
+Congo [Republic],2008,4.46
+Cook Islands,2008,3.23
+Costa Rica,2008,5.81
+Côte d'Ivoire,2008,6.47
+Croatia,2008,15
+Cuba,2008,5.12
+Cyprus,2008,8.84
+Czech Republic,2008,16.47
+Denmark,2008,12.02
+Djibouti,2008,1.87
+Dominica,2008,8.68
+Dominican Republic,2008,6.28
+Ecuador,2008,9.43
+Egypt,2008,0.32
+El Salvador,2008,3.99
+Equatorial Guinea,2008,6.12
+Eritrea,2008,1.64
+Estonia,2008,17.24
+Ethiopia,2008,4.1
+Fiji,2008,2.76
+Finland,2008,13.1
+France,2008,12.48
+Gabon,2008,9.46
+Gambia,2008,3.58
+Georgia,2008,6.66
+Germany,2008,12.14
+Ghana,2008,3.11
+Greece,2008,11.01
+Grenada,2008,10.71
+Guatemala,2008,7.1
+Guinea,2008,0.79
+Guinea-Bissau,2008,3.9
+Guyana,2008,8.7
+Haiti,2008,5.92
+Honduras,2008,4.43
+Hungary,2008,16.12
+Iceland,2008,7.38
+India,2008,2.69
+Indonesia,2008,0.56
+Iran,2008,1.03
+Iraq,2008,0.47
+Ireland,2008,14.92
+Israel,2008,2.52
+Italy,2008,9.72
+Jamaica,2008,5.17
+Japan,2008,7.79
+Jordan,2008,0.65
+Kazakhstan,2008,11.1
+Kenya,2008,3.88
+Kiribati,2008,2.7
+Kuwait,2008,0.1
+Kyrgyzstan,2008,4.72
+Laos,2008,6.99
+Latvia,2008,13.45
+Lebanon,2008,2.3
+Lesotho,2008,5.56
+Liberia,2008,5.07
+Libya,2008,0.1
+Lithuania,2008,16.3
+Luxembourg,2008,12.84
+Macedonia [FYROM],2008,8.94
+Madagascar,2008,1.32
+Malawi,2008,1.44
+Malaysia,2008,0.87
+Mali,2008,0.99
+Malta,2008,4.1
+Mauritania,2008,0.11
+Mauritius,2008,3.53
+Mexico,2008,8.55
+Micronesia,2008,5.25
+Moldova,2008,23.01
+Mongolia,2008,3.41
+Morocco,2008,1.24
+Mozambique,2008,2.27
+Myanmar [Burma],2008,0.58
+Namibia,2008,12.09
+Nauru,2008,4.81
+Nepal,2008,2.42
+Netherlands,2008,9.75
+New Zealand,2008,9.99
+Nicaragua,2008,5.21
+Niger,2008,0.34
+Nigeria,2008,12.72
+Niue,2008,8.69
+Norway,2008,8.35
+Oman,2008,0.92
+Pakistan,2008,0.05
+Palau,2008,9.86
+Panama,2008,7.3
+Papua New Guinea,2008,3.64
+Paraguay,2008,7.91
+Peru,2008,6.53
+Philippines,2008,6.08
+Poland,2008,14.43
+Portugal,2008,13.89
+Qatar,2008,1.29
+Romania,2008,16.15
+Russia,2008,16.23
+Rwanda,2008,9.99
+Saint Kitts and Nevis,2008,10.62
+Saint Lucia,2008,12.05
+Saint Vincent and the Grenadines,2008,4.99
+Samoa,2008,4.51
+São Tomé and Príncipe,2008,8.45
+Saudi Arabia,2008,0.34
+Senegal,2008,0.51
+Serbia,2008,12.21
+Seychelles,2008,12.11
+Sierra Leone,2008,9.48
+Singapore,2008,1.54
+Slovakia,2008,13.31
+Slovenia,2008,14.94
+Solomon Islands,2008,1.37
+Somalia,2008,0.5
+South Africa,2008,10.16
+South Korea,2008,19.15
+Spain,2008,11.83
+Sri Lanka,2008,0.81
+Sudan,2008,2.56
+Suriname,2008,6.56
+Swaziland,2008,5.05
+Sweden,2008,9.5
+Switzerland,2008,11.41
+Syria,2008,1.49
+Tajikistan,2008,3.39
+Tanzania,2008,7.86
+Thailand,2008,7.08
+Timor-Leste,2008,0.74
+Togo,2008,1.92
+Tonga,2008,3.92
+Trinidad and Tobago,2008,6.16
+Tunisia,2008,1.05
+Turkey,2008,3.02
+Turkmenistan,2008,5
+Tuvalu,2008,2.14
+Uganda,2008,16.4
+Ukraine,2008,17.47
+United Arab Emirates,2008,0.52
+United Kingdom,2008,13.24
+United States,2008,9.7
+Uruguay,2008,8.99
+Uzbekistan,2008,3.61
+Vanuatu,2008,0.96
+Venezuela,2008,7.6
+Vietnam,2008,3.91
+Yemen,2008,0.2
+Zambia,2008,3.56
+Zimbabwe,2008,4.96

@@ -1,0 +1,48 @@
+---
+title: "A Shiny RMarkdown Page"
+author: "Mark Andrews"
+date: "23/08/2020"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+Choose a predictor variable from the list `Agriculture`, `Examination`, `Education`, `Catholic`, `Infant.Mortality`.
+A scatterplot of the points with their labels is shown, as is the line of the best fit.
+The line of best fit is
+$$
+y = \beta_0 + \beta_1 x,
+$$
+where $\beta_0$ and $\beta_1$ are the coefficients of the normal linear regression model predicting `Fertility` from the chosen predictor.
+```{r swiss, echo=FALSE}
+library(tidyverse)
+library(ggrepel)
+
+inputPanel(
+  selectInput("predictor", 
+              label = "Select predictor:",
+              choices = c("Agriculture",
+                          "Examination",
+                          "Education",
+                          "Catholic",
+                          "Infant.Mortality")
+  )
+)
+
+renderPlot({
+  swiss %>% 
+  as_tibble(rownames = 'region') %>% 
+  ggplot(aes_string(x = input$predictor, y = "Fertility", label = "region")) +
+  stat_smooth(method = 'lm', se = F) +
+  geom_point() +
+  geom_text_repel() +
+  theme_classic()
+})
+```
+
+
+
+

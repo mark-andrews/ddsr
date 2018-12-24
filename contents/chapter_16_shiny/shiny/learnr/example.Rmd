@@ -1,0 +1,46 @@
+---
+title: "An Interactive Tutorial"
+author: "Mark Andrews"
+date: "Aug 23, 2020"
+output: learnr::tutorial
+runtime: shiny_prerendered
+---
+
+```{r setup, include=FALSE}
+library(learnr)
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+```
+
+```{r quiz}
+quiz(
+  question("Which of the following models are used for modelling binary variables?",
+    answer("Linear regression"),
+    answer("Ordinal regression"),
+    answer("Binary logistic regression", correct = TRUE),
+    answer("Probit regression", correct = TRUE),
+    answer("Poisson regression")
+  ),
+  question("Which of the following are continous probability distributions?",
+    answer("Normal distribution", correct = TRUE),
+    answer("Binomial distribution"),
+    answer("Poisson distribution"),
+    answer("Negative binomial distribution")
+  )
+)
+```
+
+The following code is for a linear regression.
+
+```{r swiss_lm_1, exercise=TRUE, exercise.eval=FALSE}
+M <- lm(Fertility ~ Catholic, data = swiss)
+```
+
+Enter the `lm` model to predict `Fertility` from `Education`.
+```{r swiss_lm_2, exercise = TRUE}
+    
+```
+
+```{r swiss_lm_2-solution}
+M <- lm(Fertility ~ Education, data = swiss)
+```

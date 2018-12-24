@@ -1,0 +1,1504 @@
+---
+title: "Chapter 13: Nonlinear Regression"
+author: "Mark Andrews"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    fig_caption: true
+    keep_tex: true
+    highlight: haddock
+  html_document:
+    highlight: haddock
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+---
+
+```{r, echo=F}
+knitr::opts_chunk$set(echo = F, prompt = F, warning = F, message = F, comment='#>')
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+```
+
+```{r}
+library(tidyverse)
+library(magrittr)
+library(knitr)
+library(modelr)
+
+theme_set(theme_classic())
+```
+
+
+
+# Introduction
+
+In Chapter 10 (Logistic Regression), Chapter 11 (Generalized Linear Models), and Chapter 12 (Multilevel Models), we saw how the basic or default regression model, which we referred to as the normal linear model, can be generalized and extended so that it can apply to a much wider range of problems than would otherwise be the case.
+In this chapter, we will consider another important generalization of the basic regression model.
+In order to introduce this generalization, let us again return to the normal linear model.
+In the normal linear model, we assume we have a set of $n$ univariate observations:
+$$
+y_1, y_2 \ldots y_i \ldots y_n.
+$$
+Corresponding to each $y_i$, we have a set of $K$ predictor variables $\vec{x}_i = x_{i1}, x_{i2} \ldots x_{ik} \ldots x_{iK}$.
+The normal linear model assumes that each $y_i$ is a sample from a normal distribution with a mean $\mu_i$ and a variance $\sigma^2$, and the mean $\mu_i$ is a linear function of the predictors $x_i$. 
+We can write that statement more formally as follows:
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad \mu_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ik},\quad\text{for $i \in 1\ldots n$}.
+$$
+In other words, this model assumes that each $y_i$ is a sample from a normal distribution whose mean $\mu_i$ is a (deterministic) linear function of the predictors. 
+
+The assumption of a linear relationship between the mean of the outcome variable and the predictor variables is a strong one. 
+It means that we are assuming that the average value of the outcome variable will change as a constant proportion of a change in any predictor variable. 
+For example, if were to change $x_{ik}$ by $\Delta_{x_{ik}}$, we assume that $\mu_i$ will change by exactly $\beta_k \times \Delta_{x_{ik}}$. 
+We assume that this holds for all predictor variables and for any value of the change $\Delta_{x_{ik}}$. 
+Clearly, this is a restrictive assumption that will not generally hold. 
+In Figure \ref{fig:nonlinear_examples}, we show some of the many ways in which this assumption can be violated.
+In each of these examples, the average value of the outcome variable does not change by a constant amount with any constant change in the predictor variable. 
+Clearly, the average trends in each of these scatterplots are not adequately described by straight lines.
+
+```{r}
+fig_cap <- '
+Examples of nonlinear regression models. In each case, the values of the outcome variables
+are sampled from normal distributions whose means are nonlinear functions of the the predictor variable.
+'
+```
+
+```{r, nonlinear_examples, fig.align='center', out.width='0.9\\textwidth', fig.cap=fig_cap}
+library(cowplot)
+library(tikzDevice)
+
+textwidth_in_inches <- 469.75/72.26
+
+nonlinear_examples_fname <- 'nonlinear_examples_fname.tex'
+
+
+set.seed(666)
+
+N <- 50
+Df <- tibble(x = seq(-2, 2, length.out = N))
+
+plotter <- function(f, sigma){
+  Df %>% mutate(y = f(x) + rnorm(N, sd = sigma)) %>% 
+    ggplot(Df, mapping = aes(x = x, y = y)) +
+    geom_point(size = 0.5) +
+    theme_classic() +
+    theme(aspect.ratio = 1/2)  +  ylab('y') +
+    xlab('x') 
+}
+exponential_f <- function(sigma = 1){
+  plotter(f = exp, sigma = sigma)
+}
+
+logistic_f <- function(L = 1, sigma = 1, b = 1, a = 0){
+  ilogit <- function(x) L/(1 + exp(-(b*x + a)))
+  plotter(f = ilogit, sigma = sigma)
+}
+
+sinusoidal_f <- function(b = 1, sigma = 1){
+  plotter(f = function(x) sin(b*x), sigma = sigma)
+}
+
+quadratic_f <- function(sigma = 1){
+  plotter(f = function(x) -x^2, sigma = sigma)
+}
+
+mog_f <- function(sigma = 1){
+  f <- function(x){
+    x <- x * 2
+    dnorm(x, mean = -1.5) + 1.5 * dnorm(x, mean = 1.5)
+  }
+  plotter(f = f, sigma = sigma)
+}
+
+plot_grid(exponential_f(sigma = 0.5),
+          logistic_f(sigma = 0.5, b = 3, L = 10),
+          sinusoidal_f(b = 1.5, sigma=0.15),
+          mog_f(sigma = 0.04),
+          labels = letters[1:4],
+          nrow = 2)
+
+```
+
+We can deal with these situations by no longer modelling the average value of the outcome variable as linear function of the predictors. 
+For example, we can define a normal *nonlinear* regression model as follows:
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad \mu_i = f(x_i, \theta),\quad\text{for $i \in 1\ldots n$},
+$$
+where $x_i$ is the vector of $K$ predictors as before, $f$ is some (deterministic) nonlinear function of $x_i$, and $\theta$ is a set of parameters of $f$.
+More generally, of course, we do not have to assume our outcome variable is normally distributed.
+In fact it could be any parameterized probability distribution. 
+Moreover, we do not have to assume that it is the mean of the outcome distribution that varies as the deterministic function of $x_i$. 
+This leads to the following more general nonlinear regression model:
+$$
+y_i \sim D(\mu_i, \psi),\quad \mu_i = f(x_i, \theta),\quad\text{for $i \in 1\ldots n$},
+$$
+where $D$ is some probability distribution with parameters $\mu_i$ and $\psi$, and $\mu_i$ is the nonlinear function of $x_i$, which is parameterized by $\theta$.
+
+Using a nonlinear regression model, whether the normal or the more general one, introduces considerable conceptual and practical difficulties. 
+First, we must choose the nonlinear function, or functional form, $f$. 
+There are indescribably many possibilities for $f$ and choosing between them or even choosing a plausible set of candidate functions can be very challenging, as we will see. 
+Second, inference of the values of the unknown parameters of the model can also be very challenging. 
+In the normal linear regression model, inference of, for example, the maximum likelihood estimator, can be accomplished using algebra. 
+Likewise, assuming appropriate choices of prior distributions for the parameters, the Bayesian posterior distribution over these parameters can be obtained through algebra. 
+This is generally not the case when we use nonlinear functions, even if our outcome variable is normally distributed, and for arbitrary nonlinear functions $f$ and arbitrary probability distributions for the outcome variable $D$, inference of the values of the unknown parameters in both $f$ and $D$ may lead to insurmountable computational challenges. 
+Typically, different numerical algorithms are employed in different situations. 
+Often these work well, but it is not at all uncommon to encounter computational problems or failures with these algorithms too. 
+Finally, even assuming that inference was successful, the interpretation of parameters in nonlinear regression models may also be challenging or even impossible. 
+In a linear model, each regression coefficient has a simple interpretation: it gives the rate of change of the outcome variable for any unit change of the predictor. 
+In nonlinear models, it is not so simple.
+Certainly, in some cases of nonlinear regression, the parameters can have a clear and meaningful interpretations. 
+But in other cases, individual parameters can not be understood independently of other parameters.
+This sometimes entails that it can be difficult to assess whether one predictor variable has any statistically meaningful relationship (e.g., a statistically significant relationship) with the outcome variable.
+More generally, it can be challenging to summarize and explain the relationship, if any, between the predictors and the outcome variable. 
+Simply put, nonlinear regression models can be opaque, and as such, are sometimes preferred to be treated just as *black box* models, used for the accuracy of their predictions rather than for any conceptual or explanatory insights. 
+
+For all of these reasons, nonlinear regression should be treated with some caution and as a relatively advanced statistical topic. 
+That is emphatically not to say that it should be avoided.
+It is in general a very powerful tool that can allow us to do either more advanced analyses than were otherwise possible, or even to be able to deal with problems that were otherwise impossible. 
+It is just that we should also be clear that nonlinear regression raises additional conceptual and practical challenges compared to those we have encountered when using general or generalized linear models.
+
+In this chapter, we'll discuss four topics related to nonlinear regression.
+First, we'll cover parametric nonlinear regression, which is where a certain parametric form of the nonlinear function is assumed.
+Next, we will cover polynomial and splines regression models, both of which can be seen as either semiparametric or nonparametric regression models.
+Finally, we will introduce to the topic of *generalized additive models* (\gams), which is a broad class of nonlinear regression models of which polynomial and splines models can be seen as subclasses.
+
+# Parametric nonlinear regression
+
+In *parametric nonlinear regression*, we choose a particular parametric functional form for the nonlinear function $f$ and then infer the values of its unknown parameters from data.
+The other types of nonlinear regression that we will cover in this chapter also have parameters, which are inferred from data, and so can also be termed parametric models.
+However, in these cases, the functional form of the nonlinear function in the regression model is essentially unknown and is being approximated by a more flexible nonlinear model. 
+
+## Example 1: A sigmoidal regression 
+
+To begin with this topic, let us start with an essentially arbitrarily chosen nonlinear function, such as the following nonlinear function of a single variable $x$, as an example:
+$$
+f(x, b, \alpha, \beta) \triangleq b \tanh(\alpha + \beta x).
+$$
+The $\tanh$ (hyperbolic tangent) function is defined as follows:
+$$
+\tanh(x) = \frac{e^x - e^{-x}}{e^x + e^{-x}} = \frac{e^{2x}-1}{e^{2x} + 1}
+$$
+It is a *sigmoidal* or S-shaped function that maps the real line to the interval $[-1, 1]$, see Figure \ref{fig:tanh}a, and so $f(x, b, \alpha, \beta)$ is a linear function of a nonlinear function of another linear function of $x$.
+Functions of this type are widely used in artificial neural network models [see @Bishop:NeuralNetworks].
+With this nonlinear function, our nonlinear regression model would then be
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad \mu_i = b \tanh(\alpha + \beta x_i),\quad\text{for $i \in 1\ldots n$}.
+$$
+In order to explore this regression model in practice, we will begin by simply generating data according to the model.
+```{r, echo=TRUE}
+Df <- local({
+  b <- 3.0
+  alpha <- 0.75
+  beta <- 0.25
+  tibble(x = seq(-10, 10, length.out = 50),
+         y = b * tanh(alpha + beta*x) + rnorm(length(x), sd = 0.5))
+})
+```
+This data is shown in Figure \ref{fig:tanh}b.
+```{r, tanh, echo=F, out.width='\\textwidth', fig.align='center', fig.cap='a) The $\\tanh$, or hyperbolic tangent, function. b) Data normally distributed around a linear function of a $\\tanh$ function.'}
+plot_1 <- tibble(x = seq(-3, 3, length.out = 1000),
+                 y = tanh(x)) %>% 
+  ggplot(aes(x = x, y = y)) + 
+  geom_line() +
+  theme(aspect.ratio = 1/2) + ylab('y') + xlab('x') 
+
+plot_2 <- ggplot(Df, aes(x = x, y = y)) +
+  geom_point(size = 0.5) +
+  theme(aspect.ratio = 1/2) + ylab('y') + xlab('x') 
+
+plot_grid(plot_1, plot_2, labels=c('a', 'b'), nrow = 2)
+```
+To perform this regression analysis, we can use the `nls` function that is part of the base R `stats` package, which is always preloaded. 
+With `nls`, in its R formula, we state the parametric form of the function we are assuming. 
+In our case, this will be `y ~ b * tanh(alpha + beta * x)`.
+The `nls` function then attempts to find the *least squares* solution for `alpha` and `beta`.
+In other words, and more formally, it attempts to find the values of $b$, $\alpha$ and $\beta$ that minimize the following formula.
+$$
+\sum_{i=1}^n \left( y_i - b\tanh(\alpha + \beta x_i)\right)^2
+$$
+Usually, `nls` requires us to also provide an initial guess of the values of the unknown parameters. 
+In the following example, we'll set `alpha` to 0 and `b` and `beta` to 1.
+```{r, echo=T}
+M <- nls(y ~ b * tanh(alpha + beta * x), 
+         start = list(b = 1, alpha = 0, beta = 1),
+         data = Df)
+```
+We can view the results of this analysis using `summary` just as we did with `lm`, `glm`, `lmer` etc models.
+```{r, echo=T}
+summary(M)
+```
+```{r}
+S <- summary(M)
+coefs <- S$coefficients[,'Estimate']
+sigma <- S$sigma
+```
+As can we see, the least squares estimates of $b$, $\alpha$ and $\beta$, which we'll label as $\hat{b}$, $\hat{\alpha}$ and $\hat{\beta}$, are `r round(coefs['b'], 3)`, `r round(coefs['alpha'], 3)` and `r round(coefs['beta'], 3)`. 
+The estimate for $\sigma$, the standard deviation of the normal distribution around each $\mu_i$, also known as the *residual standard error*, has a value of `r round(sigma, 3)`. 
+All of these values match well the parameters that we used to generate the data.
+
+We may now view the predictions of the model using the `predict` function. 
+Recall that by default, `predict` will return the predicted values of the outcome variable for each value of the predictor variables using the estimated values of the parameters.
+In other words, it will calculate $\hat{y}_i = \hat{b} \tanh(\hat{\alpha} + \hat{\beta} x_i)$ for each $x_i$.
+We'll use the following code to perform this prediction and plot the results, which is shown in Figure \ref{fig:tanh_predict}
+```{r, tanh_predict, echo=T, out.width='0.5\\textwidth',fig.align='center', fig.cap='The fitted $\\tanh$ regression model.'}
+Df %>% 
+  mutate(y_pred = predict(M)) %>% 
+  ggplot(aes(x = x)) +
+  geom_point(aes(y = y), size = 0.5) +
+  geom_line(aes(y = y_pred), colour = 'red')
+```
+
+One practical issue with `nls` is that choosing starting values may not always be a simple matter.
+Even in the above example, starting values relatively close to the true values, say $0$ for all parameters, will lead to the algorithm failing. 
+```{r, echo=T, error=T}
+M_tmp <- nls(y ~ b * tanh(alpha + beta * x), 
+             start = list(b = 0, alpha = 0, beta = 0),
+             data = Df)
+```
+In the case of some functions, however, the `stats` package provides functions that use heuristics to roughly estimate some reasonable starting values of parameters. 
+These so-called `selfStart` functions only exist for a restricted set of functions. 
+While it is possible to create new `selfStart` functions for new functions, creating the heuristics is itself not simple. 
+For our $f(x, b, \alpha, \beta)$ function, no `selfStart` function exists. 
+However, a `selfStart` function, `SSlogis`, does exist for a related function:
+$$
+\texttt{SSlogis}(x, \text{Asym}, x_{\text{mid}}, \text{scal}) \triangleq \frac{\text{Asym}}{1 + e^{\frac{x_{\text{mid}}-x}{\text{scal}}}}
+$$
+This is also a sigmoidal function, but it is bounded between $0$ and $a$.
+Because it can not take on negative values, to use it with our data, we must first subtract the minimum value of all $y_i$ values from each $y_i$.
+Having done so, we can use the `getInitial` function to return some plausible starting values for $\text{Asym}$, $x_{\text{mid}}$, and $\text{scal}$.
+```{r, echo=T}
+inits <- getInitial(y ~ SSlogis(x, Asym, xmid, scal), 
+                    data = mutate(Df, y = y - min(y))
+)
+inits
+```
+With some algebra, we can then map the parameters of `SSlogis` to those of our $\tanh$ based function as follows:
+$$
+\alpha = \frac{\text{Asym}}{2\text{scal}},\quad
+\beta = \frac{1}{2 \text{scal}},\quad
+b = \frac{\text{Asym}}{2}
+$$
+We may now use these starting values in our `nls` model.
+```{r, echo=T}
+starting_values <- within(list(),{
+  alpha <- inits['Asym'] / (2 * inits['scal'])
+  beta <- 1 / (2 * inits['scal'])
+  b <- inits['Asym']/2
+})
+
+nls(y ~ b * tanh(alpha + beta * x), 
+    start = starting_values,
+    data = Df) %>% 
+  summary()
+```
+
+
+## Example 2: Modelling golf putting successes 
+
+Thus far, our aim was simply to introduce the basic principles of how to do nonlinear regression using `nls`, and for that we used a seemingly arbitrary nonlinear function and some data generated using this model. 
+Let us now consider some real world data, but also consider how the choice of the nonlinear function can be, and ideally ought to be, theoretically motivated.
+The data we will use concerns the relative frequencies with which professional golfers successfully putt the golf ball into the hole as a function of their distance from the hole. 
+This data, which is available in the `golf_putts.csv` file, is taken from @berry:statistics, and was discussed further in @gelman:teaching_stats.
+```{r, echo=T}
+golf_df <- read_csv('data/golf_putts.csv')
+golf_df
+```
+```{r}
+two_ft <- golf_df %>% filter(distance == 2) %>% unlist()
+ten_ft <- golf_df %>% filter(distance == 10) %>% unlist()
+```
+As we can see, this data provides the number of putting attempts and the number of successful putts at various distances (in feet) from the hole. 
+For example, there were `r two_ft['attempts']` recorded putting attempts at a distance of `r two_ft['distance']` feet from the hole.
+Of these `r two_ft['attempts']` attempts, `r two_ft['success']`, or around `r round(100*two_ft['success']/two_ft['attempts'])`%, were successful. 
+On the other hand, there were `r ten_ft['attempts']` recorded attempts at a distance of `r ten_ft['distance']` feet, or which `r ten_ft['success']`, or around `r round(100*ten_ft['success']/ten_ft['attempts'])`%, were successful. 
+The absolute number of attempts and successes at each distance is vital information and so ideally we should base our analysis on this data, using a binomial logistic regression or a related model. 
+However, for simplicity here, we will just use the relative frequencies of successes at each distance.
+To do so, we will first create a new variable, `prob`, that is the ratio of successes to attempts at each distance.
+This is done in the following code, and the plot of these probabilities as a function of distance is show in Figure \ref{fig:golf_putts}.
+```{r, echo=T}
+golf_df %<>% mutate(prob = success/attempts)
+```
+```{r, golf_putts, out.width='0.5\\textwidth',fig.align='center', fig.cap='The relative frequencies of successful putts by professional golfers as a function of distance (ft) from the hole.'}
+ggplot(golf_df,
+       mapping = aes(x = distance, y = prob)
+) + geom_point() + 
+  ylab('Probability of the golf ball landing in hole') +
+  xlab('Distance from the hole (ft)')
+```
+
+\begin{figure}
+\begin{center}
+\includegraphics[width=0.5\textwidth]{includes/golf_putting_v2.pdf}
+\caption{A golf ball of radius $r$ (left) and the golf hole of radius $R$ (right). The centres of these two circles are $d$ apart. If the golf ball travels in a straight vertical line to the hole, it will fall in. If its trajectory deviates, either to the right or to the line, greater than an angle of $\theta_{\text{crit}}$, it will miss.
+  The angle $\theta_{\text{crit}}$ is the angle between the vertical line of length $d$ and the tangent line from the centre of the ball to the hole. The line from the centre of the hole meets the tangent line at a right angle. As such, $\theta_{\text{crit}} = \sin^{-1}\left(\tfrac{R}{d}\right)$.
+}
+\label{golf_diagram}
+\end{center}
+\end{figure}
+
+In order to fit a parametric nonlinear regression model to this data, we must begin by choosing the nonlinear function.
+We could choose functions whose shape appears to roughly match the decaying pattern of the points.
+However, when it is possible, it is preferable to choose a function based on a principled model of the phenomenon.
+As an example, let us use the simple model described in @gelman:teaching_stats.
+We will treat the golf ball as a circle of radius $r$ and the hole as the circle of radius $R$.
+In reality, the values of $r$ and $R$ are 21.33mm and 53.975mm, respectively.
+In Figure \ref{golf_diagram}, we draw these two circles to scale, positioned a distance of $d$ apart.
+If the golf ball travels in a straight line along the line from its centre to the centre of the hole, it will fall into the hole. 
+If it deviates slightly from this straight line, it will still fall in if the angle of the trajectory to the left or the right is no greater than $\theta_{\text{crit}} = \sin^{-1}\left(\tfrac{R}{d}\right)$, which is the angle between the vertical line of length $d$ and the tangent line from the centre of the circle representing the ball to the circle representing the hole^[The tangent line from the centre of the small circle intersects the line from the centre of the larger circle at a right angle. In the right angled triangle that is formed, see Figure \ref{golf_diagram}, the side opposite $\theta_{\text{crit}}$ is length $R$, and the hypotenuse is of length $d$. The $\sin$ of $\theta_{\text{crit}}$ is $\sin\left(\theta_{\text{crit}}\right) = \tfrac{R}{d}$, and so $\theta_{\text{crit}} = \sin^{-1}\left(\tfrac{R}{d}\right)$]. 
+We can assume that deviation from a perfect straight line of a professional golfer's putt will be normally distributed with a mean of zero and a standard deviation of $\sigma$, where the value of $\sigma$ is unknown.
+Given this, the probability that the angle of their putt will be between $0$ and $\theta_{\text{crit}}$ is 
+$$
+\Prob{0 < \theta \leq \theta_{\text{crit}}} = \Phi(\theta_{\text{crit}}\given 0, \sigma^2) - \tfrac{1}{2},
+$$
+where
+$$
+\Phi(\theta_{\text{crit}}\given 0, \sigma^2) \triangleq 
+\int_{-\infty}^{\theta_{\text{crit}}} N(\theta \given 0, \sigma^2),
+$$
+which is the value at $\theta_{\text{crit}}$ of the cumulative distribution function of a normal distribution of mean 0 and standard deviation $\sigma$.
+We simply double the quantity $\Phi(\theta_{\text{crit}}\given 0, \sigma^2) - \tfrac{1}{2}$ to get $\Prob{\theta_{\text{crit}} < \theta \leq \theta_{\text{crit}}}$. 
+Therefore, the probability of a successful putt is 
+$$
+2 \Phi\left(\sin^{-1}\left(\tfrac{R}{d}\right)\given 0, \sigma^2\right) - 1.
+$$
+This is a nonlinear parametric function of distance $d$, where $R$ is known to have a value of 53.975mm, and $\sigma$ is the single unknown parameter.
+
+This nonlinear function is easily implemented as follows.
+```{r, echo=T}
+successful_putt_f <- function(d, sigma){
+  R <- 0.17708333 # 53.975mm in feet
+  2 * pnorm(asin(R/d), mean=0, sd=abs(sigma)) -1
+}
+```
+
+The `nls` based model using this `successful_putt_f` function is as follows.
+```{r, echo=T}
+M_putt <- nls(prob ~ successful_putt_f(distance, sigma),
+              data = golf_df,
+              start = list(sigma = 0.1)
+)
+summary(M_putt)
+```
+```{r}
+estimate <- coefficients(M_putt)['sigma']
+rad2deg <- function(rad) (rad * 180) / pi
+```
+As we can see, the estimate for `sigma` is `r estimate %>% round(3)`.
+This is the estimated standard deviation in the angle of errors the golfer's putts. 
+It is given in radians, and corresponds to `r rad2deg(estimate) %>% round(3)` degrees.
+The nonlinear function with this estimated value for $\sigma$ is plotted in Figure \ref{fig:golf_putts_prediction}. 
+This appears to be a good fit to the data, which is not necessarily expected given that the physical model that we used was a very simple one.
+
+```{r golf_putts_prediction, out.width='0.5\\textwidth',fig.align='center', fig.cap='The predictions of the nonlinear regression model based on probabilities of errors in putting angles being normally distributed.'}
+golf_df %>% 
+  mutate(prediction = predict(M_putt)) %>% 
+  ggplot(mapping = aes(x = distance)) + 
+  geom_point(mapping = aes(y = prob)) + 
+  geom_line(mapping = aes(y = prediction), col='red') +
+  ylab('Probability of the golf ball landing in hole') +
+  xlab('Distance from the hole (ft)')
+```
+
+# Polynomial regression
+
+Using `nls` required that we knew or could propose a specific functional form for the nonlinear function in our regression model. 
+We saw the case of the golf putting data where, using some basic principles and knowledge of the domain, we could obtain a specific nonlinear function for our regression model.
+There are many other examples like this throughout science where theoretical descriptions of the phenomenon of interest, even if sometimes simplified ones, can lead to nonlinear functions that we can use in the regression model.
+When we are in these situations, `nls` and related tools are very useful.
+Often, however, we simply do not have theoretically motivated nonlinear functions that describe the phenomenon of interest. 
+Certainly, it may be possible in principle to derive these functions, but this is essentially a type of scientific theory building, and so is not at all a simple matter, especially where the phenomenon and the related data are complex.
+In these situations then, we often proceed by using a flexible class of nonlinear regression models that essentially attempt to approximate the nonlinear function in regression model.
+These models are sometimes termed *nonparametric* nonlinear regression models, although the validity of that term is debatable, and include spline and radial basis function regression models, generalized additive models, and Gaussian process regression models. 
+We will cover some of these models in subsequent sections of this chapter.
+As a bridge to these topics, we will first cover polynomial regression models. 
+
+Polynomial regression models can be seen as just another parametric nonlinear regression model like those we used with `nls` in the previous section because we have a specific nonlinear function, namely a polynomial function of specified degree, that has parameters that we then infer from data.
+Indeed, it is perfectly possible to use a polynomial function in `nls`.
+However, polynomial functions are often chosen for their apparent ability to approximate other functions.
+In other words, in situations where we are modelling data whose trends are nonlinear but where there no known parametric form to this nonlinear, polynomial regression models are often the default choice.
+The reason why they are chosen is because, as we will see, they are particularly easy to use, being essentially a linear regression on transformed predictor variables.
+However, we will argue here that polynomial regression should be used with caution, and perhaps should not be a default choice when doing nonlinear regression, because they can often lead to poor fit to the data, either by underfitting but more commonly by *overfitting*, as we will see.
+
+## The nature of polynomial regression
+
+For simplicity, let us begin with a regression model with a single outcome variable and single predictor variable. 
+As we've seen, a normal linear regression model in this case is defined as follows:
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad \mu_i = \alpha + \beta x_i,\quad\text{for $i \in 1\ldots n$}.
+$$
+The function $\mu_i = \alpha + \beta x_i$ is a *polynomial of degree one*. 
+In other words, we can write
+\begin{align*}
+\mu_i &= \alpha + \beta x_i,\\
+      &= \alpha x_i^0 + \beta x_i^1,
+\end{align*}
+where the superscripts in $x_i^0$ and $x_i^1$ are exponents. 
+In other words, $x_i^0$ is $x_i$ raised to the power of $0$, which is $x_i^0 = 1$, and $x_i^1$ is $x_i$ raised to the power of $1$, which is $x_i^1 = x_i$.
+The *degree* of the polynomial is the highest power in any of its terms.
+We can easily extend the linear model to become a polynomial of any degree.
+For example, a degree $2$ polynomial regression version of the above model could be as follows:
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad \mu_i = \alpha + \beta x_i + \gamma x_i^2,\quad\text{for $i \in 1\ldots n$}.
+$$
+We could rewrite this as 
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad \mu_i = \alpha x_i^0 + \beta x_i^1 + \gamma x_i^2,\quad\text{for $i \in 1\ldots n$},
+$$
+or, to avoid proliferation of Greek letters for the coefficients, by 
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad \mu_i = \beta_0 x_i^0 + \beta_1 x_i^1 + \beta_2 x_i^2,\quad\text{for $i \in 1\ldots n$},
+$$
+where the subscripts in $\beta_0$, $\beta_1$, $\beta_2$ are simply indices.
+Continuing like this to any finite degree is easy. 
+For example, here's a degree $K = 5$ polynomial of each $x_i$.
+\begin{align*}
+y_i \sim N(\mu_i, \sigma^2),\quad 
+\mu_i &= \beta_0 x_i^0 + \beta_1 x_i^1 + \beta_2 x_i^2 + \beta_3 x_i^3 + \beta_4 x_i^4 + \beta_5 x_i^5 ,\\
+\mu_i &= \sum_{k=0}^K \beta_k x_i^k,\quad\text{for $i \in 1\ldots n$}.
+\end{align*}
+Viewed this way, a polynomial regression model of single predictor is simply a linear regression model with multiple predictors, each of which being the predictor raised to a different power.
+
+Raising a given predictor to successive powers from $0, 1 \ldots$ leads to a different function of $x$. 
+Some examples are shown in Figure \ref{fig:polynomials_plot}.
+When the power is $0$, the function is a flat line at $1$ ($y = x^0 = 1$).
+When the power is $1$, the function is a line with slope $1$ ($y = x^1 = x$).
+When the power is $2$, the function is a parabolic, or quadratic, function, and so on.
+The polynomial function $\sum_{k=0}^K \beta_k x_i^k$ is a weighted sum of these functions, with the weightings of the sum being the coefficients $\beta_0, \beta_1 \ldots \beta_K$.
+These weighted sums can approximate different functions.
+For example, in Figure \ref{fig:rpolynomial_plot}, we provide multiple plots, each with multiple functions of the form $y = \sum_{k=0}^5 \beta_k x^k$ where $\beta_0, \beta_1 \ldots \beta_5$ are random.
+In polynomial regression, therefore, we aim to infer a set of coefficients to essentially approximate the function that represents the curve from which our data was generated along with additive normally distributed noise.
+In other words, we assume that are data are generated as follows:
+$$
+y_i \sim N(f(x_i), \sigma^2),\quad \text{for $i = 1, 2 \ldots n$},
+$$
+where $f$ is a nonlinear function that we will approximate with a polynomial of degree $K$, i.e. each $x_i$, we assume that $f(x_i)$ can be approximated by $\sum_{k=0}^K \beta_k x_i^k$ for some unknown values of $\beta_0, \beta_1 \ldots \beta_K$.
+
+
+```{r}
+get_polynomial_design_matrix <- function(K=3, xmin=-10, xmax=10, N=100, rescale = T){
+  
+  # Produce a matrix of x, and x raised to the power of 0 to K
+  # If `rescale, the values of the powers of x are scaled to be between -2 and 2
+  
+  rescale_f <- function(x, new_min=-1, new_max=1){
+    
+    new_range <- new_max - new_min
+    original_range <- max(x) - min(x)
+    
+    x <- x * new_range/original_range
+    x - (min(x) - new_min)
+  }
+  
+  x <- seq(xmin, xmax, length.out = N)
+  Df <- map(x, ~.^seq(0, K)) %>%
+    do.call(rbind, .) %>% 
+    set_colnames(paste0('degree_', seq(0, K))) %>% 
+    as_tibble() %>% 
+    mutate(x = degree_1) %>% 
+    select(x, everything())
+  
+  if (rescale){
+    Df %>% mutate_at(vars(matches('^degree_[^0]$')), 
+                     ~rescale_f(., new_min = -2, new_max = 2))
+  } else {
+    Df
+  }
+}
+
+rpolynomial <- function(K = 5){
+  beta <- rnorm(K + 1)
+  beta <- beta/sum(beta)
+  get_polynomial_design_matrix(K = K) %>%
+    mutate(y = select(., starts_with('degree')) %>% 
+             apply(1, function(x) sum(x*beta))
+    ) %>% select(x, y) 
+}
+```
+
+```{r, polynomials_plot, out.width='0.66\\textwidth',fig.align='center', fig.cap='Plots of polynomial functions. For each degree $k \\in 0, 1, \\ldots 5$, we plot $y = x^k$. We have scaled the value of $y$ in each case so that it occurs within the range $(-2, 2)$, which is done to aid the visualization of each function.'}
+
+get_polynomial_design_matrix(K=5) %>% 
+  gather(degree, y, starts_with('degree')) %>% 
+  ggplot(mapping = aes(x = x, y = y, colour = degree)) + geom_line()
+
+```
+
+```{r, rpolynomial_plot, out.width='\\textwidth',fig.align='center', fig.cap='Examples of random polynomial functions. In each subplot, we have five random polynomials of degree $K=5$. In other words, each function shown in each subplot is defined as $y = \\sum_{k=0}^5 \\beta_k x^k$ for some random vector $\\beta_0, \\beta_1 \\ldots \\beta_5$.'}
+
+rpolynomial_examples <- function(i){
+  set.seed(i)
+  Df <- imap(rerun(5, rpolynomial(K = 5)), 
+             ~mutate(., example = .y)) %>% 
+    bind_rows() %>% 
+    mutate_at(vars(example), as.character)
+  
+  p <- Df %>% ggplot(mapping = aes(x = x, y = y, colour = example)) + 
+    geom_line() +
+    theme(legend.position="none")
+  
+  p
+}
+
+plot_ids <- c(110, 114, 116, 117)#, 120, 122, 125, 129, 130)
+
+do.call(plot_grid, map(plot_ids, rpolynomial_examples))
+
+
+```
+
+## Polynomial regression in practice
+
+Let use polynomial regression to model some eye-tracking data[^eyetrax_data], which is based on averaging data that was obtained from a eye-tracking based cognitive psychology experiment, and is available in the file `funct_theme_pts.csv`.
+```{r, echo=T}
+eyefix_df <- read_csv('data/funct_theme_pts.csv')
+```
+The data provides the number of times over the duration of a few seconds that participants look at certain key object in their visual scenes under different experimental conditions.
+To begin, we will look at the average number of eye fixations at one of the three different types of object in each (50ms) time window, averaging over experimental subjects and experimental conditions.
+The fixation proportions for all three object is shown in Figure \ref{fig:eyefix_fig_1}. 
+We will begin our analysis with just the data on the *Target* object.
+```{r, echo=T}
+eyefix_df_avg <- eyefix_df %>% 
+  group_by(Time, Object) %>% 
+  summarize(mean_fix = mean(meanFix)) %>% 
+  ungroup()
+
+eyefix_df_avg_targ <- filter(eyefix_df_avg, Object == 'Target')
+```
+```{r, eyefix_fig_1, out.width='0.65\\textwidth',fig.align='center', fig.cap='Average proportion of eye fixations at different types of objects (named \\emph{Competitor}, \\emph{Target}, \\emph{Unrelated}) in each time window in multisecond experimental trial.'}
+eyefix_df_avg %>% 
+  ggplot(mapping = aes(x = Time, y = mean_fix, colour = Object)) +
+  geom_point() 
+```
+
+[^eyetrax_data]: Data from D. Mirman and J. Magnussen. See https://github.com/dmirman/gazer for more details.
+
+To perform a polynomial regression in R, we can use `lm`. 
+All we need to do is to create new variables that are our original variable raised to different powers. 
+For example, for a predictor variable `x` and outcome `y`, a degree 3 polynomial regression using `lm` could be written using the following `lm` formula.
+```
+y ~ x + I(x^2) + I(x^3)
+```
+Note that we must use `I()`, known as *as is*, here. 
+This essentially transforms e.g. `x^2` to be a new variable in the regression.
+We can create the same formula more easily using `poly` as follows.
+```
+y ~ poly(x, degree=3, raw=T)
+```
+We will explain the meaning of `raw=T` in due course, but for now, we will note that by default `raw=F`.
+
+In the following code, we perform polynomial regression on this data from degree $1$ (which is a standard linear model) to degree $9$. 
+Note that we are using `purrr::map` here to re-run the same `lm` 9 times.
+On the first iteration, the `degree` parameter in `poly` takes a value of `1`.
+On the second iteration, it takes the value of `2`, and so on for each value in the sequence `1` to `9`. 
+The 9 resulting models are stored in the list `M_eyefix_targ`.
+```{r, echo=T}
+M_eyefix_targ <- map(seq(9), 
+                     ~lm(mean_fix ~ poly(Time, degree = ., raw = T), 
+                         data = eyefix_df_avg_targ)
+)
+```
+The fitted models can be seen in Figure \ref{fig:eyefix_mod_1_fits} and the model fit statistics are show in Table \ref{tab:eyefix_mod_1_fits}.
+For the model fit statistics, we provide $R^2$, adjusted $R^2$, the log of the likelihood, and the AIC. 
+We have covered all four of these statistics in previous chapters.
+For example, $R^2$ and adjusted $R^2$ have been covered in Chapter 9, and the log likelihood and AIC have been covered in Chapter 3, and elsewhere.
+As we can see both in the figures and from the model summaries, we obtain better fits to the data as we increase the degree of the polynomial.
+This may seem to imply that higher order polynomials are more flexible and so generally lead to better fits to data. 
+This is an important point to which we will return later in this section.
+```{r, results='asis'}
+imap(M_eyefix_targ,
+    ~c(.y, summary(.x)$r.sq, summary(.x)$adj.r.sq, logLik(.x), AIC(.x))
+) %>% 
+  do.call(rbind, .) %>% 
+  round(2) %>% 
+  set_colnames(c('degree', 'Rsq', 'Adj Rsq', 'LL', 'AIC')) %>% 
+  as_tibble() %>% 
+  kable(format = "latex", booktabs = T, caption = "Model fit statistics for polynomial regression models.", table.envir = "table*",linesep = "", label='eyefix_mod_1_fits')
+```
+
+```{r eyefix_mod_1_fits, out.width='\\textwidth',fig.align='center', fig.cap='The predicted functions in a sequences of polynomial models, from degree 1 to degree 9.'}
+map(M_eyefix_targ, predict) %>% 
+  as_tibble(.name_repair = 'minimal') %>% 
+  set_colnames(paste0('degree_', seq(length(M_eyefix_targ)))) %>% 
+  cbind(eyefix_df_avg_targ, .) %>% 
+  gather(degree, prediction, starts_with('degree_')) %>% 
+  ggplot(mapping = aes(x = Time)) +
+  geom_point(aes(y = mean_fix), size = 0.5, alpha = 0.5) +
+  geom_line(aes(y = prediction), col='red') +
+  facet_wrap(~degree) +
+  theme_minimal()
+```
+
+Note that because the polynomial regression is essentially a linear model, everything that we know about linear models and `lm` apply to polynomial regression too.
+For example, the summary output of the model, which we show below for the case of degree $K=3$, is interpreted identically to any other `lm` model summary.
+```{r, echo=T}
+summary(M_eyefix_targ[[3]])
+```
+```{r}
+coefs_M_eyefix_targ <- coef(M_eyefix_targ[[3]])
+```
+Thus, for example, the rate of the change of the average value of the outcome variable for a unit change on $\texttt{Time}^2$ is given by the coefficient for this variable, which is `r coefs_M_eyefix_targ[3]`.
+
+## Orthogonal polynomials
+
+In the polynomials we have just run, we used `poly` with `raw = T`. 
+By setting `raw = F`, which is the default, we obtain *orthogonal polynomials*.
+This means that the predictor variables that represent the various powers of the predictor `Time` predictor are uncorrelated with one another.
+To understand the basics of orthogonal versus raw polynomials, let us generate a set of $K=5$ polynomial functions of both types as follows.
+```{r, echo=T}
+x <- seq(-1, 1, length.out = 100)
+y <- poly(x, degree = 5) # orthogonal
+y_raw <- poly(x, degree = 5, raw = T) # raw 
+```
+Now, let us look at the inter-correlation matrix of the 5 orthogonal vectors.
+```{r, echo=T}
+cor(y) %>%
+  round(digits = 2)
+```
+As we can see, they all have zero correlation with one another.
+By contrast, the raw polynomials are highly intercorrelated.
+```{r, echo=T}
+cor(y_raw) %>%
+  round(digits = 2)
+```
+Orthogonal polynomials are also usually rescaled so that each vector has a Euclidean length of exactly $1.0$.
+```{r, echo=T}
+euclidean <- function(x) sqrt(sum(x^2))
+apply(y, 2, euclidean)
+apply(y_raw, 2, euclidean)
+```
+We provide a plot of orthogonal polynomials from degree 1 to degree 5 in Figure \ref{fig:ortho_polynomials_plot}.
+```{r, ortho_polynomials_plot, out.width='0.66\\textwidth',fig.align='center', fig.cap='Plots of orthogonal polynomial functions of $x \\in (-1, 1)$ for degree 1 to 5.'}
+
+y %>%
+  set_colnames(paste0('degree_', seq(ncol(y)))) %>% 
+  as_tibble() %>% 
+  mutate(x = x) %>% 
+  gather(degree, y, starts_with('degree')) %>% 
+  ggplot(mapping = aes(x = x, y = y, colour = degree)) + geom_line()
+
+```
+
+
+
+
+
+
+
+Using orthogonal polynomials has computational and conceptual consequences.
+Computationally, it avoids any multicollinearity.
+Multicollinearity arises when any predictor variables can be predicted by some or all of the other predictors. 
+In practice, there is almost always some multicollinearity because predictors in real world data sets are often correlated, at least to a minimal extent.
+Extreme multicollinearity can lead to numerical instability in the inference algorithms. 
+But more generally, multicollinearity leads to the variance of the estimates of the coefficients (i.e., the square of the standard error of the estimate) being inflated. 
+Conceptually, on the other hand, orthogonal predictor variables entail that the coefficient for each predictor is the same regardless of which of the other predictors are present, or indeed whether any of the other predictor are present.
+In other words, the coefficient for the predictor corresponding to `Time` raised to the $k$th power will be the same in every regression that includes this term or if it were used as the only predictor. 
+The coefficient for each predictor in the orthogonal polynomial regression gives the independent contribution of the various powers of the original predictor.s
+
+In the following, we rerun the above analysis using orthogonal predictors.
+```{r, echo=T}
+M_eyefix_targ_orth <- map(seq(9), 
+                          ~lm(mean_fix ~ poly(Time, degree = .), 
+                              data = eyefix_df_avg_targ)
+)
+```
+Let us look, for example, at the coefficients in the first models from degree 1 to degree 4.
+```{r, echo=T}
+map(M_eyefix_targ_orth[1:4],
+    ~coef(.) %>% unname())
+```
+As we can see, the coefficient corresponding to any given particular power is the same in each model.
+Moreover, because the orthogonal polynomials are all normalized, they are on the same scale.
+As such, from the coefficient alone we can immediately see the effect size of each power of the original predictor.
+
+It is important to remember, however, that the orthogonal predictors are no longer simply $x^0, x^1, x^2, \ldots x^K$.
+They are based on a (relatively complex) transformation of this $K+1$ dimensional vector space in a manner comparable to what is done in *principal components analysis*.
+In addition, it should also be noted that orthogonal polynomials of any given degree will still lead to an *identical* model fit to that obtained using the raw polynomials. 
+Overall then, the choice of orthogonal polynomials is motivated by the potential advantages in their interpretation, and also for the numerical properties.
+
+## Polynomial regression using other variables
+
+Because we are using `poly` inside `lm` effectively to create a new set of predictors, how we use and interpret the model results in a polynomial regression are no different to how they are when using `lm` generally.
+For example, in the following, see analyse how the average value of `mean_fix` varies as polynomial function of time for each of the three different object categories, rather than just the `Target` category.
+```{r, echo=T}
+M_eyefix <- lm(mean_fix ~ poly(Time, 9)*Object, data=eyefix_df_avg)
+```
+We show the model fit for this in Figure \ref{fig:eyefix_mod_2_fits}.
+```{r, eyefix_mod_2_fits, out.width='0.6\\textwidth',fig.align='center', fig.cap='The predicted functions for proportion of looking times to each category using a 9 degree polynomial. In this case, we use the categorical predictor \\texttt{Object} to vary to coefficients for the polynomial regression for the three object categories.'}
+eyefix_df_avg %>% 
+  add_predictions(M_eyefix) %>% 
+  ggplot(mapping = aes(x = Time, colour=Object)) +
+  geom_point(aes(y = mean_fix), size = 0.5, alpha = 0.5) +
+  geom_line(aes(y = pred))
+```
+
+In this model, the `Object` variable is a categorical variable and so we are creating a different polynomial function for each `Object` category (`Target`, `Competitor`, `Unrelated`) by inferring
+polynomial coefficients for the base category (which is, by default, `Competitor`, based on the alphabetical order of the category names) and then differences in these coefficients corresponding to the `Target` and `Unrelated` categories.
+For example, in the following, we show the difference in the quadratic term, i.e. representing `Time` raised to the power of 2, between the `Competitor` and the `Target` category.
+```{r, echo=T}
+coef(M_eyefix) %>% 
+  extract('poly(Time, 9)2:ObjectTarget')
+```
+This tells us that that coefficient changes by a value of approximately `r coef(M_eyefix) %>% extract('poly(Time, 9)2:ObjectTarget') %>% round(3)` from the from the `Competitor` to the `Target` category.
+
+Although this analysis was as easy to perform as a varying slopes and varying intercept linear model, the interpretation of the model is more challenging.
+We can easily compare the `M_eyefix` model against a null alternative model, where `Object` is used as an intercept only term.
+```{r, echo=T}
+M_eyefix_null <- lm(mean_fix ~ Object + poly(Time, 9), data=eyefix_df_avg)
+anova(M_eyefix_null, M_eyefix)
+```
+This shows that the polynomial functions for the `Target`, `Competitor`, and `Unrelated` `Object` categories do not differ simply in terms of their intercept terms.
+However, beyond that, it is not simple matter to say where and how the three different polynomial functions differ from one another, and so it is not a simple matter to explain the effect of `Object` on the time course of the eye fixation proportions in this experiment.
+This is common issue with nonlinear regression models that we mentioned in the introduction to this chapter.
+Ultimately, the polynomial regression model, as with nonlinear regression more generally, provides us with a relatively complex probabilistic model of the phenomenon we are studying. 
+However, key features of interest, such as the role played by one predictor variable, can not be isolated as easily to role of individual parameters.
+
+## Overfitting in polynomial regression
+
+Let us consider the following simple data set, which is also plotted in Figure \ref{fig:overfit_1}.
+```{r, echo=T}
+set.seed(101)
+Df <- tibble(x = seq(-2, 2, length.out = 20),
+             y = 0.5 + 1.5 * x + rnorm(length(x))
+) 
+```
+
+```{r, overfit_1, out.width='0.5\\textwidth',fig.align='center', fig.cap='Data generated by a simple linear model, with intercept $0.5$, slope $1.5$, and noise standard deviation $\\sigma = 1$.', echo=F}
+Df %>% ggplot(aes(x,y)) + geom_point()
+```
+Although we know, because we have generated it, that this data is nothing more than data from a linear normal model, if this were real world data, we simply would not know this.
+We could therefore see how well each in a sequence of increasingly complex polynomial regression models fits this data. 
+These fits are shown Figure \ref{fig:overfit_2}, where we also show the $R^2$ value for each polynomial.
+```{r, overfit_2, out.width='\\textwidth',fig.align='center', fig.cap='Fitting a data with a sequence of polynomials from degree 1 to degree 9. Shown in the label for each model is its $R^2$ value. Clearly, the fit to the data is increasing but at a cost of \\emph{overfitting}.'}
+M_overfits <- map(seq(9), 
+         ~lm(y ~ poly(x, degree = .), data = Df)
+)
+col_labels <- paste0('degree_', seq(length(M_overfits))) %>% 
+  paste0(' (',round(map_dbl(M_overfits, ~summary(.)$r.sq), 2),')')
+
+Df_new <- tibble(x = seq(-2, 2, length.out = 1000))
+
+prediction_df <- map(M_overfits, ~predict(., newdata = Df_new)) %>% 
+  as_tibble(.name_repair = 'minimal') %>% 
+  set_colnames(col_labels) %>% 
+  cbind(Df_new, .) %>% 
+  gather(degree, prediction, starts_with('degree_')) %>% 
+  mutate(degree = factor(degree, levels = col_labels))
+
+prediction_df %>% 
+  ggplot(mapping = aes(x = x)) +
+  geom_point(data=Df, aes(x = x, y = y), size = 0.5, alpha = 0.5) +
+  geom_line(aes(y = prediction), col='red') +
+  facet_wrap(~degree) +
+  theme_minimal()
+```
+As the degree of the polynomial model increases, so too does its fit to the data.
+However, this fit to the data is essentially an *overfit*. 
+There is no precise general definition of overfitting, but in this example, it is clearly the case that the overfitted model is fitting the noise rather than the true underlying function, which we know in this case is just a linear model.
+We can see how the functions in higher order polynomials are bending to fit individual data points.
+Overfitted models do not generalize well to new data.
+This is easy to observe in this example.
+We generate a new set of observations from the same true model that was used to generate the original data, and then see how well this new data is predicted by each of the 9 previously fitted models.
+We can measure the model predicts the new data sets by calculating $R^2_\text{new}$ scores for each new data set as follows:
+$$
+R^2_{\text{new}} = 
+1 - \frac{RSS_\text{new}}{TSS_\text{new}} = 
+1 - \frac{\sum_{i=1}^n (y_i^\text{new} - \hat{y}^\text{new}_i)^2}
+    {\sum_{i=1}^n (y_i^\text{new} - \bar{y}^\text{new})^2},
+$$
+where $y^\text{new}_1 \ldots y^\text{new}_n$ are the outcome variable values in the new data set, $\bar{y}^\text{new}$ is the mean of these values, and $\hat{y}^\text{new}_1 \ldots \hat{y}^\text{new}_n$ are the predicted values of the outcome variable for the model.
+Obviously, the lower the value of $R^2_\text{new}$, the worse the model generalization performance.
+We will generate 1000 new data sets from the same data generating process as the original model, and for each data set calculated $R^2_\text{new}$ for each of the 9 polynomial models.
+The boxplot of the distribution of the $R^2_\text{new}$ scores for each polynomial model are shown in Figure \ref{fig:out_of_sample_generalization}.
+Clearly, as the degree of the polynomial increases, its out-of-sample generalization performance decreases.
+
+It should be noted that, as we discussed in Chapter 8, model evaluation methods such as \aic are explicitly designed to measure out-of-sample generalization and hence help us to identify overfitted models. 
+We may calculate the \aic value for each of the model above as follows.
+```{r, echo=T}
+map_dbl(M_overfits, AIC) %>%
+  set_names(paste0('degree_', seq(M_overfits))) %>% 
+  round(2)
+```
+As we can see, although the \aic model is lower for polynomials of degree 2 and 3 than for degree 1, the drop is not by much and after that, as the degree of the polynomial increases, so too does the \aic value.
+
+
+```{r, out_of_sample_generalization, out.width='0.6\\textwidth',fig.align='center', fig.cap='For each polynomial model, we show the boxplot of the distribution of $R^2$ scores of the predictions of new data sets generated from the same true data generating process as the original data, which was a normal linear model. The lower the value, the poorer the out of sample generalization of the model. As such, the more complex the polynomial model, the worse its generalization performance despite the fact that the more complex models fit the original data better.', cache = TRUE}
+out_sample_generalization <- function(M, .data){
+  .data %>% 
+    add_predictions(M) %>% 
+    summarize(rss = sum((y-pred)^2),
+              tss = sum((y - mean(y))^2),
+              rsq = 1 - rss/tss) %>% 
+    select(rsq) %>% unlist()
+}
+
+rerun(1000, {
+  Df_new <- tibble(x = seq(-2, 2, length.out = 20),
+                   y = 0.5 + 1.5 * x + rnorm(length(x))
+  )
+  
+  map_dbl(M_overfits, 
+          ~out_sample_generalization(., Df_new))
+}) %>% 
+  do.call(rbind, .) %>% 
+  set_colnames(paste0('degree_', seq_along(M_overfits))) %>% 
+  as_tibble() %>% 
+  gather(degree, rss, starts_with('degree_')) %>% 
+  ggplot(mapping = aes(x = degree, y = rss)) + 
+  geom_boxplot() + 
+  theme(axis.text.x = element_text(size=8))
+
+```
+
+Overfitting is a general problem in statistical modelling.
+However, polynomial regression is especially prone to overfitting. 
+This is because higher order polynomials are too unconstrained. 
+The higher the order of the polynomial, the more it can twist and bend to fit the data.
+This is not always avoided by simply sticking to lower order polynomials because lower order polynomials *underfit* the data, having insufficient flexibility to fit the function.
+Thus a common problem with polynomial regression is that the lower order polynomials are not flexible enough, and the higher order ones are too unconstrained.
+Moreover, polynomial regression is also prone to a pathology related *Runge's phenomenon*, which is where there is excessive oscillation in the polynomial function particularly at its edges.
+We can see this easily by increasing the order of the polynomial to 16.
+This model is shown in Figure \ref{fig:runge_phenom}.
+```{r, runge_phenom, cache=FALSE, out.width='0.6\\textwidth',fig.align='center', fig.cap='In higher order polynomials, there is often excessive oscillation between fitted points, particularly at the edge of the function. Here, we plot a 16th order polynomial. At edges of the function, we extreme oscilliation between the fitted points.'}
+M <- lm(y ~ poly(x, degree = 16, raw = F), data = Df)
+Df_new <- tibble(x = seq(-2, 2, length.out = 1000))
+Df_new %>% 
+  add_predictions(M) %>% 
+  ggplot() +
+  geom_line(mapping = aes(x = x, y = pred)) +
+  geom_point(Df, mapping= aes(x = x, y = y), col='red')
+```
+
+
+# Spline and basis function regression
+
+Polynomial regression can be seen as a type of *basis function* regression.
+In basis function regression, we model the nonlinear functions of the predictors variables using linear combinations of simpler functions that are known as the basis functions.
+For example, in the case of a nonlinear regression with one predictor variable, and assuming normally distributed outcome variables, we would write our basis function regression model as follows:
+\begin{align*}
+y_i \sim N(\mu_i, \sigma^2),\quad 
+&\mu_i = f(x_i) = \sum_{k=1}^K \beta_k \phi_k(x_i),\quad\text{for $i \in 1\ldots n$},
+\intertext{or if we include an explicit intercept term}
+&\mu_i = f(x_i) = \beta_0 + \sum_{k=1}^K \beta_k \phi_k(x_i),\quad\text{for $i \in 1\ldots n$}.
+\end{align*}
+Here, $\phi_1(x_i), \phi_2(x_i) \ldots \phi_k(x_i) \ldots \phi_K(x_i)$ are (usually) simple deterministic functions of $x_i$.
+In polynomial regression, our basis functions are defined as follows:
+$$
+\phi_k(x_i) \triangleq x_i^k.
+$$
+We saw in Figure \ref{fig:rpolynomial_plot} what weighted sums of these functions look like.
+
+```{r}
+b_spline <- function(x, knots, show_piece = F){
+  
+  stopifnot(length(knots) == 5)
+  
+  .b_spline <- function(x){
+    if (x >= knots[1] & x < knots[2]) {
+      piece <- 1
+      u <- (x-knots[1])/(knots[2] - knots[1])
+      y <- 1/6 * u^3 
+      
+    } else if (x >= knots[2] & x < knots[3]) {
+      piece <- 2
+      u <- (x-knots[2])/(knots[3] - knots[2])
+      y <- 1/6 * (1 + 3*u + 3*u^2 - 3*u^3)
+      
+    } else if (x >= knots[3] & x < knots[4]) {
+      piece <- 3
+      u <- (x-knots[3])/(knots[4] - knots[3])
+      y <- 1/6 * (4 - 6*u^2 + 3*u^3)
+      
+    } else if (x >= knots[4] & x <= knots[5]) {
+      piece <- 4
+      u <- (x-knots[4])/(knots[5] - knots[4])
+      y <- 1/6 * (1 - 3*u + 3*u^2 - u^3)
+    }
+    else {
+      piece <- 0
+      y <- 0 
+    } 
+    
+    if (!show_piece) return(y)
+    
+    c(y, piece)
+  
+  }
+  
+  if (!show_piece){
+    tibble(x = x, 
+           y = map_dbl(x, .b_spline)
+    )
+  } else {
+    map(x, .b_spline) %>% 
+      do.call(rbind, .)%>%
+      set_colnames(c('y', 'segment')) %>% 
+      as_tibble() %>% 
+      mutate(x = x) %>% 
+      mutate_at(vars(segment), as.factor) %>% 
+      select(x, everything())
+  }
+  
+}
+```
+
+## Cublic b-splines 
+
+Using basis functions for nonlinear regression is widely practised.
+There are many different types of basis functions that are possible to use, but one particularly widely used class of basis functions are *spline* functions.
+The term *spline* is widely used in mathematics, engineering, and computer science and may refer to many different types of related functions, but in the present context, we are defining splines as piecewise polynomial functions that are designed in such a way that each piece or segment of the function joins to the next one without a discontinuity. 
+As such, splines are smooth functions composed of multiple pieces, each of which is a polynomial.
+Even in the context of basis function regression, there are many types of spline functions that can be used, but one of the most commonly used types is *cubic b-splines*.
+The *b* refers to *basis* and the *cubic* is the order of the polynomials that make up the pieces.
+Each cubic b-spline basis function is defined by 4 curve segments that join together smoothly.
+The breakpoints between the intervals on which these curves are defined are known as *knots*.
+If these knots are equally spaced apart, then we say that the spline is *uniform*.
+For basis function $k$, its knots can be stated as
+$$
+t^k_0 < t^k_1 < t^k_2 < t^k_3 < t^k_4,
+$$
+so that the curve segments are defined on the intervals $(t^k_0, t^k_1]$, $(t^k_1, t^k_2]$, $(t^k_2, t^k_3]$, $(t^3_0, t^k_4)$.
+Spline basis function $k$ takes the value of $0$ for values less than $t^k_0$ or values greater than $t^k_4$.
+The cubic b-spline is then defined as follows:
+$$
+\phi_k(x_i) = 
+\begin{cases}
+\tfrac{1}{6} u^3, &\quad\text{if $x_i \in (t^k_0, t^k_1]$},\quad\text{with $u = (x_i-t^k_0)/(t^k_1-t^k_0)$}\\
+\tfrac{1}{6} (1 + 3u + 3u^2 - 3u^3), &\quad\text{if $x_i \in (t^k_1, t^k_2]$},\quad\text{with $u = (x_i-t^k_1)/(t^k_2-t^k_1)$}\\ 
+\tfrac{1}{6} (4 - 6u^2 + 3u^3), &\quad\text{if $x_i \in (t^k_2, t^k_3]$},\quad\text{with $u = (x_i-t^k_2)/(t^k_3-t^k_2)$}\\
+\tfrac{1}{6} (1 - 3u + 3u^2 - u^3), &\quad\text{if $x_i \in (t^k_3, t^k_4)$},\quad\text{with $u = (x_i-t^k_3)/(t^k_4-t^k_3)$}\\
+0 &\quad\text{if $x_i < t^k_0$ or $x_i > t^k_4$}
+\end{cases}
+$$
+In Figure \ref{fig:bspline_basis}, we plot a single cubic b-spline basis function defined on the knots $\{-\tfrac{1}{2}, -\tfrac{1}{4}, 0, \tfrac{1}{4}, \tfrac{1}{2}\}$. 
+In this figure, we have colour coded the curve segments.
+
+
+```{r bspline_basis, fig.align = 'center', out.width='0.5\\textwidth', fig.cap="A single cubic b-spline basis function defined on the knots $\\{-\\tfrac{1}{2}, -\\tfrac{1}{4}, 0, \\tfrac{1}{4}, \\tfrac{1}{2}\\}$."}
+x <- seq(-1, 1, length.out = 1000)
+knots <- seq(-0.5, 0.5, length.out = 5)
+b_spline(x, knots = knots, show_piece = T) %>%
+  ggplot(mapping = aes(x = x, 
+                       y = y, 
+                       colour = segment)) +
+  geom_point(size = 0.5) +
+  theme(legend.position="none")
+```
+
+In any basis function regression, including spline regression, we usually have many basis functions.
+In the case of spline regression, the number and location of the basis functions are defined by the position of the knots. 
+In the case of any one basis function, as we've seen, only five knots are used. 
+However, if there are many more knots, a basis function is defined on each set of 5 consecutive knots.
+In other words, if our knots are $t_0, t_1, t_2 \ldots t_K$, one basis function is defined on knots $t_0, t_1, t_2, t_3, t_4$, the next is defined on knots $t_1, t_2, t_3, t_4, t_5$, and so on. 
+In Figure \ref{fig:bspline_bases}a, we provide examples of multiple basis functions defined on different consecutive sequences of a set of knots spaced $\tfrac{1}{2}$ apart, from -2 to 2. 
+In practice, sometimes lower order spline are fitted to the sequences of less 5 knots at the start and end of the set of knots, e.g., the sequences $t_0, t_1, t_3$, etc.
+The function `bs` available from the `splines` package creates b-spline basis functions in this way.
+In Figure \ref{fig:bspline_bases}b, we provide the basis functions created by `splines::bs` for the same set of knots as were used in \ref{fig:bspline_bases}a.
+
+```{r bspline_bases, fig.align = 'center', out.width='\\textwidth', fig.cap="a) A set of cubic b-spline basis functions defined on each consective set of 5 knots, spaced $\\tfrac{1}{2}$ apart, from -2 to 2. b) The set of cubic b-spline basis functions defined on the set same knots as in a) generated by \\texttt{splines::bs} function, which includes lower order b-splines at the edges of the set of knots."}
+x <- seq(-2, 2, length.out = 1000)
+knots <- seq(-2, 2, by = 0.5)
+
+library(splines)
+
+p1 <- imap_dfr(seq(1,length(knots)-4),
+         ~b_spline(x, knots = knots[.x:(.x+4)]) %>% 
+           mutate(k = .y)
+) %>% ggplot(mapping = aes(x = x, y = y, group = k)) + geom_line()
+
+p2 <- bs(x, knots  = knots) %>% 
+  as.data.frame() %>% 
+  as_tibble() %>% 
+  mutate(x=x) %>% 
+  gather(k, y, -x) %>% ggplot(mapping = aes(x = x, y = y, group = k)) + geom_line()
+
+plot_grid(p1, p2, labels = c('a', 'b'), nrow = 2)
+```
+
+
+
+```{r rbspline_plot, out.width='\\textwidth',fig.align='center', fig.cap='Examples of random sums of cubic b-splines basis functions. In each subplot, we have five random functions generated by different weightings of the same set of basis functions, which were defined on knots spaced $\\tfrac{1}{2}$ apart, from -2 to 2. .'}
+rbspline <- function(x, knots){
+  tibble(x = x,
+         y = bs(x, knots = knots) %*% rnorm(length(knots) + 3) %>% 
+           as.vector()
+  )
+  
+}
+
+rbspline_examples <- function(i){
+  set.seed(i)
+  Df <- imap(rerun(5, rbspline(x, knots)), 
+             ~mutate(., example = .y)) %>% 
+    bind_rows() %>% 
+    mutate_at(vars(example), as.character)
+  
+  p <- Df %>% ggplot(mapping = aes(x = x, y = y, colour = example)) + 
+    geom_line() +
+    theme(legend.position="none")
+  
+  p
+}
+
+# we could use specific seeds here, or just let the previous seed decide
+plot_ids <- sample(seq(1000, 10000), 4)
+
+do.call(plot_grid, map(plot_ids, rbspline_examples))
+
+
+```
+
+The simplest way to perform spline regression in R is to use `splines::bs`, or a related function from the `splines` package, just as we used `poly` for polynomial regression.
+For example, to perform a cubic b-spline regression on our eye-fixation rates to the three object categories, we could do the following.
+```{r, echo=T}
+library(splines)
+knots <- seq(-500, 2500, by = 500)
+M_bs <- lm(mean_fix ~ bs(Time, knots = knots)*Object, 
+           data=eyefix_df_avg)
+```
+The model fit for this model is shown in Figure \ref{fig:bspline_fit_1}.
+Notice that we spaced the knots evenly from -500 to 2500 in steps of 500 ms. 
+This gives us `r length(knots)` explicitly supplied knots, at which there will be a basis function.
+In addition, however, the `bs` function provides 3 (assuming `degree=3`, which is the default) extra lower degree basis functions at the boundaries.
+From the model summary, we can see that we have an extremely high model fit, $R^2 = `r summary(M_bs)$r.sq %>% round(3)`$.
+As before, the very high $R^2$ value must be treated with some initial caution, as it may indicate model overfit, a point to which we will return momentarily.
+```{r, bspline_fit_1, out.width='0.6\\textwidth',fig.align='center', fig.cap='The fit of a cubic b-spline, with evenly spaced basis functions every 500ms, to the average eye fixation rates to each \\texttt{Object} category.'}
+eyefix_df_avg%>%
+  add_predictions(M_bs) %>%
+  ggplot(mapping = aes(x = Time, group = Object, colour = Object)) +
+  geom_point(aes(y = mean_fix), size = 0.5, alpha = 0.5) +
+  geom_line(aes(y = pred))
+```
+
+An alternative approach to using `bs` with `lm` to perform b-spline regression is to not explicitly choose the location of the knots, but rather to let `bs` choose them at evenly spaced quantiles.
+We can accomplish this using the `df` parameter. 
+If we set `df` to some $K$, then `bs` will find $K-3$ knots.
+For example, the following code will perform a spline regression very similar to `M_bs`, and with the same number of basis function, but with the knot locations chosen based on quantiles.
+```{r,echo=T}
+M_bs_df10 <- lm(mean_fix ~ bs(Time, df = 10)*Object, 
+                data=eyefix_df_avg)
+```
+We can see the location of the `df - 3` knots by extracting the `knots` attribute from the object created by `bs` as follows.
+```{r, echo=T}
+with(eyefix_df_avg,
+     attr(bs(Time, df = 10), 'knots')
+)
+```
+In this case, the knots happen to be in the same location as when explicitly made them.
+
+## Radial basis functions
+
+An alternative, though related, class of basis functions to spline basis functions are *radial basis functions* (\rbf). 
+In these basis functions, the value the function takes is defined by the distance of the input value from a fixed center. 
+As an example, one of the most commonly used \rbf models is the *Gaussian* or *squared exponential* \rbf defined as follows.
+$$
+\phi(x) = e^{-\frac{\vert x - \mu\vert^2}{2\sigma^2}}.
+$$
+An example of Gaussian \rbf, with $\mu = 0$ and $\sigma = 1$, is shown in Figure \ref{fig:rbf_example}.
+```{r, rbf_example, out.width='0.6\\textwidth',fig.align='center', fig.cap='A Gaussian radial basis function (\\textsc{rbf}) is essentially an unnormalized Normal distribution. In this figure, we display a Gaussian \\textsc{rbf} that is centered at $\\mu=0$ and has a width parameter $\\sigma = 1.0$. This is identical to an unnormalized Normal distribution with a mean of 0 and standard deviation of 1.0.'}
+tibble(x = seq(-3, 3, length.out = 1000),
+       y = exp(-x^2)) %>% 
+  ggplot(mapping = aes(x = x, y = y)) +
+  geom_line() + 
+  theme_classic()
+```
+```{r}
+centres <- seq(-2, 2, by = 0.5)
+```
+These functions are identical to unnormalized Normal distributions where the two parameters of the \rbf play the same role as the mean and the standard deviation of the Normal distribution. 
+In Figure \ref{fig:random_rbf_plot}, we display random sums of `r length(centres)` \rbf functions defined at defined the centres `r centres`. 
+In subfigures a-d in \ref{fig:random_rbf_plot}, we set the $\sigma$ parameter of the \rbfs to $0.25, 0.5, 1.0, 2.0$, respectively.
+As is clear from these subfigures, as the $\sigma$ parameter increases, the resulting functions become smoother.
+
+
+
+```{r random_rbf_plot, out.width='\\textwidth',fig.align='center', fig.cap='Examples of random sums of Gaussian \\textsc{rbf}s. In each subplot, we have five random functions generated by different weightings of the same set of \\textsc{rbf}s, which were defined on centres spaced $\\tfrac{1}{2}$ apart, from -2 to 2. The width parameter $\\sigma$ of the $\\textsc{rbf}s$, on the other hand, take the values of $0.25, 0.5, 0.75, 1.0$ in subfigures a-d, respectively. Clearly, as $\\sigma$ increases, the resulting functions become more smooth.'}
+
+random_rbf <- function(x, centres, sigma = 1.0){
+  map_dfc(centres, 
+          ~exp(-(x-.)^2/(2*sigma^2))
+  ) %>% as.matrix() %>% 
+    multiply_by_matrix(rnorm(length(centres))) %>% 
+    as.data.frame() %>% 
+    set_names('y') %>% 
+    mutate(x = x)
+}
+
+x <- seq(-3, 3, length.out = 1000)
+
+random_rbf_examples <- function(i, sigma){
+  set.seed(i)
+  Df <- imap(rerun(5, random_rbf(x, centres = centres, sigma = sigma)), 
+             ~mutate(.x, example = .y)) %>% 
+    bind_rows() %>% 
+    mutate_at(vars(example), as.character)
+  
+  p <- Df %>% ggplot(mapping = aes(x = x, y = y, colour = example)) + 
+    geom_line() +
+    theme(legend.position="none")
+  
+  p
+}
+
+# we could use specific seeds here, or just let the previous seed decide
+plot_ids <- sample(seq(1000, 10000), 4)
+
+do.call(function(...){
+  plot_grid(..., labels = c('a', 'b', 'c', 'd'))
+  }, 
+  map2(plot_ids, c(0.25, 0.5, 0.75, 1.0), random_rbf_examples)
+)
+```
+
+We can perform a \rbf regression using `lm` similarly to how we used `lm` with `poly` or `splines:bs`. 
+To do so, we will create a custom `rbf` function that returns the values of set of Gaussian \rbf functions defined at specified centres and with a common width parameter.
+```{r, echo=T}
+rbf <- function(x, centres, sigma = 1.0){
+  map(centres, 
+      ~exp(-(x-.)^2/(2*sigma^2))
+  ) %>% do.call(cbind, .)
+}
+```
+We may then use this `rbf` function inside `lm` by choosing the location of the centres, which we set to be at every 250ms between -1000 and 3000 ms, and the width parameter, which we set to be 500.
+We will use the `eyefix_df_avg` data set as before.
+```{r, echo=TRUE}
+centres <- seq(-1000, 3000, by = 250)
+M <-lm(mean_fix ~ rbf(Time, centres = centres, sigma = 500)*Object, 
+       data=eyefix_df_avg)
+
+```
+The predictions of this model are shown in Figure \ref{fig:rbf_fit}.
+
+
+```{r, rbf_fit, out.width='0.6\\textwidth',fig.align='center', fig.cap='The fit of a Gaussian \\textsc{rbf}, with centres at every 250ms and $\\sigma = 500$, to the average eye fixation rates to each \\texttt{Object} category.'}
+
+
+eyefix_df_avg %>% 
+  add_predictions(M) %>% 
+  ggplot(mapping = aes(x = Time, colour = Object, group = Object)) +
+  geom_point(aes(y = mean_fix), size = 0.5, alpha = 0.5) +
+  geom_line(aes(y = pred)) + 
+  theme_minimal()
+
+```
+
+
+## Choosing basis function parameters
+
+A persistent and major issue in basis function regression is choosing between or evaluating the different parameters of the basis functions. 
+In the case of cubic b-splines, for example, this would primarily concern the choice of the number and location of the knots.
+Other basis functions, as we will see, have other parameters whose values must also be chosen.
+Although this issue can in principle be treated as just another type of parametric inference, i.e., where the basis function parameters are inferred along with the standard regression coefficients and the standard deviation of the outcome variable, doing so can often be technically very difficult. 
+As a result, more commonly, this issue is treated as a model evaluation issue. 
+In other words, evaluating or choosing between the number and location of knots in a spline regression can be seen as analogous, for example, to choosing between different parametric functions performing parametric nonlinear regression using `nls`.
+To do so, we typically employ a wide range of model evaluation methods including model fit statistics to guide our choices.
+Efficient methods for making these choices, as well as making other modelling choices with basis function regression, will be discussed in the next section on *generalized additive models*.
+However, for now, we will begin looking at this issue using some relatively simple general methods. 
+For example, we evaluate choices concerning knots in spline regression by using the \aic values for each model in a sequence of spline models with increasing numbers of basis functions.
+Rather than using the standard \aic, however, we will use \aicc defined as follows:
+$$
+\textsc{aic}_c = \textsc{aic} + \frac{2 k (k+1)}{n - k -1}.
+$$
+This can be implemented as follows:
+```{r, echo=T}
+aic_c <- function(model){
+  K <- length(coef(model))
+  N <- nrow(model$model)
+  AIC(model) + (2*K*(K+1))/(N-K-1)
+}
+```
+
+This correction is generally advised when the ratio of sample size $n$ to number of parameters $k$ is relatively low, as it would be in the case.
+
+Here, we will consider a new data set `GSSvocab`, available from `GSSvocab.csv`, that provides scores on a vocabulary test for a relatively large number of people, collected over the course of a few decades.
+For simplicity, we will examine how vocabulary test scores vary with age, excluding the other variables in the data set.
+For this, we obtain the average vocabulary score for each year of age for a sequence of years from 18 to 89.
+```{r, echo=T}
+GSSvocab <- read_csv('data/GSSvocab.csv')
+gssvocab <- GSSvocab %>% 
+  group_by(age) %>% 
+  summarize(vocab = mean(vocab, na.rm=T)) %>%
+  ungroup() %>% 
+  drop_na()
+```
+This data is shown in Figure \ref{fig:vocab_scores}.
+```{r, vocab_scores, out.width='0.6\\textwidth',fig.align='center', fig.cap='Average score on a vocabulary test for each year of age in a sequences of years from 18 to 89.'}
+gssvocab %>% 
+  ggplot(aes(x = age, y = vocab)) + geom_point()
+```
+
+Let us now fit a sequence of cubic b-spline regression model to this data, where we vary the number of knots from a minimum of 3 to 30.
+This is done in the following code where we use so-called *natural* cubic b-splines, using the `splines::ns` function.
+Cubic b-splines of this kind forces the constraint that the function is linear beyond the knot boundaries.
+```{r, echo=T}
+df_seq <- seq(3, 30) %>%
+  set_names(.,.)
+
+M_gssvocab <- map(df_seq,
+                  ~lm(vocab ~ ns(age, df = .),
+                      data = gssvocab)
+)
+
+
+aic_results <- map_dbl(M_gssvocab, aic_c)%>%
+  enframe(name = 'df',
+          value = 'aic')
+```
+For comparison with the \aicc result, we will also perform a *leave-one-out cross-validation* (\loocv).
+As discussed in Chapter 8 and elsewhere, this is where we remove one observation from the data, fit the model on the remaining data, and then see how well we can predict the outcome variable's value in the held-out data.
+In a data set with $n$ observations, we leave each observation out and so it requires $n$ repetitions of the model fitting process.
+```{r, echo=T, cache=F}
+loocv <- function(K){
+  map_dbl(seq(nrow(gssvocab)),
+          function(i){
+            Df_train <- gssvocab %>% slice(-i)
+            Df_test <- gssvocab %>% slice(i)
+            M <- lm(vocab ~ ns(age, df = K), data = Df_train)
+            Df_test %>% 
+              add_predictions(M) %>% 
+              summarize(rss = (vocab - pred)^2) %>% 
+              unlist()
+          }
+  ) %>% sum()
+}
+
+loocv_results <- map_dbl(df_seq, loocv) %>% 
+  enframe(name = 'df',
+          value = 'loocv')
+
+```
+
+The minimum \aicc score is `r aic_results %>% deframe() %>% min() %>% round(2)`, which occurs at a `df` of `r filter(aic_results, aic == min(aic)) %>% pull(df)`.
+The minimum \loocv score is `r loocv_results %>% deframe() %>% min() %>% round(2)`, which occurs at a `df` of `r filter(loocv_results, loocv == min(loocv)) %>% pull(df)`.
+
+In Figure \ref{fig:aicloocv-vocab_scores}a, we show the difference between the \aicc scores at all `df` values and the minimum \aicc score, and in Figure \ref{fig:aicloocv-vocab_scores}b, we how the differences between the \loocv scores at all `df` values and the minimum \loocv score. As we can see, the best models have a low number of knots.
+High values of `df` tend to become extremely poor.
+
+```{r, aicloocv-vocab_scores, out.width='\\textwidth',fig.align='center', fig.cap='Differences in a) \\aicc scores and b) \\loocv scores between each model and the best fitting model.'}
+# ggplot(aic_results,
+#        aes(x = df, y = aic)) + 
+#   geom_point() +
+#   geom_segment(aes(x=df, xend=df, y=0, yend=aic)) +
+#   scale_x_discrete(limits=names(df_seq)) + 
+#   xlab('Number of knots') +
+#   ylab('AIC score') + 
+#   theme(axis.text.x = element_text(size=5)) +
+#   theme(aspect.ratio = 1/3)
+p1 <- aic_results %>%
+  mutate(aic = aic - min(aic)) %>% 
+  ggplot(aes(x = df, y = aic)) + 
+  geom_point() +
+  geom_segment(aes(x=df, xend=df, y=0, yend=aic)) +
+  scale_x_discrete(limits=names(df_seq)) + 
+  xlab('Number of knots') +
+  ylab('AIC - min(AIC)') + 
+  theme(axis.text.x = element_text(size=5),
+        axis.text.y = element_text(size = 8),
+        axis.title.y =element_text(size=8)) 
+
+p2 <- loocv_results %>%
+  mutate(loocv = loocv - min(loocv)) %>% 
+  ggplot(aes(x = df, y = loocv)) + 
+  geom_point() +
+  geom_segment(aes(x=df, xend=df, y=0, yend=loocv)) +
+  scale_x_discrete(limits=names(df_seq)) + 
+  xlab('Number of knots') +
+  ylab('LOOCV - min(LOOCV)') + 
+  theme(axis.text.x = element_text(size=5),
+        axis.text.y = element_text(size = 8),
+        axis.title.y =element_text(size=8))
+
+plot_grid(p1, p2, labels=c('a', 'b'), nrow = 2)
+```
+```{r, gss_vocab_scores, out.width='\\textwidth',fig.align='center', fig.cap='Cubic b-spline regression models of varying \\texttt{df} values fitted to the vocabulary test data. The model with the \\texttt{df} of 6 has the lowest \\aicc and \\loocv score, but model 5 has a practically indistinguishable \\aicc or \\loocv score.'}
+model_set <- c('3', '4', '5', '6', '10', '15')
+imap(M_gssvocab[model_set],
+     function(m,y) {gssvocab %>% add_predictions(m) %>% mutate(df=y)}
+) %>% bind_rows() %>% 
+  mutate(df = factor(df, levels = model_set)) %>% 
+  ggplot(aes(x = age)) +
+  geom_point(aes(y = vocab), size = 0.5, alpha = 0.5) +
+  geom_line(aes(y = pred), col='red') +
+  facet_wrap(~df) +
+  theme_minimal()
+```
+
+# Generalized additive models
+
+The polynomial and spline regression models that we have covered in the previous two sections can be regarded as special cases of a more general type of regression model known as a *generalized additive model* (\gam).
+\gams are quite a general class of regression models, incorporating many special cases, and because of this, a single formal definition, while technically possible, may not be particularly clear.
+It is better, therefore, to define \gams by a series of different definitions.
+We may begin our definition of \gams as follows.
+Given $n$ observations of a set of $L$ predictor variables $x_1, x_2 \ldots x_l \ldots x_L$ and outcome variable $y$,
+where $y_i, x_{1i}, x_{2i} \ldots x_{li} \ldots x_{Li}$ are the values of the outcome and predictors on observation $i$, then a \gam regression model of this data is:
+$$
+y_i \sim D(\mu_i, \psi),\quad \mu_i = f_1(x_{1i}) + f_2(x_{2i}) + \ldots + f_L(x_{Li}),\quad\text{for $i \in 1\ldots n$},
+$$
+where $D$ is some probability distribution with parameters $\psi$, and each predictor variable $f_l$ is a *smooth function* of the predictor variable's values.
+Usually each smooth function $f_l$ is a weighted sum of basis functions such as spline basis functions or other common types, some of which we describe below.
+In other words, the smooth function $f_l$ might be defined as follows:
+$$
+f_l(x_{li}) = \beta_{l0} + \sum_{k=1}^K \beta_{lk} \phi_{lk}(x_{li}),
+$$
+where $\phi_{lk}$ is a basis function of $x_{li}$. 
+Although this definition is quite general in its scope, we can in fact be more general.
+For example, instead of the outcome variable being described by a probability distribution $D$ where the value of $\mu_i$ is the sum of smooth functions of the values of predictor variable at observation $i$, just as in the case of generalized linear models, we could transform $\mu_i$ by a deterministic *link function* $g$ as follows:
+$$
+y_i \sim D(g(\mu_i), \psi),\quad \mu_i = f_1(x_{1i}) + f_2(x_{2i}) + \ldots + f_L(x_{Li}),\quad\text{for $i \in 1\ldots n$}.
+$$
+More generally still, each smooth function may in fact be a multivariate function, i.e. a function of multiple predictor variables.
+Thus, for example, a more general \gam than above might be as follows:
+$$
+y_i \sim D(g(\mu_i)),\quad \mu_i = f_1(x_{1i}) + f_2(x_{2i}, x_{3i}, x_{4i}) + \ldots + f_L(x_{Li}),\quad\text{for $i \in 1\ldots n$},
+$$
+where in this case, $f_2$ is a 3-dimensional smooth function.
+From these definitions so far, we can view \gams as extensions of the general and generalized linear models that are based on sums of smooth functions of predictors.
+However, multilevel \gams are also possible. 
+Recall that an example of a simple multilevel normal linear model can be defined as follows:
+\begin{align*}
+y_{ji} &\sim N(\mu_{ji}, \sigma^2),\quad\mu_j = \alpha_j + \beta_j x_{ji}, \quad\text{for $i \in 1\ldots n$}\\
+\text{with}\quad \alpha_j &\sim N(a, \tau^2_{\alpha}),\quad\beta_j \sim N(b, \tau^2_{\beta})\quad\text{for $j \in 1\ldots J$.}
+\end{align*}
+This model can be rewritten as 
+\begin{align*}
+y_{ji} &\sim N(\mu_{ji}, \sigma^2),\\
+       \mu_{ji} &= a + \nu_j + b x_{ji} + \xi_j x_{ji}, \quad\text{for $i \in 1\ldots n, \quad j \in 1\ldots J$,}\\
+\text{with}\quad \nu_j &\sim N(0, \tau^2_{\alpha}),\quad\xi_j \sim N(0, \tau^2_{\beta}),\quad\text{for $j \in 1\ldots J$.}
+\end{align*}
+A \gam version of this model might be as follows.
+\begin{align*}
+y_{ji} &\sim N(\mu_{ji}, \sigma^2),\\
+       \mu_{ji} &= a + \nu_j + f_1(x_{ji}) + f_{2j}(x_{ji}), \quad\text{for $i \in 1\ldots n, \quad j \in 1\ldots J$,}\\
+\text{with}\quad \nu_j &\sim N(0, \tau^2_{\alpha}),\quad f_{2j} \sim F(\Omega),\quad\text{for $j \in 1\ldots J$.}
+\end{align*}
+Here, $f_{21}, f_{22}\ldots f_{2j} \ldots f_{2J}$ are *random smooth functions*, sampled from some function space $F(\Omega)$, where $\Omega$ specifies the parameters of that function space.
+
+## Using `mgcv`
+
+The R package `mgcv` [@mgcv:cran;@wood:gam:book] is a powerful and versatile toolbox for using \gams in R.
+Here, we will introduce some of the main features of `mgcv`. 
+We will use a classic data-set often used to illustrate nonlinear regression, namely the `mycle` data set, available in the `MASS` package and elsewhere.
+This data set gives head acceleration measurements over time in a simulation of a motorcycle crash.
+```{r}
+mcycle <- MASS::mcycle
+```
+We illustrate this data set in Figure \ref{fig:mcycle}.
+```{r mcycle, out.width='0.5\\textwidth', fig.cap='Head acceleration over time in a simulated motorcycle crash.', fig.align='center'}
+mcycle %>% 
+  ggplot(aes(x = times, y = accel)) +
+  geom_point()
+```
+
+The main function we will use from `mgcv` is `gam`.
+By default, `gam` behaves just like `lm`.
+In other words, to do a normal linear regression on the `mcycle` data, we could use `gam` as follows.
+```{r,echo=TRUE}
+library(mgcv)
+
+M_0 <- gam(accel ~ times, data = mcycle)
+```
+In other to use `gam` to do basis function regression, we must apply what `mgcv` calls *smooth terms*. 
+There are many smooth terms to choose from in `mgcv` and there are many methods to specify them. 
+Here, we will use the function simply named `s` to set up the basis functions. 
+The default basis functions used with `s` are *thin plate splines*. 
+These are a type of radial basis functions, not identical but similar to those we describe above.
+Therefore, to do thin plate spline basis function regression using `gam`, we simply apply `s` to our predictor as follows.
+```{r, echo=TRUE}
+M_1 <- gam(accel ~ s(times), data = mcycle)
+```
+The plot of the fit of this model can be accomplished using the base R `plot` function. 
+This plot in shown in Figure \ref{fig:mcycle_gam_1}.
+```{r mcycle_gam_1, out.width='0.5\\textwidth', fig.cap='A thin plate spline basis function regression model applied to the \\texttt{mycle} data set.', fig.align='center'}
+plot(M_1, residuals = T)
+```
+
+The model summary output, using the generic `summary` function, gives us some different output to what we normally get from linear or generalized linear models, even when we use basis functions.
+In particular, it provides us the following table for the basis functions
+```{r, echo=T}
+summary(M_1)$s.table
+```
+The `edf` is the effective degrees of freedom of the smooth term. 
+We can interpret its values in terms of polynomial terms. 
+In other words, a `edf` close to one means the smooth terms is effectively a linear function, while a `edf` close to 2 or close to 3, and so on, are effectively quadratic, cubic, and so on, models.
+The F statistic and p-value that accompanies this value tells us whether the function is significantly different to a horizontal line, which is a linear function with a zero slope. 
+Even if the `edf` is greater than 1, the p-value may be not significant because there is too much uncertainty in the nature of the smooth function.
+
+The number of basis functions used by `s` is reported by the `rank` attribute of the model.
+In our model, we see that it is `r M_1$rank`.
+```{r, echo=T}
+M_1$rank
+```
+In general, `mgcv` will use a number of different methods and constraints, which differ depending on the details of the model, in order to optimise the value of `k`. 
+We can always, however, explicitly control the number of basis functions used by setting the value of `k` in the `s` function.
+For example, in the following, we set the value of `k` to be 5.
+```{r, echo=TRUE}
+M_2 <- gam(accel ~ s(times, k = 5), data = mcycle)
+M_2$rank
+```
+How models with different numbers of bases differ in terms of AIC can be easily determined using the `AIC` function.
+To illustrate this, we will fit the same model with a range of value of `k` from 3 to 30.
+```{r, echo=T}
+M_k_seq <- map(seq(3, 20), 
+               ~gam(accel ~ s(times, k = .), data = mcycle))
+model_aic <- map_dbl(M_k_seq, AIC)
+```
+```{r gam_aic, out.width='0.5\\textwidth', fig.cap='The AIC values of \\texttt{gam} models of the \\texttt{mcycle} data with different values of \\texttt{k} from 3 to 20 within the \texttt{s} function.', fig.align='center'}
+tibble(k = seq(3, 20),
+       aic = model_aic) %>% 
+  ggplot(aes(x = k, y = aic)) + geom_point() + geom_line()
+```
+We plot these AIC values in the following Figure \ref{fig:gam_aic}.
+As we can see, the \aic values drop to a minimum at `r seq(3,20)[which.min(model_aic)]`, and then slowly increases after this minimum over the remaining values of `k` we have examined.
+
+In addition to explicitly setting the number of basis functions, we can also explicitly set the *smoothing penalty* with the `sp` parameter used inside the `s` function.
+In general, the higher the smoothing penalty, the *less* flexibility in the nonlinear function. 
+For example, very high values of the smoothing penalty effectively force the model to be a liner model.
+On the other hand, low values of the smoothing penalty may be overly flexible and overfit the data, as we saw above.
+In Figure \ref{fig:sp_plots}, we display the model fits of `gam` models applied to `mcycle` data for three different values of $sp$.
+```{r sp_plots, out.width='\\textwidth', fig.cap='Plots of the fits of \\gam models to the \\texttt{mcycle} data with different values of \\texttt{sp} from, left to right and upper to lower, $10^{-1}$, $1$, $10$, $100$.', fig.align='center', results='hide'}
+par(mfrow=c(2, 2))
+plot(gam(accel ~ s(times, sp = 1e-1), data = mcycle), residuals = T)
+plot(gam(accel ~ s(times, sp = 1), data = mcycle), residuals = T)
+plot(gam(accel ~ s(times, sp = 1e1), data = mcycle), residuals = T)
+plot(gam(accel ~ s(times, sp = 1e2), data = mcycle), residuals = T)
+dev.off()
+```
+
+From the Figure, it is clear that values of `sp` greater than $1$ tend to underfit the data.
+Therefore, it seems likely that much lower values of `sp` will be optimal in terms of \aic.
+In the following, we evaluate the \aic of a set of models whose `sp` ranges from $10^{-5}$ to $1$ in powers of 10.
+```{r, echo=TRUE}
+sp_seq <- 10^seq(-5, 0)
+M_sp_seq <- map(sp_seq,
+                ~gam(accel ~ s(times, sp = .), data = mcycle)
+)
+model_sp_aic <- map_dbl(M_sp_seq, AIC) %>% 
+  set_names(sp_seq)
+```
+We may then subtract the minimum value of \aic to see the difference in \aic from each model to the optimal model.
+```{r, echo=T}
+model_sp_aic - min(model_sp_aic)
+```
+As we can see, the optimal model is at `r which.min(model_sp_aic) %>% names()`, with the \aic values for the lower orders of magnitude being very close, but a rapidly increasing \aic value for higher orders of magnitude.
+
+
+As with `k`, if `sp` is not explicitly set, `mgcv` uses a different methods, including cross-validation, to optimise the value of `sp` for any given model. 
+For example, for models `M_1` and `M_2` above, we can see that their `sp` values are as follows.
+```{r, echo=T}
+c(M_1$sp, M_2$sp)
+```
+These optimized `sp` values are close to the `sp` value we estimated using `AIC` above.
+
+
+
+
+
+\newpage
+# References
+

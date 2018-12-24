@@ -1,0 +1,29 @@
+\begin{figure}
+\centering
+\begin{tikzpicture}[mynode/.style={draw,circle, fill=red!10,minimum width=10mm,align=center},mynodex/.style={draw,circle, minimum width=10mm,align=center}]
+
+\node[mynode] (y_1) {$y_{jd}$};
+\node[mynode,above = of y_1] (x_1) {$x_{jd}$};
+\node[right=5mm of y_1] (i) {$d \in 1\ldots n_j$};
+
+\node[mynodex, below=20mm of y_1] (beta) {$\vec{\beta}_j$};
+\node[right=5mm of beta] (j) {$j \in 1\ldots J$};
+\node[mynodex, left=13mm  of beta] (sigma) {$\sigma$};
+\node[right=25mm of beta] (phantom) {$$};
+
+\node[draw,rounded corners=2mm,inner sep=5mm,fit=(y_1) (x_1) (i)] {};
+\node[draw,rounded corners=2mm,inner sep=10mm,fit=(y_1) (x_1) (beta) (phantom)] {};
+
+\node[mynodex, below=13mm of beta] (b) {$\vec{b}$};
+\node[mynodex, right= of b] (Sigma) {$\Sigma$};
+
+\foreach \value in {x_1,beta}
+\draw[->] (\value) to (y_1);
+
+\draw[->] (sigma) [bend left] to (y_1);
+\draw[->] (b) to (beta);
+\draw[->] (Sigma) to (beta);
+\end{tikzpicture}
+\caption{Bayesian network diagrams for a multilevel varying slopes and intercepts linear model.}
+\label{fig:bda_sleepstudy_multilevel}
+\end{figure}

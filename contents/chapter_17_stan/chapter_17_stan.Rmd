@@ -1,0 +1,871 @@
+---
+title: "Chapter 17: Probabilistic Modelling with Stan"
+author: "Mark Andrews"
+output:
+  latex_document:
+    toc: true
+    toc_depth: 2
+    fig_caption: true
+    highlight: haddock
+  html_document:
+    highlight: haddock
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+  - \usepackage{minted}
+---
+  
+  
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = T, warning = F, message = F)
+
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+
+library(tidyverse)
+library(magrittr)
+library(rstan)
+library(latex2exp)
+
+theme_set(theme_classic())
+
+options(width=120)
+
+cat_script <- function(filename, start=NA, end=NA, filename_in_comment = T, minted='stan', comment_symbol = "//", leading_trim = T){
+  
+  basename <- function(path){
+    path %>% str_split(pattern = '/') %>% 
+      extract2(1) %>% 
+      tail(1)
+  }
+  
+  lines <- readLines(filename)
+  
+  if (leading_trim){
+    lines <- remove_leading_spaces(lines)
+  }
+  
+  start <- ifelse(is.na(start), 1, start)
+  end <- ifelse(is.na(end), length(lines), end)
+  cat(sprintf("\\begin{minted}{%s}", minted), sep='\n')
+  #cat(sprintf("\\begin{minted}[bgcolor=LightGray]{%s}", minted), sep='\n')
+  if (filename_in_comment){
+    cat(str_c(comment_symbol, ' ', basename(filename)), sep="\n")
+  } 
+  
+  lines <- lines[start:end]
+  
+  if (leading_trim){
+    lines <- remove_leading_spaces(lines)
+  }
+  
+  cat(lines, sep='\n')
+  cat("\\end{minted}")
+}
+
+cat_rscript <- function(filename, start=NA, end=NA, filename_in_comment = T){
+  cat_script(filename = filename, start=start, end=end, filename_in_comment = filename_in_comment, minted = 'R', comment_symbol = '#')
+}
+
+
+cat_stanfile <- function(filename, start=NA, end=NA, filename_in_comment = T){
+  cat_script(filename = filename, start=start, end=end, filename_in_comment = filename_in_comment, minted = 'stan', comment_symbol = '//')
+}
+
+
+
+remove_leading_spaces <- function(s){
+  s %>%
+    str_remove(pattern = '^\n') %>%
+    str_remove(patter = '\n$') %>% 
+    str_split(pattern = '\n') %>% 
+    unlist() %>% 
+    enframe() %>% 
+    mutate(n_leading_space = str_extract(value, pattern = regex('^\\s*')) %>%
+             str_count(pattern = regex("\\s"))
+    ) %>% 
+    mutate(n = min(n_leading_space)) %>% 
+    mutate(new_value = str_remove(value, pattern = regex(sprintf('\\s{%d}', n)))) %>% 
+    pull(new_value)
+}
+
+```
+
+# Introduction
+
+
+In Chapter 8 and subsequent chapters, we described how the aim of Bayesian inference is to infer the posterior distribution of the assumed statistical model's parameters, which we can write as $\Prob{\theta\given\data}$, where $\theta$ is the set of unknown parameters and $\data$ is the observed data.
+In general, in all but a small number of cases, this posterior distribution, which we can think of as simply as a function over a (often very high) dimensional space, does not have an analytical description.
+In other words, in general, there is no formula that will give quantities that we seek such as the posterior's mean, standard deviation, high posterior density interval, posterior predictive distribution, etc.
+However, all of these quantities are *expectations* of the posterior distribution, which we can express as 
+$$
+\left\langle g(\theta) \right\rangle = \int g(\theta) \Prob{\theta\given\data} d\theta,
+$$
+where $g(\theta)$ is some function of the parameters $\theta$.
+We can approximate these expectations using the *Monte Carlo integration* method, which is where we draw samples from $\Prob{\theta\given\data}$ and then calculate the arithmetic mean of the function $g$ applied to each one:
+$$
+\left\langle g(\theta) \right\rangle \approx \frac{1}{n} \sum_{i=1}^n g(\tilde{\theta}_i),
+$$
+where $\tilde{\theta}_1, \tilde{\theta}_2 \ldots \tilde{\theta}_n$ are $n$ samples drawn drawn from $\Prob{\theta\given\data}$.
+
+In Chapter 8, we also saw that Markov Chain Monte Carlo (\mcmc) methods, which include techniques such as the *Metropolis* (or, more general, *Metropolis-Hastings*) sampler, the *Gibbs* sampler, and the *Hamiltonian Monte Carlo* variant of the Metropolis sampler are algorithms from drawing samples from high dimensional probability distributions that can be applied very generally.
+As useful and as general as these \mcmc samplers are, they nonetheless are relatively arduous to implement in practice.
+Because samplers are computationally very intensive, they need to be implemented in lower level programming languages such as C/C++ or Fortran.
+Even when we have knowledge and experience with these languages, writing code in these language is more difficult, time consuming, and error prone than writing code in, say, R.
+In addition, there is often a lot of mathematical details about the models that we need to work out and then implement in code.
+For example, we must mathematically work out the likelihood function, which for large models may be relatively complex, and then we must implement this in code.
+For some samplers, some as Gibbs samplers or Hamiltonian Monte Carlo, further mathematical details, such as conditional distributions or the derivative of the posterior distribution must be worked out and implemented.
+We may then have to fine tune the samplers to maximize their efficiency.
+In addition, every time we change major aspects of our model, we must often rewrite substantial portions of our code. 
+Overall, compared to any code covered in this book, these are major programming tasks that require time and effort that we simply may not be able to afford.
+
+The aim of a *probabilistic programming language* (\ppl) is to automate the implementation of the \mcmc sampler.
+With a \ppl, all we need do is specify our probabilistic model, including the priors, in a high level programming language.
+The sampler is then automatically derived and compiled and executed for us, and samples are then returned to us.
+The saving in terms of our time and effort can be remarkable.
+What might have taken days or even weeks of relatively tedious and error prone programming in C++ or Fortran, can now be accomplished in minutes by writing high level code.
+
+In this chapter, we cover the Stan \ppl, which is named after the Polish American Mathematician Stanislaw Ulam who was one of the inventors of the Monte Carlo in the late 1940's.
+The first stable release of Stan was in 2012, and it has grown steadily in popularity since then. 
+Now it is arguably the dominant probabilistic programming language for Bayesian data analysis in statistics.
+Here, we will attempt to provide a self-contained tutorial introduction to Stan and how it can be used in R by using `rstan`.
+
+# Univariate models
+
+Let us begin by considering some simple models, each one being defined essentially by probability distributions over a single observed variable.
+
+## Loaded die model
+
+```{r, echo=F}
+set.seed(10101)
+N <- 250
+sample(seq(6),
+       size = N,
+       replace = T,
+       prob = c(1, 1, 1, 1, 1, 2)
+) %>% tibble(outcome = .) %>% write_csv('data/loaded_dice.csv')
+```
+
+Let us begin with a very simple one parameter problem.
+Let us imagine that we have a die that is loaded to make an outcome of 6 more likely than other outcome.
+We throw this die $N = `r N`$ times and record the resulting face on each occasion.
+Simulated data of this kind is available in the following data set.
+```{r}
+dice_df <- read_csv('data/loaded_dice.csv')
+```
+We can use `table` to count the number of outcomes of each face, and clearly there are more cases of 6 than other outcomes.
+```{r}
+dice_df %>% table()
+```
+We can recode each outcome as a "six" or "not-six" binary outcome.
+```{r}
+dice_df %<>% 
+  mutate(is_six = ifelse(outcome == 6, 1, 0))
+dice_df
+```
+
+### Bernoulli model
+
+If we denote these binary outcomes as $y_1, y_2 \ldots y_n$, with each $y_i \in \{0, 1\}$, an assuming that there is a fixed probability $\theta$ that each $y_i = 1$, then our model of this data is as follows.
+$$
+y_i \sim \textrm{Bernoulli}(\theta),\quad\text{for $i \in 1, 2\ldots n$}.
+$$
+A Bayesian model places a prior probability distribution over $\theta$.
+When using a \mcmc methods generally, especially with a \ppl like Stan, we have practically endless choices for this prior.
+However, it must be a probability distribution over the real interval $[0, 1]$, and so an easy choice would be a $\textrm{Beta}$ distribution with hyperparameters $\alpha$ and $\beta$, which we will assume are known.
+Thus, the complete Bayesian model is as follows.
+$$
+\begin{aligned}
+y_i &\sim \textrm{Bernoulli}(\theta),\quad\text{for $i \in 1, 2\ldots n$},\\
+\theta &\sim \textrm{Beta}(\alpha, \beta).
+\end{aligned}
+$$
+
+To implement this model is Stan, we first extract out the `is_six` variable as a standalone vector, which we will name `y`, and record the length of this vector as `N`.
+```{r}
+y <- dice_df %>% pull(is_six)
+N <- length(y)
+```
+Given that we've assumed the `alpha` and `beta` hyperparameters of the $\textrm{Beta}$ distribution are known, we will set them to be both equal to $1$, which gives us a uniform prior distribution over $\theta$.
+```{r}
+alpha <- 1.0
+beta <- 1.0
+```
+The four variables `y`, `N`, `alpha`, and `beta` are the data that we will send to Stan, and to do so, we must put them into a list.
+```{r}
+dice_data <- list(y = y,
+                  N = N,
+                  alpha = alpha, 
+                  beta = beta)
+```
+
+The Stan implementation of this model is written in an external file, namely `loaded_dice.stan`.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice.stan')
+```
+We notice that in this Stan program, as with most Stan programs, we have multiple code blocks, specifically `data`, `parameters`, and `model`.
+The `data` block defines the input data.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice.stan', start = 1, end = 6, filename_in_comment = F)
+```
+Notice that we must not only declare the names of the variables that we will be passing in to the program as data, but we must also declare their size and type.
+For example, we declare than `N` is a positive integer, that `y` is a vector of `N` integers which are bounded between 0 and 1, and so `y` is a binary vector, and `alpha` and `beta` are declared as non-negative real numbers.
+The `parameters` block declares the (free) parameters of the model.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice.stan', start = 8, end = 10, filename_in_comment = F)
+```
+In this example, we have just one parameter, `theta`, which corresponds to $\theta$ in the above mathematical description.
+This has a real value bounded between 0 and 1.
+The next block is `model` and is where we define the model itself.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice.stan', start = 12, end = 15, filename_in_comment = F)
+```
+This code corresponds almost perfectly to the mathematical description of the model.
+First, we state that `theta` is distributed as a $\textrm{Beta}$ distribution with hyperparameters `alpha` and `beta`.
+Next, we state that each element of `y` is distributed as a Bernoulli distribution with parameter `theta`.
+Here, we are using vectorized notation.
+In other words, the statement 
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice.stan', start = 14, end = 14, filename_in_comment = F)
+```
+is equivalent to 
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice_for.stan', start = 14, end = 16, filename_in_comment = F)
+```
+While the second form maps on identically to the mathematical description, it is less concise notation and also less efficient.
+
+```{r, echo = F}
+stan <- function(file, ...){
+  rstan::stan(file = fs::path('stan', file), refresh = 0, ...)
+}
+```
+
+We can execute this Stan program in R via commands provided by the `rstan` package.
+```{r, eval=F}
+library(rstan)
+```
+It should be noted, however, that Stan is a program that is completely independent of R, and can be interfaced with many other programming languages and environments such as Python, Matlab, Stata, Julia, Mathematica, Scala, and others.
+The following command from the `rstan` package will compile a sampler based on the specifications in `loaded_dice.stan` and the data in `dice_data`, and then draw samples from it.
+```{r, cache=T}
+M_dice <- stan(file = 'loaded_dice.stan',
+               data = dice_data)
+```
+Typing the name `M_dice` gives us the following output.
+```{r}
+M_dice
+```
+There we see output that is similar to that of a `brm` based model, which of course is another interface to Stan.
+The number of chains, total number of iterations, and number of warmup iterations, are all presented at the top of this output.
+In the summary of the samples themselves, we are given information concerning `theta`, which is our one unknown variable.
+From this, we have the mean, the standard deviation, and quantiles of the posterior distribution's samples.
+In addition, we have the `Rhat` convergence diagnostic, the effective number of samples `n_eff`.
+The `se_mean` is the standard deviation divided by the square root of the `n_eff`.
+As we can see, in addition to the information concerning `theta`, we have the same information for `lp__`.
+This the logarithm of the (unnormalized) posterior density evaluated at the posterior samples of `theta`.
+This information is not often of direct interest in itself but is used in the calculation of various model fit statistics. 
+
+If we apply the generic `summary` command to `M_dice`, we are given a list with two objects: `summary` and `c_summary`.
+```{r}
+summary(M_dice) %>% class()
+summary(M_dice) %>% names()
+```
+The `summary` object in this list is a matrix that summarizes the samples from all chains together.
+The `c_summary` is a multidimensional array that gives a separate summary for each chain.
+With the main `summary` command, we can pass in a vector of parameters using the keyword `pars` and a vector of quantiles using the keyword `probs`.
+For example, to get the 2.5th and 97.5th percentile values of `theta`, and obtain these summaries for all chains together, we can do the following.
+```{r}
+summary(M_dice, pars = 'theta', probs = c(0.025, 0.975))$summary
+```
+For convenience, we can create a custom function `stan_summary` to return the summary matrix as a tibble.
+```{r}
+stan_summary <- function(stan_model, pars, probs = c(0.025, 0.975)){
+  summary(stan_model, pars = pars, probs = probs)$summary %>% 
+    as_tibble(rownames = 'par')
+}
+
+stan_summary(M_dice, pars = 'theta')
+```
+
+
+
+### Binomial model
+
+Now let us consider a variant on the Bernoulli model for the loaded die.
+Because each of the $n$ throws of the die and hence each six or not-six binary outcome is independent of every other and dependent only the value of $\theta$, the mathematical model defined above is also identical to the following binomial model.
+$$
+\begin{aligned}
+m &\sim \textrm{Binomial}(n, \theta),\\
+\theta  &\sim \textrm{Beta}(\alpha, \beta),
+\end{aligned}
+$$
+where $m$ is the total number of observations where the binary outcome was equal to six.
+A Stan program for this model is in `loaded_dice_binomial.stan`.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice_binomial.stan')
+```
+As we can see, in the model block, we now have the line
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice_binomial.stan', filename_in_comment = F, start = 14, end = 14)
+```
+rather than this line from the previous Stan program
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice.stan', filename_in_comment = F, start = 14, end = 14)
+```
+As such, we no longer need to pass in `y` as data but need to pass in `m = sum(y)` instead.
+The value of `m` must be bounded between `1` and `N`, and hence we also include the following new line, which replaces the line declaring `y`.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice_binomial.stan', filename_in_comment = F, start = 3, end = 3)
+```
+We then call the model as before.
+```{r, cache=T}
+M_dice_2 <- stan('loaded_dice_binomial.stan',
+                 data = list(m = sum(y), 
+                             N = length(y),
+                             alpha = alpha,
+                             beta = beta)
+)
+```
+The summary results are almost identical to those of the Bernoulli model.
+```{r}
+stan_summary(M_dice_2, pars = 'theta')
+```
+
+### Logistic Bernoulli model
+
+Another variant on the Bernoulli model above is the following logit model.
+$$
+\begin{aligned}
+y_i &\sim \textrm{Bernoulli}(\theta),\quad\text{for $i \in 1, 2\ldots n$},\\
+\log\left(\frac{\theta}{1-\theta}\right) &= \mu,\quad\mu \sim N(0, \sigma^2).
+\end{aligned}
+$$
+Here, the prior is a normal distribution, with a zero mean and variance of $\sigma^2$, over the log odds of $\theta$.
+This is simply an alternative prior over $\theta$ that is known as *logit normal* distribution.
+Again, we will assume that $\sigma$ is known.
+Setting $\sigma = 1.0$ gives a relatively diffuse prior over $\theta$, albeit one that is unimodal and centered at $\theta=0.5$. See Figure \ref{fig:logit-normal} for an illustration of this distribution.
+
+```{r logit-normal, echo=F, fig.cap="A logit-normal prior over $\\theta$ whose hyperparameters are $\\mu = 0$ and $\\sigma = 1$.", fig.align="center", out.width="0.5\\textwidth"}
+logit_normal <- function(x, mu=0, sigma=1){
+  
+  logit <- function(x, epsilon=1e-6) {
+    x <- ifelse(x < epsilon, epsilon, x)
+    x <- ifelse(x > (1-epsilon), 1-epsilon,x)
+    log(x/(1-x))
+  }
+  
+  z <- 1/(sigma * sqrt(2*pi))
+  y <- 1/(x*(1-x))
+  f <- exp(-(logit(x) - mu)^2/(2*sigma^2))
+  
+  z * y * f
+}
+
+tibble(x = seq(0.001, 0.999, by = 0.001)) %>% 
+  mutate(y = logit_normal(x)) %>% 
+  ggplot(aes(x = x, y = y)) + 
+  geom_line() + 
+  labs(x = TeX("$\\theta$"),
+       y = TeX("$\\mathrm{P}(\\theta)$")) +
+  theme_classic()
+```
+
+```{r, echo=F}
+# load M_dice_3 from RDS file
+M_dice_3 <- readRDS('M_dice_3.Rds')
+```
+
+The logit-normal based model is defined in the `loaded_dice_logit.stan` file.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice_logit.stan')
+```
+In this program, we use the `bernoulli_logit` probability distribution that takes the normally distributed variable `mu` as a parameter.
+Given that we want to view samples from `theta` instead of, or at least in addition to, those of `mu`, we include the following `generated quantities` code block.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice_logit.stan', filename_in_comment = F, start = 16, end = 19)
+```
+
+We can compile, execute, and draw samples from this program using `rstan::stan` as usual.
+```{r, results='asis', echo=F}
+cat_rscript('scripts/m_dice_3.R', start = 13, end = 15, filename_in_comment = F)
+```
+The summary results are almost identical to those of the Bernoulli model.
+```{r}
+stan_summary(M_dice_3, pars = c('mu', 'theta'))
+```
+Clearly, the posterior distribution over `theta` is practically identical in this model than in the model with the Beta prior.
+
+## Normal models
+
+Now let us consider models where the observed variable is assumed to be normally distributed.
+In the following data set, we have data concerning mathematical achievement scores in a sample of US university students.
+```{r}
+math_df <- read_csv('data/MathPlacement.csv')
+```
+A histogram for this data is shown in the mathematical SAT (Scholastic Aptitude Test) (`SATM`) scores is shown in Figure \ref{fig:math_sat}.
+```{r, math_sat, fig.cap="Histogram of mathematical SAT scores in a sample of student in a US university.", fig.align="center", out.width="0.5\\textwidth"}
+math_df %>%
+  ggplot(aes(x = SATM)) + 
+  geom_histogram(binwidth = 2, col='white')
+```
+Clearly, this data is unimodal and roughly bell-shaped but also with a negative skew.
+Despite is lack of symmetry, a simple and almost default model of this data would be as follows.
+$$
+y_i \sim N(\mu, \sigma^2),\quad\text{for $i \in 1\ldots n$},
+$$
+where $y_i$ is the maths SAT score of student $i$ and where there are $n$ students in total.
+Obviously, we have two unknowns, $\mu$ and $\sigma$, and so in a Bayesian model, we first put priors over these two variables.
+As with the previous examples above, we have an almost endless variety of priors to use in this case.
+Given the simplicity of the model, and the fact that we have `r math_df %>% select(SATM) %>% na.omit() %>% pull(SATM) %>% length()` observations, excluding missing values, any prior that is not extremely precise will be dominated by the likelihood function when determining the posterior distribution, and thus most common choices are not likely to make much practical differences to the posterior distribution.
+Common choices for a prior on the $\mu$ parameter of the normal distribution is another normal distribution.
+These can be set to have a relatively high value for the variance (hyper)-parameter to get a vague and hence weakly informative prior.
+For the prior over $\sigma$, @gelman2006prior generally recommends heavy tailed distributions over the positive real values such as a half-Cauchy or half-t distribution.
+Following these suggestions, our Bayesian model becomes, for example:
+$$
+\begin{aligned}
+y_i &\sim N(\mu, \sigma^2),\quad\text{for $i \in 1\ldots n$},\\
+\mu &\sim N(\nu, \tau^2),\quad \sigma \sim \mathrm{Student}_{+}(\kappa, \phi, \omega),
+\end{aligned}
+$$
+where $\mathrm{Student}_{+}$ is the upper half of the (nonstandard) Student t-distribution centered at $\phi$, with scale parameter $\omega$, and with degrees of freedom $\kappa$.
+For this choice of prior, we therefore have in total 5 hyper-parameters $\nu$, $\tau$, $\phi$, $\omega$ and $\kappa$.
+
+A Stan program implementing this model is in the file `normal.stan`.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/normal.stan')
+```
+This program is much the same as before with its three main code blocks.
+One important general feature of Stan not seen before is that the truncated Student t-distribution is defined by the general Student t-distribution.
+However, because `sigma` is defined as having only positive values, the resulting prior distribution over `sigma` is the half t-distribution.
+In general, regardless of the prior distribution that we use, it will be truncated based on the variable's defined limits.
+
+We can run this program with `rstan::stan` as follows.
+```{r, echo=F, results='asis'}
+cat_rscript('scripts/m_normal.R', start=7, end=8, filename_in_comment = F)
+```
+As we can see, we have the hyperparameters for the normal distribution on `mu` to be `nu = 50` and `tau = 25`.
+This places a relatively diffuse normal distribution over $\mu$ with its center at 50 and with 95% of its mass from approximately 0 to 100.
+The half Student-t distribution has its lower bound at 0, and with its scale being `omega = 10`, this entails that 95% of its mass extends as far as 30.
+
+```{r, echo=F}
+M_math <- readRDS('M_math.Rds')
+```
+
+As before, we can view the summary of the results with `stan_summary`.
+```{r}
+stan_summary(M_math, pars = c('mu', 'sigma'))
+```
+Clearly, this reveals a very precise estimates of both the mean `mu` and standard deviation `sigma` of the normal distribution of maths SAT scores.
+
+# Regression models
+
+Normal linear regression models are extensions of the normal distribution based model just described in the previous section.
+
+## Simple linear regression
+
+As an example, using the `math_df` data, we will model how the score on a math placement exam `PlcmtScore` varies as a function of `SATM`.
+A scatterplot of this data is shown in Figure \ref{fig:mathplacement}.
+```{r, mathplacement, echo=F, fig.cap='A scatterplot of scores on a mathematics placement exam against maths SAT scores.', fig.align='center', out.width="0.67\\textwidth"}
+math_df %>% 
+  select(SATM, PlcmtScore) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = SATM, y = PlcmtScore)) + geom_point()
+```
+Denoting the `PlcmtScore` by $y$ and `SATM` by $x$, the model can be written as follows.
+$$
+\text{for $i \in 1\ldots n$}\quad y_i \sim N(\mu_i, \sigma^2),\quad\mu_i = \beta_0 + \beta_1 x_i.
+$$
+There are now three parameters in the model: $\beta_0$, $\beta_1$, $\sigma$.
+We will place normal priors on $\beta_0$ and $\beta_1$, and half t-distribution on $\sigma$.
+As such the full Bayesian model is as follows.
+$$
+\begin{aligned}
+y_i &\sim N(\mu_i, \sigma^2),\quad\mu_i = \beta_0 + \beta_1 x_i,\\
+\beta_0 &\sim N(\nu_0, \tau^2_0),\quad
+\beta_1 \sim N(\nu_1, \tau^2_1),\quad
+\sigma \sim \mathrm{Student}_{+}(\kappa, \phi, \omega)
+\end{aligned}
+$$
+The Stan code for this model is in `normallinear.stan`.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/normlinear.stan')
+```
+
+For this example, we will choose the hyperparameters to lead to effectively uninformative priors on $\beta_0$ and $\beta_1$.
+Specifically, the normal distributions will be centered on zero, i.e. $\nu_0 = \nu_1 = 0$, and will be sufficiently wide, i.e., $\tau_0 = \tau_1 = 50$, so as to be effectively uniform over all practically possible values for $\beta_0$ and $\beta_1$.
+For the prior on $\sigma$, as above, we will use the upper half of Student's t-distribution centered at 0 and with a relatively low degrees of freedom and with a scale $\omega$ equal to the \mad of the outcome variable $y$.
+If we place the `x` and `y` data vectors and the values of the hyperparameters in the list `math_data_2`, we can call the Stan program as using `rstan::stan` as we did above.
+```{r, echo=F, results='asis'}
+cat_rscript('scripts/normlinear.R', start = 4, end = 18, filename_in_comment = F)
+```
+
+```{r, echo=F}
+M_math_2 <- readRDS('M_math_2.Rds')
+```
+As before, we can view the results with `stan_summary`
+```{r}
+stan_summary(M_math_2, pars = c('beta_0', 'beta_1', 'sigma'))
+```
+
+## Multiple regression and categorical predictors
+
+In general, we may have any number of predictors in a regression model.
+As we have seen previously, if any of these predictors are categorical variables, each one is recoded using a binary dummy code.
+For example, a categorical variable with $L$ distinct levels can be recoded using $L-1$ binary variables.
+The values of the predictors for all observations can be arranged as an $n \times K + 1$ matrix $X$, known as the design matrix, where $n$ is the number of observations, $K$ is the total final number of predictors after all categorical predictors have been recoded, and the first column of $X$ is a vector of $n$ $1$'s.
+Therefore, in general, any normal linear model can be described as follows.
+$$
+\vec{y} \sim N(\vec{\mu}, \sigma^2),\quad \vec{\mu}  = X\vec{\beta},
+$$
+where $\vec{y}$ is the $n$ dimensional vector of all observations of the outcome variable, $\vec{\beta}$ is a $K+1$ dimensional vector of coefficients, and the first value of $\vec{\beta}$ is the intercept term.
+A full Bayesian version of this model is implemented in the program `mlreg.stan`.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/mlreg.stan')
+```
+In this program, we have a normal prior on $\vec{\beta}$ and a half Student t-distribution prior on $\sigma$ as before.
+Note that the prior over $\vec{\beta}$ is a specified in the Stan code as follows.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/mlreg.stan', start = 25, end = 25, filename_in_comment = F)
+```
+This places the same $N(0, \tau^2)$ prior over each element of $\vec{\beta}$.
+Note also that this program has a new command block that we have not used previously: `transformed parameters`.
+This is used to create parameters that are transformations of the original ones.
+Here, we have used it for the $\mu$ vector, which is a deterministic function of $\beta$ and $X$.
+
+To use this Stan program, the base R command `model.matrix` and the corresponding `model_matrix` command from the `modelr` package can used to create the design matrix $X$.
+As an example, in the following data set, we have the height, weight, gender, and race, amongst other variables, for a set of over 6000 individuals.
+```{r}
+weight_df <- read_csv('data/weight.csv')
+weight_df
+```
+The `gender` variable has two values, `r weight_df %>% pull(gender) %>% unique() %>% paste(collapse = ' and ')`.
+The race variable has `r weight_df %>% pull(race) %>% unique() %>% length()` values, of which `white`, `black`, `hispanic` make up around `r weight_df %>% filter(race %in% c('black', 'white', 'hispanic')) %>% nrow() %>% magrittr::divide_by(nrow(weight_df)) %>% magrittr::multiply_by(100) %>% round()`% of cases, and so we will limit our focus to them.
+```{r}
+weight_df %<>% filter(race %in% c('black', 'white', 'hispanic'))
+```
+The design matrix to predict `weight` from `height`, `gender`, and `race` is 
+```{r}
+library(modelr)
+model_matrix(weight_df, weight ~ height + gender + race)
+```
+Note that here, the `gender` variable has been coded with a single binary dummy code as follows.
+```{r, echo=F, results='asis'}
+weight_df %>%
+  select(gender) %>% 
+  bind_cols(model_matrix(weight_df, weight ~ height + gender + race) %>% 
+              select(starts_with('gender'))
+  ) %>% distinct() %>% rename(dummy = gendermale) %>% 
+  arrange(gender) %>% 
+  as.matrix() %>% 
+  unname() %>% 
+  knitr::kable(format = "latex", booktabs = T) 
+```
+On the other hand, the `race` variable has been coded by the following dummy code with two binary variables.
+```{r, echo=F, results='asis'}
+weight_df %>%
+  select(race) %>% 
+  bind_cols(model_matrix(weight_df, weight ~ height + gender + race) %>% 
+              select(starts_with('race'))
+  ) %>% distinct() %>% arrange(race) %>% 
+  as.matrix() %>% 
+  unname() %>% 
+  knitr::kable(format = "latex", booktabs = T) 
+```
+The design matrix $X$ and outcome vector $\vec{y}$ can now be obtained simply as follows.
+```{r, results='asis', echo=F}
+cat_rscript('scripts/mlreg.R', start = 6, end = 8, filename_in_comment = F)
+```
+With this, the data list can be set up as follows.
+```{r, results='asis', echo=F}
+cat_rscript('scripts/mlreg.R', start = 10, end = 16, filename_in_comment = F)
+```
+We may then execute the Stan program with `stan`.
+```{r, results='asis', echo=F}
+cat_rscript('scripts/mlreg.R', start = 18, end = 18, filename_in_comment = F)
+```
+```{r, echo=F}
+M_weight <- readRDS('M_weight.Rds')
+```
+We may view the summary of the posterior samples for $\vec{\beta}$ and $\sigma$ using `stan_summary`.
+```{r}
+stan_summary(M_weight, pars = c('beta', 'sigma'))
+```
+
+## Generalized linear models
+
+Extending the multiple linear regression example just described to a generalized linear model is very straightforward.
+Just as in the case of linear models, in generalized linear models, our predictor variables, including categorical predictor variables that have been recoded using a dummy binary code, can be represented as $K + 1$ design matrix $X$.
+If our outcome variable vector $\vec{y}$ is a binary vector, a binary logistic regression model of this data would be as follows.
+$$
+\vec{y}\sim \textrm{Bernoulli}(\vec{\theta}),\quad \textrm{logit}(\vec{\theta}) = X\vec{\beta}.
+$$
+On the other hand, if $\vec{y}$ is a vector of counts, we could use the following Poisson regression model for this data.
+$$
+\vec{y}\sim \textrm{Poisson}(\vec{\lambda}),\quad \log(\vec{\lambda}) = X\vec{\beta}.
+$$
+Alternatively, our model for the count outcome variable could be a negative binomial regression model as follows.
+$$
+\vec{y}\sim \textrm{NegBinomial}(\vec{\lambda}, \phi),\quad \log(\vec{\lambda}) = X\vec{\beta},
+$$
+where $\phi$ is the inverse dispersion parameter.
+
+Fully Bayesian versions of all of these models would be straightforward extensions of the multiple linear regression model in the previous section.
+For example, a Bayesian binary logistic regression with multiple predictors can be found in the `logitreg.stan`.
+```{r, echo=F, results = 'asis'}
+cat_stanfile('stan/logitreg.stan')
+```
+This program is obviously similar to the normal linear regression model.
+The principal difference comes down to the model of the outcome variables, specified in the following line.
+```{r, echo=F, results = 'asis'}
+cat_stanfile('stan/logitreg.stan', start = 25, end = 25, filename_in_comment = F)
+```
+Although not strictly necessary, we also include the following `generated quantities` block to calculate $\vec{\theta} = \textrm{ilogit}(\vec{\mu})$, where $\vec{\mu} = X\vec{\beta}$.
+```{r, echo=F, results = 'asis'}
+cat_stanfile('stan/logitreg.stan', start = 28, end = 31, filename_in_comment = F)
+```
+
+
+We can use this model with the following data set.
+```{r}
+biochem_df <- read_csv('data/biochemist.csv')
+```
+This data gives us data from `r nrow(biochem_df)` PhD students.
+For each one, we have the number of peer reviewed articles they have published (`publications`), as well their gender (`gender`), whether they are married or not (`married`), how many children they have (`children`), a measure of the prestige of their institution (`prestige`), and the number of publications of their research mentor (`mentor`).
+We can also create a new variable that indicates if the PhD student obtained a publication or not.
+```{r, results = 'asis', echo=F}
+cat_rscript('scripts/logitreg.R', start = 6, end = 6, filename_in_comment = F)
+```
+This binary variable can be the outcome variable in a logistic regression analysis that analyses how the probability of being published or not varies as a function of a set of predictor variables.
+We will use `gender`, `married`, `prestige`, and `mentor` as predictors, and we will create a binary variable that indicates whether the number of children that the PhD student has is greater than zero or not.
+As above, we will create the design matrix for these predictors using `modelr::model_matrix`.
+```{r, results = 'asis', echo = F}
+cat_rscript('scripts/logitreg.R', start = 8, end = 10, filename_in_comment = F)
+```
+Here, `gender` will be coded such that `Women` is coded as `1` and `Men` is coded as `0`.
+For the `married` variable, `Married` is coded by `0` and `Single` is coded by `1`.
+Now, we can create the necessary data for the Stan model.
+```{r, results = 'asis', echo = F}
+cat_rscript('scripts/logitreg.R', start = 12, end = 18, filename_in_comment = F)
+```
+Here, with `tau = 100`, we set the standard deviation $\tau$ for the normal prior distribution over $\beta_0, \beta_1 \ldots \beta_k \ldots \beta_K$.
+Now, we can call the Stan model with `stan`.
+```{r, results = 'asis', echo = F}
+cat_rscript('scripts/logitreg.R', start = 20, end = 20, filename_in_comment = F)
+```
+```{r, echo=F}
+M_biochem <- readRDS('M_biochem.Rds')
+```
+We may view the summary of the posterior samples for $\vec{\beta}$ using `stan_summary`.
+```{r}
+stan_summary(M_biochem, pars = 'beta')
+```
+
+A Bayesian Poisson regression model can be implemented as a relatively minor extension of the logistic regression model, as we see in the following program from the file `poisreg.stan`.
+```{r, results = 'asis', echo = F}
+cat_stanfile('stan/poisreg.stan')
+```
+The difference between this program and that of the logistic regression program occurs in three places.
+First, in the following line in the `data` block, we indicate that the values of `y` are integers that are bounded by zero but have no upper limit.
+```{r, results = 'asis', echo = F}
+cat_stanfile('stan/poisreg.stan', start = 5, end = 5, filename_in_comment = F)
+```
+Second, in the following line in the `model` block, we indicate that `y` is modelled as a Poisson distribution.
+```{r, results = 'asis', echo = F}
+cat_stanfile('stan/poisreg.stan', start = 25, end = 25, filename_in_comment = F)
+```
+Note that here, the distribution is `poisson_log`.
+This entails that the input argument vector, denoted by `mu`, is the logarithm of the rate of the Poisson distribution.
+In other words, `mu` is $\vec{\mu} = \log(\lambda)$ from the mathematical description above.
+To obtain the rate itself, we use the following `generated quantities` block.
+```{r, results = 'asis', echo = F}
+cat_stanfile('stan/poisreg.stan', start = 28, end = 31, filename_in_comment = F)
+```
+
+We will use the `X` design matrix as before, but set `y` to be `publications`, which gives the number of publications for each student.
+Therefore, our input data list is as follows.
+```{r, results = 'asis', echo = F}
+cat_rscript('scripts/poisreg.R', start = 10, end = 16, filename_in_comment = F)
+```
+We then execute the program as follows.
+```{r, results = 'asis', echo = F}
+cat_rscript('scripts/poisreg.R', start = 18, end = 18, filename_in_comment = F)
+```
+```{r, echo=F}
+M_biochem_pois <- readRDS('M_biochem_pois.Rds')
+```
+We may then view the summary of the posterior samples for $\vec{\beta}$ using `stan_summary` as before.
+```{r}
+stan_summary(M_biochem_pois, pars = 'beta')
+```
+
+As a final example of a generalized linear model, let us consider a negative binomial model, which is suitable for overdispersed count data.
+A Stan program implementing this is in `negbinreg.stan`.
+```{r, results = 'asis', echo = F}
+cat_stanfile('stan/negbinreg.stan')
+```
+The outcome variable is modelled a negative binomial with the key line.
+```{r, results = 'asis', echo = F}
+cat_stanfile('stan/negbinreg.stan', start = 27, end = 27, filename_in_comment = F)
+```
+Note that, as described above in the mathematical description, the mean of the negative binomial is given by $\vec{\lambda}$ where $\log(\vec{\lambda}) = X\vec{\beta}$.
+Thus, in the Stan code, the `mu` corresponds to $X\vec{\beta}$.
+The negative binomial distribution also has an additional parameter, $\phi$.
+The higher the inverse of $\phi$, the greater the overdispersion in the distribution.
+Here, we put a Cauchy prior with a scale of 10 on $\phi$.
+```{r, results = 'asis', echo = F}
+cat_stanfile('stan/negbinreg.stan', start = 24, end = 24, filename_in_comment = F)
+```
+We will use the same `biochem_data_count` as we used in the case of the Poisson distribution and then execute the program as follows.
+```{r, results = 'asis', echo = F}
+cat_rscript('scripts/negbinreg.R', start = 18, end = 18, filename_in_comment = F)
+```
+```{r, echo=F}
+M_biochem_nb <- readRDS('M_biochem_nb.Rds')
+```
+We may then view the summary of the posterior samples for $\vec{\beta}$ using `stan_summary` as before.
+```{r}
+stan_summary(M_biochem_nb, pars = 'beta')
+```
+
+# Multilevel models
+
+A multilevel linear regression model, also known as a linear mixed effects model, can be written as follows:
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad \mu_i = \vec{x}_i \vec{\beta}_{z_i},\quad \text{for $i \in 1\ldots n$}
+$$
+where each $z_i \in 1\ldots J$ and each $\vec{\beta}_j \sim N(\vec{b}, \Sigma)$.
+In other words, as we have explained in Chapter 11, each observation $i$ is a member of subgroup or cluster $z_i$, each cluster has its own set of regression coefficients, e.g. cluster $j$ has coefficients vector $\vec{\beta}_{j}$, and the set of $J$ coefficients vectors are each drawn from a multivariate normal distribution when mean vector $\vec{b}$ and covariance matrix $\Sigma$.
+
+
+For simplicity here, we will consider a linear mixed effects model with one predictor variable.
+This can be written as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad \mu_i = \beta_{0z_i} + \beta_{1z_i} x_i,\quad \text{for $i \in 1\ldots n$},
+$$
+where each $z_i \in 1, 2, \ldots J$, and 
+$$
+\vec{\beta}_j =
+\left[
+\begin{matrix}
+\beta_{0j},\\
+\beta_{1j}
+\end{matrix}
+\right]
+\sim
+N(\vec{b}, \Sigma)
+$$
+where $\vec{b} = [b_0, b_1]^\intercal$.
+The covariance matrix $\Sigma$ can be written
+$$
+\Sigma = \left[
+\begin{matrix}
+\tau_0^2 & \tau_0 \tau_1 \rho\\
+\tau_0 \tau_1 \rho & \tau_1^2
+\end{matrix}
+\right],
+$$
+where $\tau_0$ and $\tau_1$ are the standard deviations of the group level intercepts and slopes, respectively, and $\rho$ is their correlation coefficient.
+
+In this model, we must specify priors for $\vec{b}$, $\Sigma$ and the residual standard deviation $\sigma$.
+Clearly, there are other parameters in the model, namely $\vec{\beta}_1, \vec{\beta}_2 \ldots \vec{\beta}_J$.
+However, the prior for these is determined by the values of $\vec{b}$ and $\Sigma$.
+A commonly used, even default, prior family for $\vec{b}$ is the normal distribution.
+If this is centered at zero and has a relatively wide variance, then this is effectively an uninformative prior.
+For $\Sigma$, on the other hand, we have more choices.
+One generally useful prior for $\Sigma$ is the LJK (named after @lewandowski2009generating) prior on its corresponding correlation matrix, and a separate prior on the variance terms.
+In this example, however, because there is only one correlation coefficient term in the matrix, namely $\rho$, we will put prior on that and then separate priors on $\tau_0$ and $\tau_0$.
+Finally, we will put a similar prior on $\sigma$.
+
+A Stan program for this model is in the file `lmm.stan`.
+```{r, results = 'asis', echo = F}
+cat_stanfile('stan/lmm.stan')
+```
+In the `model` block, we specify Cauchy priors on `sigma` and `tau`, where the latter corresponds to the vector $[\tau_0,\tau_1]^\intercal$, a uniform prior on $\rho$, and very diffuse normal distribution prior on the `b` vector.
+We also see that `beta`, which corresponds to the set of $J$ vectors $\beta_1, \beta_2 \ldots \beta_J$, is distributed as a multivariate normal distribution.
+Each individual observation, for $i \in 1 \ldots n$, the model is $y_i \sim N(\mu_i, \sigma^2)$, $\mu_i = \beta_{0z_i} + \beta_{1z_i} x_i$.
+In the Stan program, this is implemented in the following lines.
+```{r, results = 'asis', echo = F}
+cat_stanfile('stan/lmm.stan', start=37, end=38, filename_in_comment = FALSE)
+```
+
+This model can be tested using the `sleepstudy` data set from `lme4`, which we explored in the previous chapter.
+```{r, results = 'asis', echo = F}
+cat_rscript('scripts/lmm.R', start=3, end=15, filename_in_comment = FALSE)
+```
+```{r, echo=F}
+M_lmm <- readRDS('M_lmm.Rds')
+```
+The summary of the main paramters of this model is as follows, which are comparable to the results obtained from the non-Bayesian `lmer` analysis of the same model.
+```{r}
+stan_summary(M_lmm, pars = c('b', 'tau', 'rho', 'sigma'))
+```
+
+# Posterior expectations
+
+As mentioned in the introduction to this chapter, quantities of interest from a Bayesian model can be expressed as *posterior expectations* that can be approximated using Monte Carlo integration:
+$$
+\left\langle g(\theta) \right\rangle = \int g(\theta) \Prob{\theta\given\data} d\theta \approx \left\langle g(\theta) \right\rangle \approx \frac{1}{n} \sum_{i=1}^n g(\tilde{\theta}_i),
+$$
+where $\tilde{\theta}_1, \tilde{\theta}_2 \ldots \tilde{\theta}_n$ are posterior samples of the unknown variables in the model.
+In general, any quantity of interest from a Bayesian model can be expressed in this way.
+For this reason, when we have the posterior samples, any question of interest concerning the model may be addressed.
+
+We can obtain each sample from each chain for any variables using `rstan::extract` as follows.
+```{r}
+rstan::extract(M_dice, pars='theta', permuted=F, inc_warmup=T) %>% 
+  magrittr::extract(,,1) %>% 
+  as_tibble()
+```
+(In this command, we use the `extract` function from both `rstan` and `magrittr` and so we use their namespaces to distinguish between them).
+With `rstan::extract`, by using `permute = F` we obtain an array for each parameter that we specify in `pars`, and get all samples including the warmup samples by `inc_warmup`.
+This function returns a multi-dimensional array whose first dimension indexes the samples, the second indexes the chains, and the third indexes the parameters.
+
+The package `tidybayes` provides many useful functions from working with Stan based models, including functions from extracting samples.
+For example, using the `M_math_2` regression model described above, the following extracts the (post-warmup) samples into a data frame with one row for each sample from each chain.
+```{r}
+library(tidybayes)
+spread_draws(M_math_2, beta_0, beta_1, sigma)
+```
+We these samples in this format, we may now easily compute quantities of interest.
+For example, let us imagine we are interested in knowing the probability that someone could score greater than 50 on `PlcmtScore` given that their `SATM` score was exactly 75.
+If we knew the true values of $\beta_0$, $\beta_1$, and $\sigma$, we would calculate this as follows.
+$$
+\Prob{y > 50\given x=75, \beta_0, \beta_1, \sigma} = 
+\int_{50}^\infty N(y \given \mu = \beta_0 + \beta_1 \times 75, \sigma)dy.
+$$
+Integrating over the posterior distribution of $\beta_0$, $\beta_1$, and $\sigma$ is as follows.
+$$
+\Prob{y > 50\given x=75} = 
+\int \Prob{y > 50\given x=75, \beta_0, \beta_1, \sigma}
+\Prob{\beta_0, \beta_1, \sigma \given \mathcal{D}} d\beta_0,d\beta_1,d\sigma.
+$$
+Using Monte Carlo integration, this integral is approximated as follows.
+$$
+\Prob{y > 50\given x=75}  
+\approx \frac{1}{S} 
+\sum_{i=1}^S \Prob{y > 50\given x=75, \tilde{\beta_0}_s, \tilde{\beta_1}_s, \tilde{\sigma}_s},
+$$
+where $\tilde{\beta_0}_s$, $\tilde{\beta_1}_s$, $\tilde{\sigma}_s$, for $s \in 1\ldots S$, are $S$ samples from the posterior distribution.
+This calculation can be easily performed using R.
+First, we write a function to calculate $\Prob{y > 50\given x=75, \beta_0, \beta_1, \sigma}$.
+```{r}
+f <- function(beta_0, beta_1, sigma){
+  pnorm(50,
+        mean = beta_0 + beta_1 * 75,
+        sd = sigma,
+        lower.tail = F
+  )
+}
+```
+We then compute this function for each sample from the posterior and calculate the average.
+```{r}
+spread_draws(M_math_2, beta_0, beta_1, sigma) %>% 
+  mutate(p = f(beta_0, beta_1, sigma)) %>% 
+  summarise(prob = mean(p))
+```
+
+# References

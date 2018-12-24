@@ -1,0 +1,9 @@
+---
+output: pdf_document
+header-includes:
+- \pagenumbering{gobble} 
+---
+
+* Apple
+* Orange
+* Blueberry

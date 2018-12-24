@@ -1,0 +1,1480 @@
+---
+title: "Chapter 10: Logistic Regression"
+author: "Mark Andrews"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    fig_caption: true
+    keep_tex: true
+    highlight: haddock
+  html_document:
+    highlight: haddock
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+---
+
+  
+```{r, echo=F}
+knitr::opts_chunk$set(echo = F, prompt = F, warning = F, message = F, comment='#>')
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+```
+
+```{r}
+library(tidyverse)
+library(cowplot)
+library(latex2exp)
+library(brms)
+theme_set(theme_classic())
+
+set.seed(101101)
+```
+
+# Introduction
+
+The normal linear model that we described in Chapter 9 models an outcome variable as a normal distribution whose mean varies as a linear function of a set of predictors.
+As useful and important as this model is, it is clearly limited in that it can only be applied to data that is both continuous and has a roughly (conditionally) normal distribution.
+That unquestionably excludes variables that are categorical, or other variables like count variables.
+We can, however, make relatively simple extensions to the normal linear model to produce a class of regression models that work in many respects just like the normal linear models but are applicable to data sets characterized by different types of outcomes variables such as categorical or count variables.
+These are known as the *generalized linear models*.
+In this chapter, we will focus on a class of models known as the logistic regression models.
+These are some of the most of the widely used examples of the generalized linear models.
+In the next chapter, we will cover some of the other major types of generalized linear models.
+
+Perhaps the single most common type of logistic regression is binary logistic regression, which we will cover here first.
+Other types of logistic regression, which are fundamentally related to binary logistic regression include ordinal logistic regression and categorical (or multinomial) logistic regression, and we will also cover these models is this chapter.
+
+
+# Binary logistic regression
+
+Let use assume, as we did with the normal linear model, that we have $n$ independent observations, that can be represented as the $n$ pairs 
+$$
+(y_1, \vec{x}_1), (y_2, \vec{x}_2) \ldots (y_i, \vec{x}_i) \ldots (y_n,\vec{x}_n).
+$$
+Here, just as before, in each observation, the $y_i$ is the observed value of a univariate *outcome* variable, and this is the variable which we are hoping to predict or explain.
+Also as before, each $\vec{x}_i$ is a row vector of values of a set of $K$ predictor or explanatory variables that can predict or explain the value of the outcome variable.
+Now consider the situation where the outcome variable is binary variable.
+Any binary variable's values can be represented, without loss of generality, as $\{0, 1\}$.
+In other words, no matter what the actual values, e.g. $\{\texttt{no}, \texttt{yes}\}$, $\{\texttt{false}, \texttt{true}\}$, etc., we can always represent these by $\{0, 1\}$.
+If the outcome variable is a binary variable, we simply can not use the normal linear model here.
+To do so would make the highly implausible claim that each value of $y_i$, which is always either $0$ or $1$, was drawn from a normal distribution.
+Because the normal distribution is a unimodal, symmetric and continuous distribution, it can not be used as a probability distribution over the discrete values $\{0, 1\}$.
+
+A suitable distribution for a binary valued random variable $x$ is a Bernoulli distribution, an example of which we depict in Figure \ref{fig:bernoulli}.
+A Bernoulli distribution is an extremely simple distribution.
+It has a single parameter, which we will denote by $\theta$. 
+This $\theta$ gives the probability that $x$ takes the value of $1$. 
+In other words,
+$$
+\Prob{x = 1} \doteq \theta,
+$$
+and so the probability that $x$ takes the value of $0$, given that $\Prob{x = 0} = 1 - \Prob{x = 1}$, is $1-\theta$.
+
+\begin{figure}
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[
+  ybar,
+  ymin = 0,
+  xmin = -1,
+  xmax = 2,
+  ylabel = {Probability},
+  xtick = data,
+  nodes near coords,
+  point meta = explicit symbolic,
+  ]
+\addplot coordinates {(0, 0.33) [$1-\theta$] (1, 0.67) [$\theta$]};
+\node (p) at (0, 0.5) {p};
+\end{axis}
+\end{tikzpicture}
+\end{center}
+\caption{A Bernoulli distribution with parameter $\theta$. The parameter $\theta$ gives the probability that the binary variable takes the value of $1$. In other words, if $x$ is a binary variable, $\Prob{x = 1} = \theta$, and so $\Prob{x = 0} = 1 - \Prob{x = 1} = 1 - \theta$.}
+\label{fig:bernoulli}
+\end{figure}
+
+We can therefore begin to extend the normal linear model by exchanging the normal distribution of the outcome variable for a Bernoulli distribution:
+$$
+y_i \sim \textrm{Bernoulli}(\theta_i),\quad \text{for $i \in 1 \ldots n$}.
+$$
+In the case of the normal linear model, we had each $y_i \sim N(\mu_i, \sigma^2)$ and each $\mu_i$ being a linear function of $\vec{x}_i$, i.e. $\mu_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki}$.
+In the case of the Bernoulli distribution, however, we can not have each $\theta_i$ being a linear function of $\vec{x}_i$ because each $\theta_i$ is constrained to take values between $0$ and $1$, and in general, if we allow $\theta_i$ to be a linear function of $\vec{x}_i$, we can not guarantee that it will be constrained to the interval $(0, 1)$.
+In order to deal with this issue, we can transform $\theta_i$ to another variable $\phi_i$ that can take on any value on the real line $\mathbb{R}$ between $-\infty$ and $\infty$ and then treat $\phi_i$ as the linear function of $\vec{x}_i$.
+For this, we need an invertible function $f \colon (0, 1) \mapsto \mathbb{R}$ that can map any value of $\theta_i$ to a unique value of $\phi$, and vice versa.
+This function $f$ is known as a *link function*, and it is a defining feature of a generalized linear model.
+
+Our model extended model now is the following:
+$$
+y_i \sim \textrm{Bernoulli}(\theta_i),\quad \theta_i = f^{-1}(\phi_i),\quad \phi_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1\ldots n$}.
+$$
+Compare this model to the original normal linear model, i.e.
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad \mu_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1\ldots n$}.
+$$
+There are two key differences here.
+First, the outcome variable's distribution is the normal distribution in the normal linear model, while it is the Bernoulli distribution for the case of binary outcome variable model.
+Second, in the normal linear model, the location parameter $\mu_i$ is a linear function of $\vec{x}_i$, while in the case of the binary outcome variable model, it is a transformation of the location parameter $\theta_i$, rather than $\theta_i$ itself, that is the linear function of $\vec{x}_i$.
+
+There are endless possibilities for the link function $f$, but the default choice, and in fact the defining choice for the binary logistic regression model is the *log odds*, otherwise known as the *logit*, function.
+The logit function is defined as 
+$$
+\phi = f(\theta) = \textrm{logit}(\theta) = \log_{e}\left(\frac{\theta}{1-\theta}\right).
+$$
+In other words, this function takes a value $\theta \in (0, 1)$ and divides it by $1-\theta$, and then calculates the natural logarithm[^log_e] of this function. 
+The term $\tfrac{\theta}{1-\theta}$, when $\theta$ is assumed to be a probability, is known the *odds* of $\theta$.
+Hence, the logit is simply the natural logarithm of the odds of $\theta$.
+The logit function is invertible:
+$$
+\theta = f^{-1}(\phi) = \textrm{ilogit}(\phi) = \frac{1}{1 + e^{-\phi}}.
+$$
+This function is usually known as the inverse logit, hence $\textrm{ilogit}$, function.
+The logit and the inverse logit functions are shown in Figure \ref{fig:logit_ilogit}a and Figure \ref{fig:logit_ilogit}b, respectively.
+
+
+```{r logit_ilogit, fig.align='center', fig.cap='(a) The log odds, also known as the logit, function that maps the interval $(0, 1)$ to $\\mathbb{R}$. (b) The inverse of the log odds, also known as the inverse logit, function that maps $\\mathbb{R}$ to the interval $(0, 1)$.', fig.height=3}
+N <- 1000
+epsilon <- 1/N
+ilogit_df <- tibble(theta = seq(epsilon, 1-epsilon, length.out = N),
+                    phi = log(theta/(1-theta))
+)
+p_1 <- ilogit_df %>% 
+  ggplot(aes(x = theta, y = phi)) + geom_line() + labs(y = TeX('$\\phi'), x = TeX('$\\theta'))
+p_2 <- ilogit_df %>% 
+  ggplot(aes(x = phi, y = theta)) + geom_line() + labs(x = TeX('$\\phi'), y = TeX('$\\theta'))
+
+plot_grid(p_1, p_2, labels = c('a', 'b'))
+```
+
+The binary logistic regression model is therefore defined exactly as follows.
+$$
+y_i \sim \textrm{Bernoulli}(\theta_i),\quad \theta_i = \textrm{ilogit}(\phi_i),\quad \phi_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$}.
+$$
+This can be written identically but in a more succinct manner as follows. 
+$$
+y_i \sim \textrm{Bernoulli}(\theta_i),\quad \textrm{logit}\left(\theta_i\right) = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$}.
+$$
+
+[^log_e]: Note that the natural logarithm is the logarithm to base $e \approx `r round(exp(1), 4)`$, hence we write it as $\log_e$. 
+It is common to see this also written as $\ln$.
+Because the natural logarithm is probably the most used logarithm base in statistics, we will usually denote it simply as $\log$ without explicitly stating the base.
+
+As an example of a binary logistic regression, let us look at a data set concerning extra marital affairs.
+This data set was conducted by the magazine *Psychology Today* and described in its July 1969 issue, and is described in more detail in @fair1978theory.
+```{r, echo=T}
+affairs_df <- read_csv('data/affairs.csv')
+```
+It has `r nrow(affairs_df)` observations for `r ncol(affairs_df)` variables.
+One of these `r ncol(affairs_df)` variables is `affairs`, which gives the number of times the respondent to the survey engaged in an extramarital act of sexual intercourse in the past year.
+The distribution of values of the `affairs` variable are as follows.
+```{r, echo=T}
+affairs_df %>%
+  pull(affairs) %>%
+  table()
+```
+Here, the values of 0, 1, 2, and 3 indicate exactly 0, 1, 2, and 3 times, while 7 indicates 4-10 times, and 12 indicates monthly or weekly or daily.
+To simplify matters, we will create a new variable `cheater` that takes the value of `TRUE` if the respondent engaged in any amount of extramarital sexual intercourse, and `FALSE` otherwise.
+```{r, echo=T}
+library(magrittr)
+affairs_df %<>% mutate(cheater = affairs > 0)
+```
+This variable, which is obviously binary, will be our outcome variable.
+Other variables, which can serve as explanatory variables, include `gender` and `rating`.
+The `rating` variable has values of 1 to 5 that mean the following: 1 = very unhappy, 2 = somewhat unhappy, 3 = average, 4 = happier than average, 5 = very happy.
+In Figure \ref{fig:affairs_plot} a-c, we show the proportion of people who cheat by a) gender b) marriage rating and c) marriage rating and gender.
+
+```{r affairs_plot, fig.align='center', fig.cap='Each bar in each plot shows the proportion of people in the relevant group who have had an affair or not in the past year. (a) The proportions for female and males. (b) The proportions according to the rating of the happiness of the marriage. (c) The proportions according to the marriage rating for females and males.'}
+p_1 <- affairs_df %>%
+  ggplot(aes(x = gender, fill = cheater)) + 
+  geom_bar(stat = 'count', position = 'fill') +
+  theme_minimal() + 
+  theme(legend.position = 'none')
+
+p_2 <- affairs_df %>% 
+  ggplot(aes(x = rating, fill = cheater)) + 
+  geom_bar(stat = 'count', position = 'fill') + 
+  theme_minimal() + 
+  theme(legend.position = 'none')
+
+p_3 <- affairs_df %>% 
+  ggplot(aes(x = rating, fill = cheater)) +
+  geom_bar(stat = 'count', position = 'fill') +
+  facet_wrap(~gender) + 
+  theme_minimal()
+
+plot_grid(
+  plot_grid(p_1, p_2, labels = c('a', 'b')),
+  p_3, 
+  nrow = 2)
+
+cheater_by_gender <- affairs_df %>%
+  group_by(gender) %>% 
+  summarize(p = mean(cheater, na.rm = T)) %>% 
+  deframe() %>% 
+  round(digits = 2)
+```
+
+
+We can understand binary logistic regression in a manner directly analogous to normal linear regression.
+Recall from Chapter 9 that we said that normal linear regression models the outcome variable as a normal distribution whose mean varies as we change the values of the predictor variables.
+In binary logistic regression, we model the outcome variable as a Bernoulli distribution whose parameter, which gives the probability of one of the two outcomes, varies as we change the values of the predictor variables.
+For example, consider Figure \ref{fig:affairs_plot}a.
+As we change `gender` from `female` to `male`, the proportion of those who have had affairs increases from `r cheater_by_gender['female']` to `r cheater_by_gender['male']`.
+Similarly, as we see in Figure \ref{fig:affairs_plot}b, as `rating` increases, the proportion of people cheating declines. 
+Likewise in Figure \ref{fig:affairs_plot}c, for females and males separately, as `rating` increases, the proportion of people cheating declines, but for the most part, for any given value of `rating`, the proportion of males who cheat is greater than the number of females who cheat.
+As we will see, we can model these changes in the probability of cheating as a function of predictors using a binary logistic regression analogously to how we could model changes in a normally distributed outcome variable as a function of predictors using normal linear regression.
+
+One of the key differences between normal linear and binary logistic regression models, as we have mentioned, is that while in normal linear models we model the location parameter of outcome variable as a linear function of the predictors, in binary logistic regression, we model the log odds of the location parameter of the outcome variable as a linear function of the predictors.
+In other words, in binary logistic regression, as predictor variable $k$ changes by $\Delta_k$, we assume the log odds of the probability of the outcome variable changes by $\beta_k \Delta_k$, where $\beta_k$ is the coefficient for predictor $k$.
+In Figure \ref{fig:affairs_logit_plot}a, we plot the proportion of cheaters as a function of the marriage rating level, and in Figure \ref{fig:affairs_logit_plot}b, we plot the log odds of this proportion as a function of the marriage rating level.
+
+```{r affairs_logit_plot, fig.align='center', fig.cap='(a) The proportion of cheaters as a function of the marriage rating. (b) The log odds of the proportion of cheaters as a function of the marriage rating.', fig.height=3}
+affairs_df2 <- affairs_df %>% 
+  group_by(rating) %>% 
+  summarize(y = mean(cheater))
+
+p_1 <- affairs_df2 %>% 
+  ggplot(aes(x = rating, y = y)) + 
+  geom_point() + 
+  stat_smooth(se = F, method = 'lm', alpha = 0.5, size = 0.25) +
+  labs(y = 'p')
+
+p_2 <- affairs_df2 %>% 
+  ggplot(aes(x = rating, y = log(y/(1-y)))) + 
+  geom_point() + 
+  stat_smooth(se = F, method = 'lm', alpha = 0.5, size = 0.25) +
+  labs(y = 'logit(p)')
+
+plot_grid(p_1, p_2, labels = c('a', 'b'))
+```
+
+Using the `affairs_df` data, we can model changes in the probability of cheating as a function of `gender` or `rating` or both `gender` and `rating` using a binary logistic regression as follows.
+When using `gender` as a predictor, our model would be as follows.
+$$
+y_i \sim \textrm{Bernoulli}(\theta_i),\quad \theta_i = \textrm{ilogit}(\phi_i),\quad \phi_i = \beta_0 + \beta_1 x_{1i},\quad\text{for $i \in 1 \ldots n$,}
+$$
+or equivalently, 
+$$
+y_i \sim \textrm{Bernoulli}(\theta_i),\quad \textrm{logit}(\theta_i) = \beta_0 + \beta_1 x_{1i},\quad\text{for $i \in 1 \ldots n$,}
+$$
+where $x_{1i}$ indicates if person $i$ is a male or female by $x_{1i} = 1$ if $\texttt{gender}_i$ is male and $x_{1i} = 0$ if person $\texttt{gender}_i$ is female. 
+Once we have inferred the value of $\beta_0$ and $\beta_1$, and we will describe how to do so below, $\textrm{ilogit}(\beta_0 + \beta_1 \times 0) = \textrm{ilogit}(\beta_0)$ will give us the estimate of the probability that a female will have an affair, while $\textrm{ilogit}(\beta_0 + \beta_1 \times 1) = \textrm{ilogit}(\beta_0 + \beta_1)$ will give us the estimate of the probability that a male will have an affair.
+Equivalently, $\beta_0$ is the estimate of the log odds that a female will have an affair, while $\beta_0 + \beta_1$ is the estimate of the log odds that a male will have an affair.
+This means that $\beta_1$ is the difference in the log odds of having an affair between males and females.
+As we will discuss in more detail below, this also entails that $e^{\beta_1}$ is the *odds-ratio* of having an affair between males and females.
+
+If we wish to model how the probability of having an affair varies by the `rating` variable, our model could be the following
+$$
+y_i \sim \textrm{Bernoulli}(\theta_i),\quad \theta_i = \textrm{ilogit}(\phi_i),\quad \phi_i = \beta_0 + \beta_2 x_{2i},\quad\text{for $i \in 1 \ldots n$,}
+$$
+which is equivalent to 
+$$
+y_i \sim \textrm{Bernoulli}(\theta_i),\quad \textrm{logit}(\theta_i) = \beta_0 + \beta_2 x_{2i},\quad\text{for $i \in 1 \ldots n$,}
+$$
+where $x_{2i} \in \{1, 2, 3, 4, 5\}$ is the rating of the happiness of the marriage by person $i$.
+Here, we are explicitly assuming that the log odds of having an affair varies linearly with a change in the value of `rating`.
+In other words, we assume that the log odds of having an affair changes by $\beta_2$ whenever `rating` changes by one unit, regardless if it changes from 1 to 2, 2 to 3, 3 to 4, or 4 to 5. 
+That the log odds changes by this constant amount whenever `rating` changes by one unit is not strictly necessary, nor is it beyond dispute in this data set as we can see from Figure \ref{fig:affairs_logit_plot}b.
+However, this assumption is a standard one, and to go beyond this assumption would require a nonlinear extension to the logistic regression, which is something we will not consider in this chapter.
+
+Modelling how the probability of having an affair varies with `gender` and `rating`, assuming no interaction between these two variables, could be done with the following model
+$$
+y_i \sim \textrm{Bernoulli}(\theta_i),\quad \theta_i = \textrm{ilogit}(\phi_i),\quad \phi_i = \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i},\quad\text{for $i \in 1 \ldots n$,}
+$$
+which is equivalent to 
+$$
+y_i \sim \textrm{Bernoulli}(\theta_i),\quad \textrm{logit}(\theta_i) = \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i},\quad\text{for $i \in 1 \ldots n$,}
+$$
+where $x_{1i}$ and $x_{2i}$ are as above.
+We interpret this model similarly to the two previous ones with the exception that now $\beta_1$ is the change in the log odds of having an affair as we go from females to males assuming that the value of `rating` is held constant.
+In other words, assuming that `rating` has any given value, as the log odds of having an affair changes by $\beta_1$ as we go from females to males.
+Likewise, holding `gender` constant, if `rating` increases by one unit, then the log odds of having an affair changes by $\beta_2$.
+
+## Maximum likelihood estimation
+
+Like in normal linear regression, we can estimate the values of the unknown variables in the model, namely $\beta_0, \beta_1 \ldots \beta_K$ using maximum likelihood estimation.
+Unlike in the case of normal linear models, however, there is no closed form solution to the obtaining the maximum likelihood estimates. 
+In other words, we can not simply solve for $\beta_0, \beta_1 \ldots \beta_K$ to find the values that maximize the likelihood function.
+Alternative, numerical methods to obtaining the maximum likelihood estimates are therefore used.
+
+The likelihood function can be
+$$
+\begin{aligned}
+\Prob{\vec{y} \given X, \vec{\beta}} &= \prod_{i=1}^n \Prob{y_i \given \vec{x}_i, \beta},\\
+                                     &= \prod_{i=1}^n \theta_i^{y_i} (1-\theta_i)^{1-y_i},
+\end{aligned}
+$$
+where $\vec{y} = [y_1, y_2 \ldots y_n]\strut^\intercal$, $\vec{\beta} = [\beta_0, \beta_1 \ldots \beta_K]\strut^\intercal$, $X$ is a matrix of $n$ stacked row vectors $\vec{1}, \vec{x}_1, \vec{x}_2 \ldots \vec{x}_n$, where $\vec{1}$ is a row of $K+1$ ones, and $\theta_i = \textrm{ilogit}(X\vec{\beta})$.
+The logarithm of the likelihood is 
+$$
+\begin{aligned}
+\log L(\vec{\beta} \given \vec{y}, X) &= \log \Prob{\vec{y} \given X, \vec{\beta}},\\
+                                 &= \sum_{i=1}^n y_i \log(\theta_i) + (1-y_i)\log(1-\theta_i).
+\end{aligned}
+$$
+Although this is clearly a function of $\vec{\beta}$, we can not, as we did in the case of normal linear models, simply calculate its gradient with respect to $\vec{\beta}$ and set it to zero and solve for $\vec{\beta}$.
+However, $\log L(\vec{\beta}\given \vec{y}, X)$ is a convex function and has a global maximum , and hence we may use numerical optimization methods to find this global maximum.
+Relatively simple methods to maximize this function include gradient descent methods that choose an arbitrary starting value for $\vec{\beta}$, calculate the gradient of the function at this point, and then choose the next value of $\vec{\beta}$ by adding to it a constant times the gradient vector.
+More computationally efficient and effective methods include using Newton's method for root find applied to the derivative of the log of the likelihood function.
+When applied to binary logistic regression, this is known as *iteratively reweighted least squares* [see @murphy2012machine for details].
+Specifically, we start with an arbitrary starting value for $\vec{\beta}$, which we will call $\vec{\beta}_0$, and then for $t \in 0, 1, 2 \ldots$, we update our estimate of $\vec{\beta}$ using the following update rule until the estimate converges:
+$$
+\vec{\beta}_{t+1} = (X\strut^\intercal S_{t} X)\strut^{-1} X\strut^\intercal (S_t X \vec{\beta}_t + \vec{y} - \vec{\theta}_t).
+$$
+Here, $S_t$ is a $n \times n$ diagonal matrix whose value at the $i$th element of the diagonal is $\theta^t_i (1 - \theta^t_i)$, where $\theta^t_i = \textrm{ilogit}(X\vec{\beta}_{t})$, and $\vec{\theta}_t = [\theta^t_1, \theta^t_2 \ldots \theta^t_n]\strut^\intercal$.
+
+As before, we will denote the maximum likelihood estimator of $\vec{\beta}$ by $\hat{\beta}$.
+It can be shown that the sampling distribution of $\hat{\beta}$ is distributed asymptotically as follows:
+$$
+\hat{\beta} \sim N(\vec{\beta}, (X\strut^\intercal S_{t} X)\strut^{-1}).
+$$
+This result is very similar, though not identical, to the sampling distribution of $\hat{\beta}$ in the case of the normal linear model.
+Using this result, the sampling distribution for any particular coefficient is
+$$
+\hat{\beta}_k \sim N(\beta_k, (X\strut^\intercal S_{t} X)\strut^{-1}_{kk}),
+$$
+which entails that 
+$$
+\frac{\hat{\beta}_k - \beta_k}{\sqrt{(X\strut^\intercal S_{t} X)\strut^{-1}_{kk}}} \sim N(0, 1),
+$$
+where $\sqrt{(X\strut^\intercal S_{t} X)\strut^{-1}_{kk}}$ is the standard error term.
+
+## Binary logistic regression using R
+
+Using R, we can implement a binary logistic regression using the `glm` function.
+The `glm` function is used almost identically to how we used `lm`, but because it is for different types of generalized linear models and not just the binary logistic regression model, we must specify both the outcome variable probability distribution that we assume and also the link function.
+
+When applied to the `affairs_df` problem, using `gender` and `rating` as the predictor variables, we implement the binary logistic regression in R as follows.
+```{r, echo=T}
+affairs_m <- glm(cheater ~ gender + rating,
+                 family = binomial(link = 'logit'),
+                 data = affairs_df)
+```
+As we can see, the way we use `glm` is almost identical to how we used `lm`, but we have to use a new argument, `family`, to specify the outcome distribution and link function.
+Given that the outcome variable's probability distribution is a Bernoulli distribution, it may seem unexpected to see that we state here that it is binomial distribution.
+However, the binomial distribution is in fact a generalization of the Bernoulli distribution; a binomial distribution when the number of observations is 1 is exactly the Bernoulli distribution.
+As such, it is technically correct to say that a binary variable has a binomial distribution.
+Note that we state the link function `link = 'logit'` inside `binomial()`.
+The logit link function is the default so we could simply write `family = binomial()`.
+
+Just like with `lm`, we may see the maximum likelihood estimates of $\beta_0, \beta_1, \beta_2$ with the `coef()` function.
+```{r, echo=T}
+(estimates <- coef(affairs_m))
+```
+From this, for example, we see that difference in the log odds of having an affair between males and females, assuming that `rating` is held constant at any value, is `r coef(affairs_m)[2] %>% round(digits=3)`.
+Likewise, assuming `gender` is held constant, as we increase `rating` by one unit, the log odds of having an affair decreases by `r (-coef(affairs_m)[3]) %>% round(digits=3)` (in other words, it increases by `r (coef(affairs_m)[3]) %>% round(digits=3)`).
+The trouble with these statements about the coefficient is that they won't make much intuitive sense for those not used to thinking in terms of log odds.
+We will return to consider some alternative explanations of these coefficients below after we have considered predictions in logistic regression.
+
+Let us now turn to hypothesis tests and confidence intervals for these coefficients.
+We may see the relevant information as follows.
+```{r, echo=T}
+summary(affairs_m)$coefficients
+```
+
+The standard error for each coefficient $k$ is, as described above, $\hat{\textrm{se}}_k =\sqrt{(X\strut^\intercal S_{t} X)\strut^{-1}_{kk}}$.
+We can confirm this easily similarly to how we did in the case of normal linear models.
+```{r, echo=T}
+library(modelr)
+
+X <- model_matrix(affairs_df, cheater ~ gender + rating) %>% 
+  as.matrix()
+
+p <- affairs_m$fitted.values
+S <- diag(p * (1 - p))
+
+(std_err <- solve(t(X) %*% S %*% X) %>% diag() %>% sqrt())
+```
+Note that `affairs_m$fitted.values` gives the values of $\vec{\theta}$ as defined above.
+
+In the table above, the `z value` is the test statistics for the null hypothesis tests that the true values of each $\beta_k$ are zero.
+In other words, it is $\hat{\beta}_k/\hat{\textrm{se}}_k$, as can be easily verified.
+The accompanying p-value, listed as `Pr(>|z|)`, is the probability of getting a result more extreme than the test statistic in a standard normal distribution.
+```{r, echo=T}
+z <- summary(affairs_m)$coefficients[,'z value']
+2 * pnorm(abs(z), lower.tail = F)
+```
+
+The confidence intervals for the coefficients can be obtained as follows.
+```{r, echo=T}
+confint.default(affairs_m)
+```
+We can confirm that for each coefficient $\beta_k$, this is $\hat{\beta}_k \pm \hat{\textrm{se}}_k \cdot \zeta_{(0.975)}$, where $\zeta_{(0.975)}$ is the value below which lies $97.5$% of the probability mass in a standard normal distribution.
+For example, for the case of `gender`, we have
+```{r, echo=T}
+estimates['gendermale'] + c(-1, 1) * std_err['gendermale'] * qnorm(0.975)
+```
+
+## Predictions in binary logistic regression
+
+Given $\hat{\beta}$, we can easily make predictions based on any given values of our predictors.
+In general, if $\vec{x}_\iota$ is a vector of values of the predictor variables that we wish to make predictions about, the predicted log odds corresponding to $\vec{x}_\iota$ is simply
+$$
+\phi_\iota = \vec{x}_\iota \hat{\beta},
+$$
+and so the predicted probability of the outcome variable, which is the predicted values of the parameters of the Bernoulli distribution of the outcome variable, is
+$$
+\theta_\iota = \frac{1}{1 + e^{-\phi_\iota}}.
+$$
+
+For example, the predicted log odds of having an affair for a male with a `rating` value of 4 is as follows:
+```{r, echo=T}
+predicted_logodds <- 
+  (estimates['(Intercept)'] + estimates['gendermale'] * 1 + estimates['rating'] * 4) %>%
+  unname()
+predicted_logodds
+```
+If we then want the predicted probability, we use the inverse logit function.
+While this function does exist in R as the `plogis` function, it is nonetheless instructive to implement ourselves as it is a very simple function.
+```{r, echo=T}
+ilogit <- function(phi){
+  1/(1 + exp(-phi))
+}
+```
+Using this function, the predicted probability is as follows:
+```{r, echo=T}
+ilogit(predicted_logodds)
+```
+
+Doing predictions in logistic regression as we have just done is instructive but becomes tedious and error prone for all but very simple calculations.
+Instead, we should use the generic `predict` function as we did in the case of `lm`.
+For this, we must first set up a data frame with the same variables as are the predictors in the model and whose values are the values we want to make predictions about.
+For example, if we want to see the predictions for both females and males at all values of the `rating` variable, we can set up the data frame using `expand_grid`, which will give us all combinations of the values of the two variables.
+```{r, echo=T}
+affairs_df_new <- expand_grid(gender = c('female', 'male'),
+                              rating = seq(5)
+)
+```
+We can now make predictions as follows.
+```{r, echo=T}
+predict(affairs_m, newdata = affairs_df_new)
+```
+By default, this gives us the predicted log odds. 
+We can get the predicted probabilities easily in one of two ways.
+First, we can pipe the predicted log odds to `ilogit`.
+```{r, echo=T}
+predict(affairs_m, newdata = affairs_df_new) %>% ilogit()
+```
+Alternatively, we can use the `type = 'response'` argument with `predict`.
+```{r, echo=T}
+predict(affairs_m, newdata = affairs_df_new, type = 'response')
+```
+
+As we have seen elsewhere, it is useful to use the `modelr::add_predictions` function to return these predictions as new variables in the data frame we are making predictions with.
+```{r, echo=T}
+affairs_df_new %>% 
+  add_predictions(affairs_m, type='response')
+```
+
+Above, we established that the estimator $\hat{\beta}$ has the following asymptotic sampling distribution:
+$$
+\hat{\beta} \sim N(\vec{\beta}, (X\strut^\intercal S X)^{-1})
+$$
+Given that the predicted log odds $\phi_\iota$ is $\vec{x}_\iota \hat{\beta}$, the sampling distribution of $\phi_\iota$ is as follows.
+$$
+\phi_\iota \sim N(\vec{x}_\iota \hat{\beta}, \underbrace{\vec{x}_\iota(X\strut^\intercal S X)^{-1}\vec{x}\strut^\intercal_\iota}_{\hat{\textrm{se}}^2_\iota}).
+$$
+From this, the 95% confidence interval on the true value of $\phi_\iota$ will be
+$$
+\phi_\iota \pm \hat{\textrm{se}}_\iota \cdot \zeta_{(0.975)} .
+$$
+Unlike in the case of `lm`, there is no option for the `predict` function to return this confidence interval directly.
+However, it will return the standard errors, and from this, we can calculate the confidence intervals easily.
+```{r, echo=T}
+predictions <- predict(affairs_m, newdata = affairs_df_new, se.fit = T)
+cbind(
+  predictions$fit - predictions$se.fit * qnorm(0.975),
+  predictions$fit + predictions$se.fit * qnorm(0.975)
+)
+```
+The confidence intervals just given are on the log odds scale, but we can easily put them on the probability scale using the `ilogit` function.
+```{r, echo=T}
+cbind(
+  predictions$fit - predictions$se.fit * qnorm(0.975),
+  predictions$fit + predictions$se.fit * qnorm(0.975)
+) %>% ilogit()
+```
+
+
+```{r}
+# Just in case you want to check the maths for the calculation of the standard error of prediction.
+W <- solve(t(X) %*% S %*% X)
+
+x_new <- model_matrix(affairs_df_new, ~ gender + rating) %>% 
+  as.matrix()
+
+all.equal(diag(x_new %*% W %*% t(x_new)) %>% sqrt(),
+          predict(affairs_m, newdata = affairs_df_new, se.fit = T)$se.fit,
+          check.names = F) %>% 
+  stopifnot(.)
+```
+
+## Risk ratios and odds ratios
+
+As mentioned above, the coefficients in a binary logistic regression give us differences in log odds.
+For example, we saw that the difference in the log odds of having an affair between males and females, assuming that `rating` is held constant at any value, is `r coef(affairs_m)[2] %>% round(digits=3)`.
+We mentioned that these values are not easily interpreted in intuitive terms, and it is preferable to compare probabilities if possible.
+
+Using the predicted probabilities we made above, we can `pivot_wider` the predictions for females and males to make them more easy to compare.
+```{r, echo=T}
+predictions <- affairs_df_new %>% 
+  add_predictions(affairs_m, type='response') %>% 
+  pivot_wider(names_from = gender, values_from = pred)
+predictions
+```
+With this, we can now calculate the difference and ratios of the probabilities of males and females.
+```{r, echo=T}
+predictions %>%
+  mutate(prob_diff = male - female, 
+         prob_ratio = male/female)
+```
+The `prob_ratio` values are obviously the ratios of the probabilities of having an affair by a males to the corresponding probabilities for females.
+These ratios are usually referred to as *risk ratios* or *relative risks*.
+Note, however, that these values are not constant across all values of `rating`.
+In other words, the relative risks of having an affairs by men and women varies according to value of `rating`.
+
+Instead of ratios of probabilities, we can also calculate ratios of odds.
+We saw above that the odds is simply the ratio of a probability $p$ to $1-p$.
+```{r, echo=T}
+predictions %>%
+  mutate(odds_male = male/(1-male), 
+         odds_female = female/(1-female),
+         odds_ratio = odds_male/odds_female)
+```
+As we can see, the odds ratios comparing males and females are constant for all values of `rating`.
+Thus, we can say that for any value of `rating`, the odds of having an affair by a man is exactly `r round(exp(estimates['gendermale']), 2)` greater than the odds of having an affair by a female.
+
+Let us look more closely at how we calculated these odds ratios.
+Let us assume that the value of `rating` is $r$.
+Then, the log odds of having an affair by a female and a male are, respectively,
+$$
+\log\left(\frac{\theta_{\textrm{female}}}{1 - \theta_{\textrm{female}}}\right) = \beta_0 + \beta_2 \cdot r,\quad
+\log\left(\frac{\theta_{\textrm{male}}}{1 - \theta_{\textrm{male}}}\right) = \beta_0 + \beta_1 + \beta_2 \cdot r.
+$$
+This means that the odds of having an affair by a female or a male are, respectively,
+$$
+\frac{\theta_{\textrm{female}}}{1 - \theta_{\textrm{female}}} = e^{\beta_0 + \beta_2 \cdot r},\quad
+\frac{\theta_{\textrm{male}}}{1 - \theta_{\textrm{male}}} = e^{\beta_0 + \beta_1 + \beta_2 \cdot r}.
+$$
+The odds ratio comparing males to females is therefore
+$$
+\frac{\theta_{\textrm{male}}}{1 - \theta_{\textrm{male}}}
+\bigg/
+\frac{\theta_{\textrm{female}}}{1 - \theta_{\textrm{female}}} =
+\frac{e^{\beta_0 + \beta_1 + \beta_2 \cdot r}}{e^{\beta_0 + \beta_2 \cdot r}}=
+e^{(\beta_0 + \beta_1 + \beta_2 \cdot r) - (\beta_0 + \beta_2 \cdot r)} =
+e^{\beta_1}.
+$$
+More generally, by the same reasoning, we can see that for any predictor $k$, $e^{\beta_k}$ gives the odds ratio corresponding to a unit change in $x_k$.
+In other words, $e^{\beta_k}$ is the factor by which the odds increases whenever $x_k$ increases by one unit, assuming any other predictors are held constant.
+
+Note that as we saw above, we can obtain the 95% confidence intervals for the coefficients as follows.
+```{r, echo=T}
+confint.default(affairs_m, parm = c('gendermale', 'rating'))
+```
+To get the confidence intervals on the odds ratios corresponding to these predictors, we simply raise the confidence intervals to the power of $e$.
+```{r, echo=T}
+confint.default(affairs_m, parm = c('gendermale', 'rating')) %>% 
+  exp()
+```
+
+
+## Model comparison
+
+As we saw above, we obtain the p-values for the null hypothesis tests that the true values of the coefficients are zero from the z statistic that is the estimate of the coefficient divided by its standard error.
+A more general way of doing null hypothesis tests in logistic regression, and also in related models as we will see below, is to perform a log likelihood ratio test, which is in fact the deviance comparison test for nest model comparison that we saw in Chapter 8.
+This allows us to compare one model with $K$ predictors to another model with $K^\prime < K$ predictors, where the $K^\prime$ predictors are a subset of the $K$ predictors.
+This is a type of *nested model comparison* because the model with the $K^\prime$ predictors is a subset of the model with the $K$ predictors. 
+For example, we could compare the model using the `gender` and the `rating` predictors to a model using either `gender` or `rating` alone, or to a model using no predictors.
+In each of these two comparisons, we are comparing a model with two predictors with a model with a subset of these two predictors. 
+
+Generally speaking, we can describe the problem of nested model comparison using binary logistic regressions as follows.
+We assume, as before, that our outcome variable is $y_1, y_2 \ldots y_i\ldots y_n$, where each $y_i \in \{0,1\}$, and that we have a set of predictors $\vec{x}_1, \vec{x}_2 \ldots \vec{x}_i \ldots \vec{x}_n$, where each $\vec{x}_i$ is 
+$$
+\vec{x}_i = x_{1i}, x_{2i} \ldots x_{ki} \ldots x_{K^\prime i} \ldots x_{Ki}.
+$$
+Obviously, $x_{1i}, x_{2i} \ldots x_{ki} \ldots x_{K^\prime i} \subset x_{1i}, x_{2i} \ldots x_{ki} \ldots x_{K^\prime i} \ldots x_{Ki}$.
+
+From this, we can set up two models, one nested in the other.
+The first model, which we will call $\mathcal{M}_1$, uses all $K$ predictors.
+$$
+\mathcal{M}_1\colon y_i \sim \textrm{Bernoulli}(\theta_i),\quad \textrm{logit}(\theta_i) = \beta_0 + \sum_{k=1}^K \beta_k x_{ki}.
+$$
+We will compare this to model $\mathcal{M}_0$ that uses $K^\prime$ predictors.
+$$
+\mathcal{M}_0\colon y_i \sim \textrm{Bernoulli}(\theta_i),\quad \textrm{logit}(\theta_i) = \beta_0 + \sum_{k=1}^{K^\prime} \beta_k x_{ki}.
+$$
+The null hypothesis comparing $\mathcal{M}_1$ and $\mathcal{M}_0$ is that 
+$$
+\beta_{K^\prime} =  \beta_{K^\prime + 1} = \ldots = \beta_{K} = 0.
+$$
+In other words, it is the hypothesis that all the coefficients corresponding to the predictors that are in $\mathcal{M}_1$ but not in $\mathcal{M}_0$ are simultaneously zero. 
+We can test this null hypothesis using a *likelihood ratio test*.
+
+We begin by inferring the maximum likelihood estimators of the coefficients in both $\mathcal{M}_0$ and $\mathcal{M}_1$.
+We will denote the estimators for $\mathcal{M}_0$ and $\mathcal{M}_1$, by $\hat{\beta}_{\mathcal{M}_0}$ and $\hat{\beta}_{\mathcal{M}_1}$.
+Having done so we can obtain the value of the likelihood function in $\mathcal{M}_0$ and $\mathcal{M}_1$ evaluated at $\hat{\beta}_{\mathcal{M}_0}$ and $\hat{\beta}_{\mathcal{M}_1}$.
+We will denote these by $\mathcal{L}_0$ and $\mathcal{L}_1$, respectively.
+The likelihood ratio comparing $\mathcal{M}_0$ to $\mathcal{M}_1$ is simply
+$$
+\textrm{likelihood ratio} = \frac{\mathcal{L}_0}{\mathcal{L}_1}.
+$$
+The logarithm of this likelihood is 
+$$
+\log \textrm{likelihood ratio} = \log\left(\frac{\mathcal{L}_0}{\mathcal{L}_1}\right) = \log(\mathcal{L}_0) - \log(\mathcal{L}_1).
+$$
+According to Wilks's theorem, when the null hypothesis is true, $-2 \times \log \textrm{likelihood ratio}$ is asymptotically distributed as a $\chi^2$ distribution with degrees of freedom $K - K^\prime$.
+Therefore, we calculate $-2 \times \log \textrm{likelihood ratio}$ and the calculate the p-value, which is simply the probability of a getting a result greater than $-2 \times \log \textrm{likelihood ratio}$ in a $\chi^2$ distribution with degrees of freedom $K - K^\prime$.
+Because
+$$
+\log \textrm{likelihood ratio} = \log(\mathcal{L}_0) - \log(\mathcal{L}_1),
+$$
+we have
+$$
+-2 \times \log \textrm{likelihood ratio} = (-2 \cdot \log(\mathcal{L}_0)) - (-2 \cdot \log(\mathcal{L}_1)).
+$$
+We refer to $-2$ times the log of the likelihood of a model as its *deviance*, and we'll denote the deviances of models $\mathcal{M}_0$ and $\mathcal{M}_1$ by $\mathcal{D}_0$ and $\mathcal{D}_1$, respectively:
+$$
+\mathcal{D}_0 = -2 \cdot \log(\mathcal{L}_0),\quad \mathcal{D}_1 = -2 \cdot \log(\mathcal{L}_1).
+$$
+Therefore, our likelihood ratio based null hypothesis test is based on the statistic
+$$
+\mathcal{D}_0 - \mathcal{D}_1,
+$$
+that we compare to a $\chi^2$ distribution with $K - K^\prime$ degrees of freedom.
+
+We can perform this null hypothesis test in R easily in different ways.
+As an example, we will compare the model with the two predictors `gender` and `rating` to a model with neither.
+We already have the model with both predictors, and have named it `affairs_m`.
+We name the model with neither predictor `affairs_m0`.
+```{r, echo=T}
+affairs_m0 <- glm(cheater ~ 1, 
+                  family = binomial(link = 'logit'),
+                  data = affairs_df)
+```
+The formula `cheater ~ 1` indicates that we have an intercept only in this model and so the model is 
+$$
+y_i \sim \textrm{Bernoulli}(\theta_i),\quad \textrm{logit}(\theta_i) = \beta_0,
+$$
+which entails that we assume that for each observation, there is a fixed probability, namely $\textrm{ilogit}(\beta_0)$, that $y_i = 1$.
+
+We can obtain the log of the likelihoods of `affairs_m` and `affairs_m0` with the `logLik` function.
+```{r, echo=T}
+logLik(affairs_m)
+logLik(affairs_m0)
+```
+The corresponding deviances can be obtained with the `deviance` function.
+```{r, echo=T}
+deviance(affairs_m)
+deviance(affairs_m0)
+```
+These are easily verified as $-2$ times the log of the likelihoods.
+```{r, echo=T}
+logLik(affairs_m) * -2
+logLik(affairs_m0) * -2
+```
+The difference of the two deviances is as follows.
+```{r, echo=T}
+deviance(affairs_m0) - deviance(affairs_m)
+```
+If the null hypothesis is true, this difference of the deviances will be distributed as a $\chi^2$ distribution with `r length(coef(affairs_m)) - length(coef(affairs_m0))` degrees of freedom.
+The p-value for the null hypothesis is therefore
+```{r, echo=T}
+K <- affairs_m %>% coef() %>% length()
+K_prime <- affairs_m0 %>% coef() %>% length()
+pchisq(deviance(affairs_m0) - deviance(affairs_m),
+       df = K - K_prime,
+       lower.tail = F)
+```
+
+While it is instructive to go through the calculations in a step by step manner as we have just done, in practice it is much easier and less error prone to use the generic `anova` function for doing likelihood ratio tests.
+We perform the above analyses using `anova` as follows.
+```{r, echo=T}
+anova(affairs_m0, affairs_m, test='Chisq')
+```
+As we can see, from this output, we have the deviances, the differences of the deviance, the degrees of freedom for the $\chi^2$ distribution, and the p-value.
+
+## Bayesian approaches to logistic regression
+
+The Bayesian approach to binary logistic regression begins with an identical probabilistic model to that of the classical approach
+In other words, we assume our data is
+$$
+(y_1, \vec{x}_1), (y_2, \vec{x}_2) \ldots (y_i, \vec{x}_i) \ldots (y_n,\vec{x}_n),
+$$
+where each $y_i \in \{0,1\}$ and each $\vec{x}_i$ is a vector of the values of $K$ predictor or explanatory variables, and that
+$$
+y_i \sim \textrm{Bernoulli}(\theta_i),\quad \textrm{logit}(\theta_i) = \beta_0 + \sum_{k=1}^{K} \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$}.
+$$
+At this point, the classical approach and the Bayesian approach diverge.
+The classical approach obtains the maximum likelihood estimators $\hat{\beta}$ and uses these estimators and their sampling distribution for hypothesis testing, confidence intervals, and predictions, as we have seen above.
+On the other hand, the Bayesian approach begins with the essential step of inferring the posterior distribution:
+$$
+\overbrace{\Prob{\vec{\beta}\given X, \vec{y}}}^{\textrm{posterior}} 
+= \frac{\overbrace{\Prob{\vec{y} \given X, \vec{\beta}}}^{\textrm{likelihood}}\overbrace{\Prob{\vec{\beta}}}^{\textrm{prior}}}
+{
+\underbrace{\int \Prob{\vec{y} \given X, \vec{\beta}}\Prob{\vec{\beta}} d\vec{\beta}}_{\textrm{marginal likelihood}},
+}
+\propto
+\overbrace{\Prob{\vec{y} \given X, \vec{\beta}}}^{\textrm{likelihood}}\overbrace{\Prob{\vec{\beta}}}^{\textrm{prior}}
+$$
+where $\vec{y} = y_1, y_2 \ldots y_n$, $X$ is the matrix whose rows are $\vec{x}_1, \vec{x}_2, \ldots \vec{x}_n$, $\vec{\beta} = \beta_0, \beta_1 \ldots \beta_K$.
+The likelihood function, which we have seen above, is a function over $\vec{\beta}$.
+Its value gives us the probability of the observing our data given any value of $\vec{\beta}$.
+The prior, on the other hand, is also a function over $\vec{\beta}$, specifically a probability density function.
+It gives the probability distribution over the possible values that $\vec{\beta}$ could take in principle.
+These two functions are multiplied by one another to result in a new function over $\vec{\beta}$, which is then divided by its integral so that the resulting posterior distribution integrates to one, and hence is a probability density function.
+We interpret the posterior distribution as follows.
+Assuming that the data is generated by the stated logistic regression model, and also that the possible values that $\vec{\beta}$ could take in principle are given by $\Prob{\vec{\beta}}$, then the posterior distribution gives the probability that the true value of $\vec{\beta}$ is any given value.
+
+Unlike the case of Bayesian linear regression, there are no choices of prior that will lead to an analytic or closed form solution to the posterior distribution.
+As such, we must use alternative numerical methods.
+One traditionally commonly used approach, described in @bishop:mlbook, @murphy2012machine and elsewhere is to use a *Laplace approximation* to the posterior distribution, which approximates the posterior distribution is a multivariate normal distribution.
+However, given the current state of general purpose software for \mcmc sampling in Bayesian models, as we described in Chapter 8 and will described further in Chapter 17, it is now practically much easier to use \mcmc methods, particularly the Hamiltonian Monte Carlo methods available with the Stan probabilistic programming language.
+As we've seen, a very easy to use R based interface to Stan is available through the `brms` package.
+
+```{r}
+brm <- function(...) brms::brm(silent = TRUE, refresh = 0, seed = 10101, ...)
+```
+
+In the following code, we define and fit a Bayesian logistic regression model predicting `cheater` from both `gender` and `rating`, just as we did above.
+```{r, echo=T, cache = T, results = 'hide'}
+affairs_m_bayes <- brm(cheater ~ gender + rating,
+                       family = bernoulli(),
+                       data = affairs_df)
+```
+This syntax is almost identical to the `glm` model. 
+However, the `family` is specified as `bernoulli` rather than `binomial`.
+The link function will default to `logit`.
+
+```{r}
+S <- summary(affairs_m_bayes)
+stopifnot(all(round(S$fixed[,'Rhat'], 2) == 1))
+min_ess <- min(S$fixed[,'Bulk_ESS'])
+stopifnot(min_ess/(S$chains * (S$iter - S$warmup)) > 0.75)
+```
+
+By using the default settings, we use `r S$chains` chains, each with `r S$iter` iterations, and where the initial `r S$warmup` iterations are discarded, leaving to `r S$chains * (S$iter - S$warmup)` total samples.
+The priors used by default are seen in the following table.
+```{r, echo=T}
+prior_summary(affairs_m_bayes)
+```
+The blank in the `prior` column for the coefficients for `gender` and `rating` tell us that a uniform prior is being used, while a non-standard t-distribution with 3 degrees and a scale of 10 is on the `Intercept` coefficient.
+
+```{r}
+original_width <- getOption('width')
+options(width = 300)
+```
+
+We can view the summary of the inference of the coefficients as follows.
+```{r, echo=T, size="tiny"}
+summary(affairs_m_bayes)$fixed
+```
+First, the `Rhat` values are all almost exactly equal to 1.0, which indicates that the chains have converged.
+The `Bulk_ESS`[^tail_ess] is an estimate of the number of independent samples that are informationally equivalent to the samples from the sampler, which are necessarily non-independent.
+We see that for each coefficient these are close to the theoretical maximum of `r S$chains * (S$iter - S$warmup)`.
+This indicates that the sampler is very efficient.
+
+```{r}
+options(width = original_width)
+```
+
+
+[^tail_ess]: The `Bulk_ESS` and `Tail_ESS` are two separate measures of effective samples size, with one (`Bulk`) using samples from the center of the distribution of the samples and the other (`Tail`) using samples from the tails. We will primarily focus on `Bulk_ESS` here, but if `Tail_ESS` is low when `Bulk_ESS` is not low, which may happen in heavy tailed distribution, this may indicate convergence problems with the sampler.
+
+Notice how the posterior mean and its standard deviation, given by `Estimate` and `Est.Error`, respectively, are almost identical to the maximum likelihood estimator and the standard error of the sampling distribution of the maximum likelihood estimator.
+Likewise, the 95% credible interval, given by `l-95% CI` and `u-95% CI` also closely parallel the classical 95% confidence intervals.
+We saw this close parallel between the classical and Bayesian models in the case of linear regression as well.
+It is to be expected in any situation where we have a relatively large amount of data, thus leading to a concentrated likelihood function, and a diffuse prior distribution.
+
+In the following code, we calculate the 95% posterior interval on $\phi_\iota = \vec{x}_\iota \vec{\beta}$, where $\vec{x}_\iota$ is a vector of values of the predictor variables.
+We do this for each observation in the `affair_df_new` data frame that used above.
+```{r, echo=T}
+posterior_linpred(affairs_m_bayes, newdata = affairs_df_new) %>%
+  as_tibble() %>% 
+  map_df(~quantile(., probs=c(0.025, 0.5, 0.975))) %>% 
+  set_names(c('l-95% CI', 'prediction', 'u-95% CI')) %>% 
+  bind_cols(affairs_df_new, .)
+
+```
+Again, we see a close parallel between these results and those of the 95% confidence interval on predictions obtained from the classical approach.
+
+## Latent variable formulation
+
+```{r dlogistic, fig.align='center', fig.cap='The standard logistic distribution whose mean is equal to 0 and whose scale parameter is 1. This compared with a normal distribution centered at 0 and with standard deviation of $1.63$.', out.width='0.65\\textwidth'}
+tibble(x = seq(-10, 10, length.out = 1000),
+       logistic = dlogis(x),
+       normal = dnorm(x, sd = 1.63)) %>% 
+  pivot_longer(cols = -x, names_to = 'distribution', values_to = 'density') %>% 
+  ggplot(aes(x = x, y = density, colour = distribution)) + geom_line() +
+  scale_color_manual(values=c( "#E69F00", "#999999", "#56B4E9"))
+
+```
+
+Before we leave binary logistic regression, as we will see when considering other forms of logistic regression, it is useful to consider an alternative formulation of it.
+In this, $y_i$ is a binary variable that takes the value of $1$ or $0$ if a latent variable $\eta_i$ is respectively above or below 0.
+More precisely, this latent variable formulation is as follows:
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad
+y_i &= \begin{cases}
+1, \quad\text{if $\eta_i \geq 0$},\\
+0, \quad\text{if $\eta_i < 0$}
+\end{cases},\\
+\eta_i &\sim \textrm{logistic}(\phi_i, 1).
+\end{aligned}
+$$
+Here, $\eta_i$ is a latent or unobserved random variable that is distributed as a *logistic distribution* whose mean is $\phi_i = \beta_0 + \sum_{k=1}^K \beta_{k} x_{ki}$ and whose scale parameter is equal to 1.
+The logistic distribution, displayed in Figure \ref{fig:dlogistic}, is a bell shaped distribution.
+It is roughly similar to normal distribution centered with a standard deviation of $1.63$.
+The probability density of the logistic distribution with location paramter $\phi_i$ scale parameter equal to 1 is as follows:
+$$
+\Prob{\eta_i \given \phi_i} = \frac{e^{-(\eta_i - \phi_i)}}{\left(1 + e^{-(\eta_i - \phi_i)}\right)^2}.
+$$
+The cumulative distribution function of the logistic distribution is as follows:
+$$
+\Prob{\eta_i \leq \omega \given \phi_i} = 
+\int_{-\infty}^{\omega} \frac{e^{-(\eta_i - \phi_i)}}{\left(1 + e^{-(\eta_i - \phi_i)}\right)^2} d\eta_i
+= \frac{1}{1 + e^{-(\omega - \phi_i)}}.
+$$
+From this cumulative distribution function, we can see that the probability that $y_i$ will take the value of $1$ is equal to the probability that $\eta_i$ takes a value of greater than $0$, which is as follows:
+$$
+\Prob{y_i = 1} = 
+1 - \Prob{\eta_i < 0 \given \phi_i} = 1 - \frac{1}{1 + e^{\phi_i}} = \frac{1}{1 + e^{-\phi_i}} = \textrm{ilogit}(\phi_i).
+$$
+Hence, we see that the latent variable formulation is identical to original definitions of the logistic regression given above, where the probability that $y_i$ takes the value of $1$ was equal to $\theta_i$, which was equal to $1/(1 + e^{-\phi_i})$.
+
+From this formulation, we see the correspondence between the normal linear model and the binary logistic regression.
+In the normal linear model, the outcome variable $y_i$ is modelled as a normal distribution whose mean increases or decreases as a linear function of a set of predictors.
+In the binary logistic regression, a latent variable $\eta_i$ is modelled as logistic distribution whose mean increases or decreases as a linear function of a set of predictors, and the binary outcome variable $y_i$ takes the value of 0 or 1 depending on whether this latent variable is, respectively, above or below 0.
+We can see that the latent variable as an evidence variable, and so the distribution over it as a distribution over the evidence in favour of one outcome value $y_i =1$ or another $y_i = 0$.
+In Figure \ref{fig:latent_logistic_fig}, we show three logistic distributions over a latent variable $\eta$.
+We can view these as three different representations of the degree of evidence for the value of the outcome variable.
+
+```{r}
+latent_logistic_cap <- sprintf('Three logistic distributions with means a) %2.2f b) %2.2f c) %2.2f. 
+Each distribution can seen as a representation  of the degree of evidence of the outcome variable $y_i$ taking the value of $1$. As the distribution shifts to the right, there is more evidence in 
+favour of the outcome variable taking the value of 1. In these three distributions, the probabilities that the outcome is 1 corresponds
+to %2.2f, %2.2f, and %2.2f.', -1.75, 0.5, 1.25, plogis(0, location = -1.75, lower.tail = F), plogis(0, location = 0.5, lower.tail = F), plogis(0, location = 1.25, lower.tail = F))
+```
+
+```{r latent_logistic_fig, fig.cap=latent_logistic_cap, out.width='\\textwidth', fig.height=2.0}
+df_1 <- tibble(x = seq(-10, 10, length.out = 10000),
+               y = dlogis(x, location = -1.75)) 
+df_2 <- tibble(x = seq(-10, 10, length.out = 10000),
+               y = dlogis(x, location = 0.5)) 
+df_3 <- tibble(x = seq(-10, 10, length.out = 10000),
+               y = dlogis(x, location = 1.25)) 
+
+p1 <- ggplot(data = df_1, aes(x = x, y = y)) + geom_line() +
+  geom_polygon(data = rbind(c(0,0), subset(df_1, x > 0)), aes(x = x, y=y), fill = 'grey') +
+  geom_polygon(data = rbind(c(0,0), subset(df_1, x < 0)), aes(x = x, y=y), fill = 'grey61') +
+  xlab(TeX('$\\eta$'))
+
+p2 <- ggplot(data = df_2, aes(x = x, y = y)) + geom_line() +
+  geom_polygon(data = rbind(c(0,0), subset(df_2, x > 0)), aes(x = x, y=y), fill = 'grey') +
+  geom_polygon(data = rbind(c(0,0), subset(df_2, x < 0)), aes(x = x, y=y), fill = 'grey61') +
+  xlab(TeX('$\\eta$'))
+
+p3 <- ggplot(data = df_3, aes(x = x, y = y)) + geom_line() +
+  geom_polygon(data = rbind(c(0,0), subset(df_3, x > 0)), aes(x = x, y=y), fill = 'grey') +
+  geom_polygon(data = rbind(c(0,0), subset(df_3, x < 0)), aes(x = x, y=y), fill = 'grey61')+
+  xlab(TeX('$\\eta$'))
+
+plot_grid(p1, p2, p3, nrow = 1, labels = 'auto')
+
+```
+
+## Probit regression
+
+Having seen the latent variable formulation of binary logistic regression, we are able to more easily understand *probit regression*, which is a regression model that is very closely related to binary logistic regression regression.
+In probit regression, each outcome variable $y_i$ is binary.
+They are modelled as follows:
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad
+y_i &= \begin{cases}
+1, \quad\text{if $\eta_i \geq 0$},\\
+0, \quad\text{if $\eta_i < 0$}
+\end{cases},\\
+\eta_i &\sim \textrm{N}(\phi_i, 1),
+\end{aligned}
+$$
+where $N(\phi_i, 1)$ is a normal distribution with mean of $\phi_i$ and standard deviation of $1$, and where $\phi_i$ is a linear function of a set of predictors, just as above.
+By direct analogy with the latent variable formulation of the binary logistic model, in the probit model, the probability that $y_i$ will take the value of $1$ is equal to the probability that $\eta_i$ takes a value of greater than $0$, which is as follows:
+$$
+\begin{aligned}
+\Prob{y_i = 1} = 
+1 - \Prob{\eta_i < 0 \given \phi_i} &= 1 - \Phi(-\phi_i) = \Phi(\phi_i),
+\end{aligned}
+$$
+where $\Phi$ is the cumulative distribution function in a standard normal distribution.
+In order words, in binary logistic regression, we have
+$$
+\Prob{y_i = 1} = \textrm{ilogit}(\phi_i),
+$$
+while in probit regression, we have
+$$
+\Prob{y_i = 1} = \Phi(\phi_i).
+$$
+Thus, binary logistic regression and probit differ by their *link* function.
+It is the log odds or logit function in the case of logistic regression, and it is the *quantile function* $\Phi^{-1}$, which is the inverse of the cumulative distribution function $\Phi$, of the standard normal in the case of probit regression.
+These functions are shown in Figure \ref{fig:logit_probit}.
+
+```{r logit_probit, fig.cap ='a) The logit and quantile function of the normal distribution, which are the link functions of binary logistic regression and probit regression, respectively. b) The inverse logit and cumulative distribution function of the normal distribution.', out.width='0.67\\textwidth', fig.height=6 ,fig.align='center'}
+p1 <- tibble(x = seq(0, 1, length.out = 1000),
+             logit = qlogis(x),
+             qnorm = qnorm(x)) %>% 
+  pivot_longer(cols = c(logit, qnorm),
+               names_to = 'link',
+               values_to = 'y') %>% 
+  ggplot(aes(x = x, y = y, colour = link)) + geom_line()+
+  scale_color_manual(values=c( "#E69F00", "#999999", "#56B4E9"))
+
+
+p2 <- tibble(x = seq(-10, 10, length.out = 1000),
+             ilogit = plogis(x),
+             pnorm = pnorm(x)) %>% 
+  pivot_longer(cols = c(ilogit, pnorm),
+               names_to = 'inv_link',
+               values_to = 'y') %>% 
+  ggplot(aes(x = x, y = y, colour = inv_link)) + geom_line()+
+  scale_color_manual(values=c( "#E69F00", "#999999", "#56B4E9"))
+
+
+plot_grid(p1, p2, labels = 'auto', nrow = 2)
+```
+We can perform a probit regression in R using `glm` just like in the case of binary logistic regression, but using `link = 'probit'` instead of `link = 'logit'`.
+In the following, using the `affairs_df` data, we model how the probability of being a cheater varies as a function of the `rating` variable.
+```{r, echo=T, cache = T}
+affairs_probit <- glm(cheater ~ rating,
+                      family = binomial(link = 'probit'),
+                      data = affairs_df)
+```
+In probit regression, statistical inference is identical to binary logistic regression: the maximum likelihood estimator of the regression coefficients is found by iteratively reweighted least squares, whose sampling distribution is asymptotically normal.
+The coefficients summary table for `affairs_probit` are as follows.
+```{r, echo=T}
+summary(affairs_probit)$coefficients
+```
+Comparing this to the set of coefficients for the binary logistic regression, we see that are considerable differences in the scale of the coefficients and their standard errors, though with the *z* test statistics being very similar.
+```{r, echo=T}
+glm(cheater ~ rating, family = binomial(link = 'logit'), data = affairs_df) %>% 
+  summary() %>% 
+  extract2('coefficients')
+```
+Importantly, in the probit regression, we do not interpret the coefficients in terms of odds ratios.
+In probit regression, the coefficient gives the change in mean of the (unit variance) normal distribution over the latent variable in the probit model for every unit change in the predictor.
+For example, in the `affairs_probit` model, the coefficient for `rating` is `r coefficients(affairs_probit)['rating'] %>% round(digits = 3)`.
+This means that as `rating` increases by one unit, the mean of the normal distribution over the latent variable increases by `r coefficients(affairs_probit)['rating'] %>% round(digits = 3)` unit.
+
+Prediction in probit regression works like prediction in binary logistic regression, but we apply the inverse of the link function, which is the standard normal, to convert from the value of the linear predictor $\phi_i$ to the probability that $y_i = 1$.
+We can do this using the `predict` and `add_predictions` function using `type = 'response'` as follows.
+```{r, echo=T}
+tibble(rating = seq(5)) %>% 
+  add_predictions(affairs_probit, type = 'response')
+```
+
+
+
+```{r}
+p <- predict(affairs_probit, newdata = tibble(rating = seq(5)), type = 'response')
+
+probit_fig_cap <- sprintf('The distribution over the latent variable in the probit regression 
+model that models the probability of being a cheater
+as a function of \\texttt{rating}, for values of \\texttt{rating} equal to a) 1 b) 3, and c) 5.
+When \\texttt{rating} increases by one unit, the mean of the normal distribution increases
+by %2.2f, which is the value of the coefficient for \\texttt{rating}.
+The areas shaded to the right are the corresponding probabilities that the outcome variable $y_i$ takes the value of 1, 
+which in this case means the probability that the person has had an extra-martial affair.
+These probabilities are %2.2f, %2.2f, and %2.2f, respectively.
+', coef(affairs_probit)['rating'], p[1], p[3], p[5])
+```
+
+```{r probit_fig, fig.cap=probit_fig_cap, out.width='\\textwidth', fig.height=2.0}
+coefs <- coef(affairs_probit)
+df_1 <- tibble(x = seq(-5, 4, length.out = 10000),
+               y = dnorm(x, mean = coefs[1] + coefs[2]*1)) 
+df_2 <- tibble(x = seq(-5, 4, length.out = 10000),
+               y = dnorm(x, mean = coefs[1] + coefs[2]*3)) 
+df_3 <- tibble(x = seq(-5, 4, length.out = 10000),
+               y = dnorm(x, mean = coefs[1] + coefs[2]*5))
+
+
+p1 <- ggplot(data = df_1, aes(x = x, y = y)) + geom_line() +
+  geom_polygon(data = rbind(c(0,0), subset(df_1, x > 0)), aes(x = x, y=y), fill = 'grey') +
+  geom_polygon(data = rbind(c(0,0), subset(df_1, x < 0)), aes(x = x, y=y), fill = 'grey61') +
+  xlab(TeX('$\\eta$'))
+
+p2 <- ggplot(data = df_2, aes(x = x, y = y)) + geom_line() +
+  geom_polygon(data = rbind(c(0,0), subset(df_2, x > 0)), aes(x = x, y=y), fill = 'grey') +
+  geom_polygon(data = rbind(c(0,0), subset(df_2, x < 0)), aes(x = x, y=y), fill = 'grey61') +
+  xlab(TeX('$\\eta$'))
+
+p3 <- ggplot(data = df_3, aes(x = x, y = y)) + geom_line() +
+  geom_polygon(data = rbind(c(0,0), subset(df_3, x > 0)), aes(x = x, y=y), fill = 'grey') +
+  geom_polygon(data = rbind(c(0,0), subset(df_3, x < 0)), aes(x = x, y=y), fill = 'grey61')+
+  xlab(TeX('$\\eta$'))
+
+plot_grid(p1, p2, p3, nrow = 1, labels = 'auto')
+
+```
+
+
+
+# Ordinal logistic regression
+
+In ordinal regression, the outcome variable $y_i$ is an ordinal variable.
+An ordinal variable can be seen as a categorical variable where the values have an order.
+Alternatively, an ordinal variable can be seen as a numerical variable whose values can be ordered but not defined on a metric space.
+For example, the values of $y_i$ could be *low*, *medium*, *high*.
+Here, there is a natural order: $\textit{low} < \textit{medium} < \textit{high}$. 
+However, we do not necessarily believe that difference between *low* and *medium* is the same as between *medium* and *high*.
+We may represent the *low*, *medium*, *high* by $\{0, 1, 2\}$.
+We treat these values as essentially labels, just as we would do with a categorical variable, though with the understanding that $0 < 1 < 2$.
+
+In a regression model with an ordinal outcome variable, we model the probability distribution over the outcome variable and how it changes with a set of predictor variables.
+For example, consider the *world values surveys* data that is available in `carData` by the name `WVS`.
+```{r, echo=T}
+library(carData)
+wvs_df <- as_tibble(WVS)
+wvs_df
+```
+In this data set, we have a variable `poverty` that represents the responses to the survey question *Do you think that what the government is doing for people in poverty in this country is about the right amount, too much, or too little?*.
+This variable takes the values of `Too Little`, `About Right`, and `Too much`.
+Note that this variable is an ordered factor.
+```{r}
+wvs_df %>% pull(poverty) %>% class()
+```
+In other words, it is a factor variable whose levels have a defined order, namely the following.
+```{r}
+wvs_df %>% pull(poverty) %>% levels()
+```
+
+In addition to `poverty`, we have predictor variables such as `religion`, `gender`, `age`, etc.
+In Figure \ref{fig:wvs_exploratory}, we group the `age` variable into 5 quintiles, and plot the numbers of males and female respondents in these quintiles who choose each of the three responses to the `poverty` question.
+From this data, we can see that as age increases, the number of people responding `Too Little` declines, and the numbers of people responding either `About Right` or `Too Much` increase.
+We also see that more females than males respond `Too Little`, and usually more males than females respond `About Right` or `Too Much`.
+
+```{r wvs_exploratory, out.width='\\textwidth', fig.cap="The frequencies of choosing each possible response to a survey question about what the government is doing about poverty, as a function of the respondent's age quintile (lower means younger) and gender.", fig.height=3}
+# library(carData)
+# 
+# wvs_df <- as_tibble(WVS)
+# 
+# #wvs_df_nested <- 
+# poverty_variable_tally <- function(data){
+#   v <- data %>% group_by(poverty) %>% tally() %>% deframe()
+#   v/sum(v)
+# }
+# 
+# wvs_df %>% 
+#   mutate(age_grp = ntile(age, 5)) %>% 
+#   group_by(age_grp, gender) %>% 
+#   nest() %>% 
+#   mutate(x = map(data, poverty_variable_tally)) %>% 
+#   dplyr::select(-data) %>% 
+#   unnest_wider(x) %>% 
+#   pivot_longer(cols = `Too Little`:`Too Much`, names_to = 'poverty', values_to = 'proportion') %>% 
+#   mutate(poverty = factor(poverty, 
+#                           levels = c('Too Little', 'About Right', 'Too Much'),
+#                           ordered = TRUE)) %>% 
+  
+wvs_df %>% 
+  mutate(age_grp = ntile(age, 5)) %>%
+  ggplot(mapping = aes(x = poverty, fill = gender)) + 
+  geom_bar(position="dodge") + 
+  facet_wrap(~age_grp, nrow = 1) +
+  scale_fill_manual(values=c( "#E69F00", "#999999", "#56B4E9")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 8, angle = -60),
+        legend.position = 'bottom',
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 8))
+
+```
+
+One of the most widely used regression models for ordinal outcome data is the *proportional odds* or *cumulative logit* logistic regression model.
+In the case of an ordinal outcome variable with three values, i.e., $y_i \in \{1, 2, 3\}$, this model is equivalent to the latent variable formulation of the binary logistic regression that we saw above, but with two rather than one thresholds, which are known as *cutpoints*, and denoted here by $\zeta_1$ and $\zeta_2$.
+In particular, the model is as follows.
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad
+y_i &= \begin{cases}
+3, \quad\text{if $\eta_i \geq \zeta_2$},\\
+2, \quad\text{if $\zeta_1 \leq \eta_i < \zeta_2$},\\
+1, \quad\text{if $\eta_i < \zeta_1$}
+\end{cases},\\
+\eta_i &\sim \textrm{logistic}(\phi_i, 1).
+\end{aligned}
+$$
+From this we have,
+$$
+\begin{aligned}
+\Prob{y_i \leq 2} &= \int_\infty^{\zeta_1} \Prob{\eta_i \given \phi_i} d\eta_i = \frac{1}{1 + e^{-(\zeta_2 - \phi_i)}} = \textrm{ilogit}(\zeta_2 - \phi_i),\\
+\Prob{y_i \leq 1} &= \int_\infty^{\zeta_0} \Prob{\eta_i \given \phi_i} d\eta_i = \frac{1}{1 + e^{-(\zeta_1 - \phi_i)}} =
+\textrm{ilogit}(\zeta_1 - \phi_i),
+\end{aligned}
+$$
+and so $\Prob{y_i = 3} = 1 - \Prob{y_i \leq 2} = 1 - \textrm{ilogit}(\zeta_2 - \phi_i)$.
+Stating these cumulative probabilities in terms of log odds, we have 
+$$
+\begin{aligned}
+\log\left(\frac{\Prob{y_i \leq 2}}{1 - \Prob{y_i \leq 2}}\right) &= \zeta_2 - \phi_i,\\
+\log\left(\frac{\Prob{y_i \leq 1}}{1 - \Prob{y_i \leq 1}}\right) &= \zeta_1 - \phi_i.
+\end{aligned}
+$$
+In general, for an ordinal variable with $J$ levels, $1 \ldots J$, for $j \in 1 \ldots J-1$, we have
+$$
+\log\left(\frac{\Prob{y_i \leq j}}{1 - \Prob{y_i \leq j}}\right) = \zeta_j - \phi_i,
+$$
+where $\zeta_1 < \zeta_2 < \ldots < \zeta_{J-1}$.
+
+The value of $\phi_i$ is, as it was used above, the linear sum of the predictors, i.e. $\phi_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki}$.
+Having the intercept term $\beta_0$ as well the cutpoints $\zeta_1, \zeta_2 \ldots \zeta_{J-1}$ means that neither are identifiable because we could add any constant value to $\beta_0$ and subtract this value from each of $\zeta_1, \zeta_2 \ldots \zeta_{J-1}$ to obtain an identical model.
+For this reason, we must constrain the values of either $\beta_0$ or the cutpoints.
+One possibility is to contrain $\zeta_1$ to equal 0.
+Another, which is more common, is to contrain $\beta_0$ to equal to 0.
+In other words, $\phi_i = \sum_{k=1}^K \beta_k x_{ki}$.
+
+The general model for the cumulative logits ordinal logistic regression is therefore the following.
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad
+y_i &= \begin{cases}
+J, \quad\text{if $\eta_i \geq \zeta_{J-1}$},\\
+J-1, \quad\text{if $\zeta_{J-2} \leq \eta_i < \zeta_{J-1}$},\\
+\ldots,\\
+2, \quad\text{if $\zeta_1 \leq \eta_i < \zeta_2$},\\
+1, \quad\text{if $\eta_i < \zeta_1$}
+\end{cases},\\
+\eta_i &\sim \textrm{logistic}(\phi_i, 1),\quad \phi_i = \sum_{k=1}^K \beta_k x_{ki}.
+\end{aligned}
+$$
+For any $1 \leq j \leq J-1$, we have
+$$
+\begin{aligned}
+\Prob{y_i = j} &= \Prob{y_i \leq j} - \Prob{y_i \leq {j-1}},\\
+               &= \textrm{ilogit}(\zeta_j - \phi_i) - \textrm{ilogit}(\zeta_{j-1} - \phi_i).
+\end{aligned}
+$$
+
+## Ordinal logistic regression in R
+
+There are many options to perform ordinal logistic regression in R.
+For example, the `ordinal` package is an excellent package for many variants of the ordinal logistic model including and especially mixed effect ordinal models.
+Here, however, we will use the `polr` function from the `MASS` package which is simple and easy to use and perfectly illustrates ordinal logistic regression as we have described it thus far.
+We will use it here to model how the `poverty` variable varies as a function of `age` and `gender` in the `wvs_df` data set.
+```{r, echo=T}
+library(MASS)
+M_ord <- polr(poverty ~ age + gender, data = wvs_df)
+summary(M_ord)
+```
+In the summary, the values of the coefficients for the linear sum are listed under `Coefficients`, while the values of $\zeta_1$ and $\zeta_2$ are listed under `Intercepts`.
+The maximum likelihood estimates of the coefficients and the cutpoints are calculated using a general purpose optimization based on the Broyden–Fletcher–Goldfarb–Shanno (BFGS) algorithm, and estimates the standard error of these estimates using the Hessian matrix of the log-likelihood function evaluated at its maximum.
+Note that the summary output does not contain p-values for either the coefficients or for the cutpoints.
+The authors of MASS [@mass:book] state that the exact distribution of the estimates are not known and so exact p-values can not be calculated.
+Alternative methods for evaluating coefficients, based on likelihood ratio tests, are recommended instead.
+However, as an approximation, though one to be used cautiously, we can treat the sampling distribution for these estimates as normally distributed and so treat the `t value` as a standard normal statistic and calculate the p-value using the cumulative normal distribution.
+
+
+```{r}
+median_age_male <- wvs_df %>% filter(gender == 'male') %>% pull(age) %>% median()
+coefs <- coefficients(M_ord)
+phi_i <- coefs %*% c(median_age_male, 1) %>% as.vector()
+zeta <- M_ord$zeta
+```
+
+Although, as we will see, we can use R's generic `predict` function to calculate the probabilities for the `poverty` outcome variable for any given set of values for the predictor variables, it is instructive to do this manually.
+For example, for a male of median age (for men), which is `r median_age_male %>% round(2)` years in this data set, the value of $\phi_i$ is
+$$
+\begin{aligned}
+\phi_i &= `r round(coefs['age'], 4)` \times `r median_age_male %>% round(2)` + `r round(coefs['gendermale'], 4)` \times 1,\\
+       &= `r phi_i %>% round(2)`.
+\end{aligned}
+$$
+The log odds that this median aged male responds that `poverty` is  "Too Little" and `poverty` is "Too Little" or "About Right" are, respectively, $\zeta_1 - \phi_i = `r round(zeta[1],3)` - `r round(phi_i, 2)` = `r round(zeta[1] - phi_i, 2)`$ and $\zeta_2 - \phi_i = `r round(zeta[2],3)` - `r round(phi_i, 2)` = `r round(zeta[2] - phi_i, 2)`$.
+These correspond to cumulative probabilities of $\textrm{ilogit}(\zeta_1 - \phi_i) = `r round(ilogit(zeta[1] - phi_i), 2)`$ and $\textrm{ilogit}(\zeta_2 - \phi_i) = `r round(ilogit(zeta[2] - phi_i), 2)`$.
+Thus, the probability that the median aged male responds by "Too Much", "About Right", or "Too Little" is, respectively, $1 - \textrm{ilogit}(\zeta_2 - \phi_i) = `r round(1 - ilogit(zeta[2] - phi_i), 2)`$, $\textrm{ilogit}(\zeta_2 - \phi_i) - \textrm{ilogit}(\zeta_1 - \phi_i) = `r  round(ilogit(zeta[2] - phi_i) - ilogit(zeta[1] - phi_i), 2)`$, and $\textrm{ilogit}(\zeta_1 - \phi_i) = `r round(ilogit(zeta[1] - phi_i), 2)`$.
+The logistic distribution corresponding to $\phi = `r round(phi_i, 2)`$ is shown in Figure \ref{fig:ord_fig_cap}.
+
+```{r}
+ord_fig_cap <- sprintf('The partitioning of the area under the logistic distribution whose mean is $\\phi_i = %2.2f$, which is the value of the linear predictor for a median aged male. The two cutpoints are $\\zeta_1 = %2.2f$ and $\\zeta_2 = %2.2f$.', phi_i, zeta[1], zeta[2])
+```
+
+
+```{r ord_fig_cap, fig.cap = ord_fig_cap, out.width='0.5\\textwidth', fig.align='center'}
+df_1 <- tibble(x = seq(-7, 8, length.out = 10000),
+               y = dlogis(x, location = phi_i)) 
+
+ggplot(data = df_1, aes(x = x, y = y)) + geom_line() +
+  geom_polygon(data = rbind(c(zeta[1],0), subset(df_1, x > zeta[1] & x < zeta[2]), c(zeta[2], 0)), aes(x = x, y=y), fill = 'grey81') +
+  geom_polygon(data = rbind(c(zeta[1],0), subset(df_1, x < zeta[1])), aes(x = x, y=y), fill = 'grey71') +
+  geom_polygon(data = rbind(c(zeta[2],0), subset(df_1, x > zeta[2])), aes(x = x, y=y), fill = 'grey91') +
+  xlab(TeX('$\\eta_i$')) +
+  geom_vline(xintercept = zeta[1]) + 
+  geom_vline(xintercept = zeta[2]) + annotate("text", x = zeta[1]-0.3, y = 0.275, label = TeX("$\\zeta_1$")) +
+  geom_vline(xintercept = zeta[2]) + annotate("text", x = zeta[2]+0.3, y = 0.275, label = TeX("$\\zeta_2$"))
+  
+```
+
+Using the `predict` or `add_predictions` functions, we can easily calculate the probabilities over the outcome variable's values for any given set of values of the predictor variables.
+To do so, we must use the `type = 'probs'` argument when calling these functions.
+```{r, echo=T}
+new_data <- expand_grid(age = c(25, 50, 75),
+                        gender = c('male', 'female'))
+add_predictions(new_data, M_ord, type='probs')
+```
+## Odds ratios
+
+We can interpret the values of the cutpoints and the regression coefficients in terms of odds ratios.
+We saw above that, for all $j \in 1 \ldots J$,
+$$
+\log\left(\frac{\Prob{y_i \leq j}}{1 - \Prob{y_i \leq j}}\right) = \zeta_j - \phi_i.
+$$
+From this, for any two cutpoints $j^\prime > j$, we have
+$$
+\begin{aligned}
+\log\left(\frac{\Prob{y_i \leq j^\prime}}{1 - \Prob{y_i \leq j^\prime}}\right) - \log\left(\frac{\Prob{y_i \leq j}}{1 - \Prob{y_i \leq j}}\right) &= (\zeta_j^\prime - \phi_i) - (\zeta_j - \phi_i),\\
+\log\left(\frac{\Prob{y_i \leq j^\prime}}{1 - \Prob{y_i \leq j^\prime}} \bigg/ \frac{\Prob{y_i \leq j}}{1 - \Prob{y_i \leq j}}\right)&= \zeta_j^\prime - \zeta_j,\\
+\frac{\Prob{y_i \leq j^\prime}}{1 - \Prob{y_i \leq j^\prime}} \bigg/ \frac{\Prob{y_i \leq j}}{1 - \Prob{y_i \leq j}} &= e^{\zeta_j^\prime - \zeta_j}.
+\end{aligned}
+$$
+From this, we see that $e^{j^\prime - j}$ is the odds ratio corresponding to the probabilities $\Prob{y_i < j^\prime}$ and $\Prob{y_i < j}$.
+In other words, the ratio of the odds that $y_i < j^\prime$ to the odds that $y_i < j^\prime$, for any $j^\prime$ and $j$, is $e^{j^\prime - j}$.
+Note that this will hold for any value of $\phi$ and so holds for any set of values of the predictors.
+
+
+To interpret the coefficients, consider increasing the value of any predictor $k$ by one unit.
+If $\phi_i = \sum_{k=1}^K \beta_k x_{ki}$, if we increase $x_{ki}$ by one unit, we have $\phi_i^\prime = \sum_{k=1}^K \beta_k x_{ki} + \beta_k = \phi + \beta_k$.
+For any value $j$ of the ordinal outcome variable, we have
+$$
+\begin{aligned}
+\log\left(\frac{\Prob{y_i \leq j \given \phi^\prime}}{1 - \Prob{y_i \leq j\given \phi^\prime}}\right) - \log\left(\frac{\Prob{y_i \leq j\given\phi}}{1 - \Prob{y_i \leq j\given \phi}}\right) &= (\zeta_j - \phi_i^\prime) - (\zeta_j - \phi_i) = \beta_k,\\
+\frac{\Prob{y_i \leq j \given \phi^\prime}}{1 - \Prob{y_i \leq j\given \phi^\prime}} \bigg/ \frac{\Prob{y_i \leq j\given\phi}}{1 - \Prob{y_i \leq j\given \phi}} &= e^{\beta_k}.
+\end{aligned}
+$$
+In other words, $e^{\beta_k}$ is the factor by which the odds that $y_i \leq j$, for any $j \in 1\ldots J-1$, increases for every one unit increase in predictor variable $k$.
+
+## Bayesian ordinal logistic regression
+
+We can perform a Bayesian counterpart of the cumulative logit ordinal logistic regression model as follows.
+```{r, echo=T, cache=T, results='hide'}
+M_ord_bayes <- brm(poverty ~ age + gender, 
+                   family = cumulative(link = 'logit'),
+                   data = wvs_df)
+```
+```{r}
+original_width <- getOption('width')
+options(width = 300)
+S <- summary(M_ord_bayes)
+stopifnot(all(round(S$fixed[,'Rhat'], 2) == 1))
+min_ess <- min(S$fixed[,'Bulk_ESS'])
+stopifnot(min_ess/(S$chains * (S$iter - S$warmup)) > 0.75)
+
+```
+As we can see, all we need specify is that the family is `cumulative` and the link is `logit`, which is the default in fact.
+By using all the other default settings, we use `r S$chains` chains, each with `r S$iter` iterations, and where the initial `r S$warmup` iterations are discarded, leaving to `r S$chains * (S$iter - S$warmup)` total samples.
+
+The default priors in this model are seen in the following table.
+```{r, echo=T}
+prior_summary(M_ord_bayes)
+```
+This tells us that the cutpoints have non-standard student t-distributions and the coefficients have uniform distributions as priors.
+
+The summary of the posterior distribution of the regression coefficients and the cutpoints are as follows:
+```{r, echo=T, size="tiny"}
+summary(M_ord_bayes)$fixed
+```
+Clearly, the means of these estimates are very similar to those estimated using maximum likelihood estimation above.
+```{r}
+options(width = original_width)
+```
+
+# Categorical (multinomial) logistic regression
+
+Thus far, we have considered regression models where the outcome variable is either a binary variable or an ordinal variable.
+If the outcome variable is a categorical variable with more than two values, we can use an extension of logistic regression that we will refer to here as categorical logistic regression, but which is more also commonly referred to as multinomial logistic regression.
+We prefer the term categorical, rather than multinomial, logistic regression for this model given that the outcome variable is a categorical variable.
+We prefer to reserve the term multinomial logistic regression for case of models where the outcome variable is vector of counts of the number of observations of each of a set of categorically distinct outcomes.
+
+In categorical logistic regression, for each observation, our outcome variable can be represented as $y_i \in 1 \ldots J$, where $1 \ldots J$ are $J$ categorically distinct values.
+For example, in a hypothetical pre-election voting preference poll in the UK, people might be asked if they will vote Conservative, Labour, Liberal Democrats, Green, Other.
+We might then model how the probability distribution over these choice vary by UK region, age, gender, etc.
+
+In categorical logistic regression, we model the log of the probability of each category relative to an arbitrarily chosen baseline category as a linear function of the predictors.
+Setting the baseline category to be $j = 1$, then for each $j = 2 \ldots J$, we have
+$$
+\log\left( \frac{\Prob{y_i = j}}{\Prob{y_i = 1}}\right) = \phi_{ji} = \beta_{j0} + \sum_{k=1}^K \beta_{jk} x_{ki},
+$$
+and by necessity, we have
+$$
+\log\left( \frac{\Prob{y_i = 1}}{\Prob{y_i = 1}}\right) = \phi_{1i} = 0.
+$$
+In other words, we model the log of the probability that $y_{i} = j$ relative to $y_i = 1$ as a linear function of the predictors.
+Note that we have a separate linear model with different coefficients for each $j > 2$.
+We can interpret the log ratio
+$$
+\log\left( \frac{\Prob{y_i = j}}{\Prob{y_i = 1}}\right) = \phi_{ji}
+$$
+in one of two ways.
+We can either interpret it directly as simply the log of a relative probabilities.
+Alternatively, we can interpret it as the log odds of the conditional probability that $y_i = j$ given that we know that $y_i = j$ or $y_i = 1$.
+
+
+From this model, we have
+$$
+\Prob{y_i = j} = e^{\phi_{ji}} \Prob{y_i = 1},
+$$
+and given that, by definition, we have
+$$
+\sum_{j=1}^J\Prob{y_i = j} = 1,
+$$
+we therefore have the following:
+$$
+\begin{aligned}
+\Prob{y_i = 1}\sum_{j=1}^J e^{\phi_{ji}}  &= 1\\
+\Prob{y_i = 1}  &= \frac{1}{\sum_{j=1}^J e^{\phi_{ji}}}.
+\end{aligned}
+$$
+This leads to the following model of the probabilities of each of the $J$ values of the outcome variable.
+$$
+\Prob{y_i = j}  = \frac{e^{\phi_{ji}}}{\sum_{j=1}^J e^{\phi_{ji}}}.
+$$
+Given that $e^{\phi_{1i}} = 1$, it is more common to write this as 
+$$
+\Prob{y_i = j}  = \frac{e^{\phi_{ji}}}{1 + \sum_{j=2}^J e^{\phi_{ji}}}.
+$$
+
+## Categorical logistic regression using R
+
+We have many options for doing categorical logistic regression in R.
+One simple option is to use `multinom` from the `nnet` package.
+```{r}
+library(nnet)
+```
+
+To illustrate this model, we will use a data set based on a subset of the `weather_check` data set in the `fivethirtyeight` package.
+```{r, echo=T}
+weather_df <- read_csv('data/weather.csv')
+weather_df
+```
+In this data, people were asked what was their source of information about the weather (`weather`).
+This had values `app` for a mobile device app, `internet` for general internet search, `tv` for local television, `weather_channel` for the weather channel, and `other` for other sources like newspaper, newsletter, etc.
+The respondents' ages were listed as the age groups `18 - 29`, `30 - 44`, `45 - 59`, `60+`.
+The frequency of each response for each age group is as follows:
+```{r, echo=T}
+weather_df %>%
+  group_by(age, weather) %>%
+  tally() %>% 
+  pivot_wider(id_cols = age, names_from = 'weather', values_from = n)
+```
+From this, we see a relative increase with age for television, particularly local television, and a relative decline with age for mobile apps.
+
+
+The following code models the probability distribution of the different weather news sources.
+First, we will set the `age` and `source` variables as factors, which will order the results to make them easier to interpret.
+```{r, echo=T, results = 'hide'}
+weather_df %<>%
+  mutate(age = factor(age, levels = c('18 - 29', '30 - 44', '45 - 59', '60+')),
+         weather = factor(weather, levels = c('other', 'app', 'internet', 'tv', 'weather_channel'))
+  )
+```
+
+For simplicity, we will begin with a model that has a single constant term.
+```{r, results='hide', echo=T}
+M_cat <- multinom(weather ~ 1, data = weather_df)
+```
+The values of coefficients are estimated using a BFGS based optimization of the log of the likelihood, as was also done above in the case of ordinal logistic regression.
+Note that `weather == 'other'` is the baseline against which all other weather news sources are compared.
+```{r, echo=T}
+summary(M_cat)
+```
+In order to appreciate the meaning of the coefficients, it helps to calculate the probability distribution over the five options using the formula
+$$
+\Prob{y_i = j}  = \frac{e^{\phi_{ji}}}{1 + \sum_{j=2}^J e^{\phi_{ji}}}.
+$$
+For $j \in 2, 3, 4, 5$, for all $i$, $\phi_{ji} = \beta_j$, while $\phi_{1i} = 0$.
+```{r, echo=T}
+phi <- rbind(other = 0, coef(M_cat)) %>% as_tibble(rownames = 'id') %>% deframe()
+phi
+```
+From this, the corresponding probabilities are as follows:
+```{r, echo=T}
+exp(phi)/sum(exp(phi))
+```
+
+We can now use `age` as a predictor as follows.
+```{r, echo=T, results='hide'}
+M_cat_2 <- multinom(weather ~ age, data = weather_df)
+```
+```{r, echo=T}
+summary(M_cat_2)
+```
+To calculate the probability distributions over `weather`, rather than doing so manually, we can use `predict` or `add_predictions` with `type = 'probs'`.
+```{r, echo=T}
+tibble(age = c('18 - 29', '30 - 44', '45 - 59', '60+')) %>% 
+  add_predictions(M_cat_2, type='probs')
+```
+These predicted probabilities are shown in Figure \ref{fig:mcat_pred_plot}.
+What is most clear here is that we see that mobile device apps decline, and local television increases, as age increases.
+
+```{r mcat_pred_plot, fig.cap='Probability distribution over different sources of weather news as a function of age group.', out.width='0.67\\textwidth', fig.align='center'}
+age <- tibble(age = c('18 - 29', '30 - 44', '45 - 59', '60+'))
+
+cbp1 <- c("#999999", "#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+bind_cols(age = age,
+          predict(M_cat_2, newdata = age, type ='probs')) %>% 
+  pivot_longer(cols = -age,
+               names_to = 'weather',
+               values_to = 'prob') %>% 
+  ggplot(aes(x = age, y = prob, fill = weather)) + geom_col() + scale_fill_manual(values = cbp1)
+```
+## Bayesian categorical logistic regression
+
+We can perform a Bayesian version of the model in the previous section using `brm` with `family = categorical(link = 'logit')`.
+```{r, results='hide', echo=T, cache=T}
+M_cat_bayes <- brm(weather ~ age, 
+                   family = categorical(link = 'logit'),
+                   data = weather_df)
+```
+```{r}
+original_width <- getOption('width')
+options(width = 300)
+```
+
+The summary output is formatted in a long format in comparison to wide format seen above with `multinom`.
+\small
+```{r, echo=T}
+summary(M_cat_bayes)$fixed
+```
+\normalsize
+
+We can rearrange the posterior mean estimates as follows.
+```{r, echo=T}
+fixef(M_cat_bayes) %>%
+  as_tibble(rownames = 'var') %>%
+  dplyr::select(var, Estimate) %>%
+  separate(var, into = c('var', 'age')) %>%
+  pivot_wider(var, names_from = age, values_from = Estimate)
+```
+
+Just as above, with the Bayesian model, we can perform predictions using `predict` or `add_predictions`.
+Note that here we do not need to use `type = 'probs'`.
+\small
+```{r, echo=T}
+tibble(age = c('18 - 29', '30 - 44', '45 - 59', '60+')) %>%
+  add_predictions(M_cat_bayes)
+```
+\normalsize
+
+
+
+
+
+# References
+

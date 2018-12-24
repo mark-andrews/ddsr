@@ -1,0 +1,126 @@
+% LaTeX packages
+\usepackage{xspace}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{float}
+\usepackage{nth}
+\usepackage{lipsum}
+\usepackage{mathtools}
+\usepackage{pgfplots}
+
+% this is needed somewhere but not everywhere
+% and conflicts with subfigure
+%\usepackage{subcaption}
+
+% LaTeX newcommands etc
+\def\argmax{\mathop{\rm argmax}}
+\def\argmin{\mathop{\rm argmin}}
+\newcommand{\aicc}{$\textsc{aic}_{c}$\xspace}
+\newcommand*{\aic}{\textsc{aic}\xspace}
+\newcommand{\betatrue}{\vec{\beta}_{\star}}
+\newcommand{\data}{\mathcal{D}}
+\newcommand{\ecdf}{\textsc{ecdf}\xspace}
+\newcommand*{\elpd}{\textsc{elpd}\xspace}
+\newcommand{\gams}{\textsc{gam}s\xspace}
+\newcommand{\gam}{\textsc{gam}\xspace}
+\newcommand*{\gui}{\textsc{gui}\xspace}
+\newcommand*{\given}{\vert}
+\newcommand{\hatse}{\hat{\textrm{se}}}
+\newcommand{\hatsemu}{\hat{\textrm{se}}_{\mu_\iota}}
+\newcommand{\hatsey}{\hat{\textrm{se}}_{y_\iota}}
+\newcommand*{\hmc}{\textsc{hmc}\xspace}
+\newcommand*{\hpd}{\textsc{hpd}\xspace}
+\newcommand{\fmle}{f_{\textrm{mle}}}
+\newcommand{\icc}{\textsc{icc}\xspace}
+\newcommand*{\iid}{\textsc{iid}\xspace}
+\newcommand{\iqr}{\textsc{iqr}\xspace}
+\newcommand{\latex}{\LaTeX{}\xspace}
+\newcommand{\loocv}{\textsc{loocv}\xspace}
+\newcommand*{\looic}{\textsc{looic}\xspace}
+\newcommand{\mad}{\textsc{mad}\xspace}
+\newcommand*{\mcmc}{\textsc{mcmc}\xspace}
+\newcommand*{\model}{\mathcal{M}}
+\newcommand{\nse}{\textsc{nse}\xspace}
+\newcommand{\oop}{\textsc{oop}\xspace}
+\newcommand{\Pop}[1]{\mathcal{P}( #1 )}
+\newcommand{\Prob}[1]{\mathrm{P}( #1 )}
+\newcommand{\PROB}[1]{\mathrm{P}\left( #1 \right)}
+\newcommand*{\pvalues}{\textit{p}-values\xspace}
+\newcommand*{\pvalue}{\textit{p}-value\xspace}
+\newcommand{\rbfs}{\textsc{rbf}s\xspace}
+\newcommand{\rbf}{\textsc{rbf}\xspace}
+\newcommand{\reml}{\textsc{reml}\xspace}
+\newcommand{\rmsea}{\textsc{rmsea}\xspace}
+\newcommand{\rss}{\textsc{rss}\xspace}
+\newcommand{\sem}{\textsc{sem}\xspace}
+\newcommand{\sigmatrue}{\sigma_{\star}}
+\newcommand*{\thetahat}{\hat{\theta}}
+\newcommand*{\thetastar}{\theta_{\star}}
+\newcommand*{\thetatrue}{\thetastar}
+\newcommand*{\tpi}{\pi}
+\newcommand*{\tthetaprop}{\tilde{\theta}_\prime}
+\newcommand*{\ttheta}{\tilde{\theta}}
+\newcommand{\vcs}{\textsc{vcs}\xspace}
+\newcommand*{\waic}{\textsc{waic}\xspace}
+\renewcommand{\linethickness}{0.05em} % Used in Chapter 7 for making LaTeX tables
+
+\DeclarePairedDelimiter{\diagfences}{(}{)}
+\newcommand{\diag}{\operatorname{diag}\diagfences}
+
+% Not sure why I need this
+% But I get a warning recommending that I add it.
+\pgfplotsset{compat=1.16}
+
+% TikZ settings
+\usetikzlibrary{positioning,shapes,trees,arrows,shadows,arrows.meta,backgrounds,fit}
+
+\tikzset{
+    %Define style for boxes
+    punkt/.style={
+           rectangle,
+           rounded corners,
+           draw=black, very thick,
+           text width=6.5em,
+           minimum height=2em,
+           text centered},
+}
+
+\tikzset{
+  treenode/.style = {shape=rectangle,
+                     rounded corners,
+                     draw, 
+                     align=center,
+                     top color=white, 
+                     font=\ttfamily\normalsize},
+  conditional/.style = {treenode, bottom color = red!20},
+  code/.style = {treenode, bottom color = gray!20},
+  dummy/.style = {treenode},
+  edge_label/.style = {font=\ttfamily\normalsize},
+  every picture/.style = {level distance = 8em,
+                          sibling distance=10em,
+                          level 1/.style = {sibling distance=15em},
+                          level 2/.style = {sibling distance=8em},
+                          edge from parent/.style = {draw, -latex},
+                          sloped}
+}
+
+
+
+% LaTeX float defaults
+% ---------------------------
+% See p.105 of "TeX Unbound" for suggested values.
+% See pp. 199-200 of Lamport's "LaTeX" book for details.
+%   General parameters, for ALL pages:
+\renewcommand{\topfraction}{0.9}	% max fraction of floats at top
+\renewcommand{\bottomfraction}{0.8}	% max fraction of floats at bottom
+%   Parameters for TEXT pages (not float pages):
+\setcounter{topnumber}{2}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{4}     % 2 may work better
+\setcounter{dbltopnumber}{2}    % for 2-column pages
+\renewcommand{\dbltopfraction}{0.9}	% fit big float above 2-col. text
+\renewcommand{\textfraction}{0.07}	% allow minimal text w. figs
+%   Parameters for FLOAT pages (not text pages):
+\renewcommand{\floatpagefraction}{0.7}	% require fuller float pages
+% N.B.: floatpagefraction MUST be less than topfraction !!
+\renewcommand{\dblfloatpagefraction}{0.7}	% require fuller float pages

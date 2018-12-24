@@ -1,0 +1,5 @@
+```python
+for x_i in x:
+  y.append(x_i)
+
+```

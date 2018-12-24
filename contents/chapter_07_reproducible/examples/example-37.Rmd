@@ -1,0 +1,6 @@
+$$
+\begin{aligned}
+f &= (x + y)(x + y),\\
+  &= x^2 + 2xy + y^2
+\end{aligned}
+$$

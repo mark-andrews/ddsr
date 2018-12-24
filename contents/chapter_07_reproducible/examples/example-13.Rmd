@@ -1,0 +1,9 @@
+---
+output: pdf_document
+header-includes:
+- \pagenumbering{gobble} 
+---
+
+1. Potato
+1. Brocolli
+1. Cabbage

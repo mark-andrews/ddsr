@@ -1,0 +1,13 @@
+---
+output: pdf_document
+header-includes:
+- \pagenumbering{gobble} 
+---
+
+* Farm animal
+    * Cow 
+    * Pig
+    * Sheep
+* Wild animal
+    * Fox
+    * Wolf

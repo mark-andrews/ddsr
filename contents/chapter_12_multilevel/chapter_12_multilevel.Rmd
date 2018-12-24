@@ -1,0 +1,1371 @@
+---
+title: "Chapter 12: Multilevel Models"
+author: "Mark Andrews"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    fig_caption: true
+    keep_tex: true
+    highlight: haddock
+  html_document:
+    highlight: haddock
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+  - \usepackage{subcaption}
+---
+
+  
+```{r, echo=F}
+knitr::opts_chunk$set(echo = T, prompt = F, warning = F, message = F, comment='#>')
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+```
+
+
+```{r, echo=F}
+library(tidyverse)
+library(magrittr)
+library(brms)
+library(broom)
+library(latex2exp)
+theme_set(theme_classic())
+
+set.seed(1010)
+
+brm <- function(...) brms::brm(silent = TRUE, refresh = 0, seed = 10101, ...)
+
+```
+
+\tikzset{every path/.style={-latex,thick}}
+
+\tikzset{
+  basic/.style = {font=\sffamily},
+  % material/.style  = {basic, text width=8mm, font=\footnotesize\sffamily, fill=yellow!60},
+  % revision/.style  = {material, fill=blue!30},
+  % root/.style   = {basic,  align=center, fill=pink!60},
+  level 1/.style = {basic, align=center, sibling distance = 30mm},
+  level 2/.style = {basic, sibling distance = 20mm},
+  level 3/.style = {basic, sibling distance = 15mm},
+  % level 4/.style = {level distance=10mm,basic, fill=pink!60, sibling distance = 20mm}
+}
+
+
+
+# Introduction
+
+Multilevel models are a broad class of models that are applied to data that consist of sub-groups or clusters, including when these clusters are hierarchically arranged.
+Although they have been in existence for decades, they have become very widely used within the last 10 to 20 years due to computational advances.
+They are are now a major statistical modelling tool in the social sciences as well many other fields of research.
+A number of related terms are used to describe multilevel models: *hierarchical* models, *mixed effects* models, *random effects* models, and more. 
+These terms are not strictly synonymous but do describe models that are all related to the general concept of a multilevel model. 
+Here, we will prefer to use the term multilevel model as the main general term for these models.
+We will also use the term *hierarchical* model, at least a certain sense of the term, as essentially synonymous to multilevel model, and we'll use the term *mixed effect* models, or *mixed effect regression*, as the term for a particular widely used variant of the multilevel regression model.
+
+As we will see, the defining feature of multilevel models is that they are *models of models*.
+In other words, for each cluster or sub-group in our data we create a statistical model, and then model how these statistical models vary across the clusters or sub-groups.
+We will begin our coverage of multilevel models by exploring *random effects* models.
+These are some of the simplest types of multilevel models, but yet they can make clear the key defining characteristics of the multilevel models generally.
+We then proceed to cover multilevel linear models, which are often referred to a *linear mixed effects* models.
+We will also describe how to perform Bayesian versions of these models.
+
+# Random effects models
+
+Let us consider the following data set, which is on rat tumours.
+```{r}
+rats_df <- read_csv('data/rats.csv',
+                    col_types = cols(batch = col_character())
+)
+rats_df
+```
+This data set consists of data from $J = `r nrow(rats_df)`$ batches of rats.
+For each batch, we have the number of rats in it (`n`) and the number of rats in the batch that developed tumours (`m`).
+Let us begin by focusing in on a single batch. 
+```{r}
+rats_df_42 <- filter(rats_df, batch == '42')
+rats_df_42
+```
+```{r, echo=F}
+af_vec <- rats_df_42 %>% unlist()
+```
+In this batch, out of `r af_vec['n']` rats, the recorded number of tumours was `r af_vec['m']`.
+With these numbers alone, we can provide a simple statistical model of the tumour rate in batch 42.
+In this model, we can say that there is a fixed but unknown probability of a tumour in this batch, which we will denote by $\theta$. 
+In other words, each rat in the batch of size $n = `r af_vec['n']`$ has probability $\theta$ of developing a tumour and so the recorded number of tumours, $m = `r af_vec['m']`$, is a draw from a binomial distribution with parameter $\theta$ and size $n = `r af_vec['n']`$. 
+In other words, our model is a binomial model:
+$$
+m \sim \textrm{Binom}(\theta, n).
+$$
+This is identical to the following binomial logistic regression model.
+$$
+\begin{aligned}
+m &\sim \textrm{Binom}(\theta, n),\quad
+\log\left(\frac{\theta}{1-\theta}\right) = \beta.
+\end{aligned}
+$$
+This binomial model can be represented by the following diagram.
+\begin{center}
+\begin{tikzpicture}[mynode/.style={draw,circle, minimum width=5mm,align=center}]
+\node[mynode, fill=red!10] (m) {$m$};
+\node[mynode, fill=red!10, above right=0.5cm and 0.5cm of m] (n) {$n$};
+\node[mynode, right=of m] (p) {$\beta$};
+\draw[->] (p) -- (m);
+\draw[->] (n) -- (m);
+\end{tikzpicture}
+\end{center}
+This kind of diagram is known as a *Bayesian network*.
+It is a directed acyclic graph showing each variable or parameter in the model.
+The shaded nodes indicate that the corresponding variable is observed.
+From this diagram we see that the variable $m$ is conditionally dependent on $n$, which is observed, and $\beta$, which is not observed and so must be inferred.
+While this diagram is very simple, it is useful to use it here to compare it to other models that we will use below.
+
+
+We can implement this binomial logistic model in R using `glm`.
+```{r}
+M <- glm(cbind(m, n-m) ~ 1, 
+         data = rats_df_42,
+         family = binomial(link = 'logit')
+)
+```
+Note that in this model, the left hand side of the `~` operator is `cbind(m, n-m)`, where `m` gives the number of rats in the batch that have tumours and `n -m` gives the number of rates in the batch who do not have tumours.
+The command `cbind` is used to stack vectors side by side as columns, and so `cbind(m, n-m)` creates a matrix with two columns.
+From this model `M`, we can see that our estimate of $\theta$ is as follows:
+```{r}
+ilogit <- function(x) 1/(1 + exp(-x))
+coef(M) %>% ilogit() %>% unname()
+```
+This is expected given that out of `r af_vec['n']` rats in this batch, the recorded number of tumours was `r af_vec['m']`, which is a proportion of `r af_vec[2:3] %>% as.numeric() %>% log() %>% diff() %>% multiply_by(-1) %>% exp() %>% round(3)`.
+
+We can now easily extend this model to apply to all batches in our data set.
+In other words, for each of our $J$ batches, where $n_j$ is the batch's size, $\theta_j$ is its fixed but unknown probability of developing a tumour, and $m_j$ is its recorded number of tumours, we have the following model:
+$$
+\begin{aligned}
+m_j \sim \textrm{Binom}(\theta_j, n_j),\quad\log\left(\frac{\theta_j}{1-\theta_j}\right) = \beta_j.
+\end{aligned}
+$$
+This is implemented using `glm` as follows.
+```{r}
+M <- glm(cbind(m, n-m) ~ 0 + batch, 
+         data = rats_df,
+         family = binomial(link = 'logit')
+)
+```
+Using `broom::tidy` and some `dplyr` and related tools, we can look at the estimates and confidence intervals for a random sample of 10 of the batches.
+```{r}
+M_estimates <- tidy(M) %>% 
+  select(term, beta = estimate) %>% 
+  mutate(term = str_remove(term, 'batch'),
+         theta = ilogit(beta)) %>% 
+  rename(batch = term)
+
+M_estimates %>% 
+  sample_n(10) %>% 
+  arrange(beta) %>% 
+  mutate_at(vars(beta,theta), ~round(., 2))
+```
+
+Although we have implemented a single `glm` model, this has effectively lead to $J$ separate binomial models. 
+The Bayesian network diagram for these models is shown in the diagram in Figure \ref{fig:J_binomial}.
+\input{include/J_binomial.tex}
+
+In other words, we have a model of the tumour rate for batch 1, another for batch 2, and so on.
+From this, we do not have a model of the distribution of tumour rates across all batches. 
+We do not, for example, have a model that gives us the mean or standard deviation, or any other information, about the tumour rate across all possible batches in this experiment, of which our set of `r nrow(rats_df)` batches are a sample.
+In order to obtain this model, we must perform a multilevel model.
+
+A multilevel model extension of the binomial logistic regression model above is as follows.
+$$
+  \text{for $j \in 1\ldots J$},\quad m_j \sim \textrm{Binom}(\theta_j, n_j),\quad\log\left(\frac{\theta_j}{1-\theta_j}\right) = \beta_j,\quad \beta_j \sim N(b, \tau^2).
+$$
+  The crucial added feature here is that the log odds of the tumour probabilities is being modelled as normally distributed with a mean of $b$ and a standard deviation of $\tau$.
+These dependencies are shown in the Bayesian network diagram in Figure \ref{fig:multilevel_binomial}.
+
+\input{include/multilevel_binomial.tex}
+
+In this multilevel model, just as in the previous non-multilevel model, $\beta_1, \beta_2, \ldots \beta_j \ldots \beta_J$ have fixed but unknown values.
+However, in addition, these values are modelled as all drawn from the same normal distribution.
+The two important consequences of this are as follows.
+First, it provides a model of the *population* from which $\beta_1, \beta_2, \ldots \beta_j \ldots \beta_J$ are a sample.
+Given that each $\beta_j$ effectively defines a model for a batch of rats, then the normal distribution from which $\beta_1, \beta_2 \ldots \beta_j \ldots \beta_J$ are drawn is a *model of models*.
+Amongst other things, this population model of the $\beta$'s allows to predict the log odds, or probability, of a tumour for any future batch of rats, i.e. batch $J+1$.
+Second, because we are assuming that $\beta_1, \beta_2, \ldots \beta_j \ldots \beta_J$ are all drawn from the same normal distribution, this introduces constraints on the inference of the values of each $\beta_j$.
+In other words, to infer the value of $\beta_j$, the observed values of $m_j$ and $n_j$ are not the only relevant pieces of information.
+Now, the values of $b$ and $\tau$ are also relevant, and because $b$ and $\tau$ are also unknown, they themselves must be inferred from $\beta_1, \beta_2, \ldots \beta_j \ldots \beta_J$.
+This effectively means that the inferences concerning $\beta_1, \beta_2, \ldots \beta_j \ldots \beta_J$ are inter-dependent and mutually constrain one another.
+We will explore both of these important general features of multilevel models below.
+
+Given that we can rewrite $\beta_j \sim N(b, \tau^2)$ as $\beta_j = b + \xi_j$ where $\xi_j \sim N(0, \tau^2)$, we can rewrite the multilevel model as
+$$
+\text{for $j \in 1\ldots J$},\quad m_j \sim \textrm{Binom}(\theta_j, n_j),\quad\log\left(\frac{\theta_j}{1-\theta_j}\right) = b + \xi_j,\quad \xi_j \sim N(0, \tau^2).
+$$
+We can then implement this model using the `glmer` model that is part of the `lme4` package.
+```{r}
+library(lme4)
+M_ml <- glmer(cbind(m, n-m) ~ 1 + (1|batch),
+              data = rats_df,
+              family = binomial(link = 'logit')
+)
+```
+Before we proceed to examine the results of this model, let us first describe the formula syntax.
+The right hand side of the formula is `1 + (1|batch)`.
+The first `1` indicates the intercept term of the model, which is $b$.
+This is identical to how we indicate an intercept only model using `lm`, `glm`, etc.
+For example, if were modelling a set of $n$ values $y_1, y_2 \ldots y_n$ as $y_i \sim N(\mu, \sigma^2)$, we could write `lm(y ~ 1)`. 
+The `(1|batch)` is a *random intercepts* statement.
+Specifically, in the case of `glmer`, it states that for each value of the `batch` variable we have a constant term, and that these constant terms are normally distributed from a *zero mean* normal distribution.
+As such, `(1|batch)` gives us the $\xi_j \sim N(0, \tau^2)$ for each of the $J$ batches.
+
+Let us look at the summary of this model.
+```{r}
+summary(M_ml)
+```
+The first thing to note is the estimated value of $b$, which is listed as the estimate of the intercept term in the `Fixed effects` section.
+We see that this has the value of `r fixef(M_ml) %>% unname() %>% round(3)`.
+The estimate of $\tau$ and $\tau^2$, on the other hand, are given by the `Std.Dev.` and `Variance` terms for the `(Intercept)` for `batch` in the `Random effects` section.
+We see that the of $\tau$ is `r VarCorr(M_ml)  %>% unlist() %>% unname() %>% sqrt() %>% round(3)`.
+As such, our model of the distribution of the log odds of the tumours is a normal distribution whose mean and standard deviation are estimated to be `r fixef(M_ml) %>% unname() %>% round(3)` and `r VarCorr(M_ml)  %>% unlist() %>% unname() %>% sqrt() %>% round(3)`, respectively.
+The translates into the probability distribution over the probabilities of tumours that we see in Figure \ref{fig:dist_theta}.
+```{r dist_theta, echo=F, fig.align='center', fig.cap='The estimate of the population distribution over $\\theta$ for the rats tumour multilevel model.', out.width='0.75\\textwidth'}
+logit <- function(theta) log(theta/(1-theta))
+mu <- fixef(M_ml)
+s <- VarCorr(M_ml) %>% as.numeric() %>% sqrt()
+f <- function(theta, mu, s) dnorm(logit(theta), mean = mu, sd = s)
+h <- function(theta) abs(1/theta + 1/(1 - theta))
+
+theta_df <- seq(1/1000, 1-1/1000, length.out = 1e4) %>% 
+  enframe() %>% 
+  mutate(d = f(value, mu, s) * h(value))
+
+theta_df %>% ggplot(aes(x=value, y = d)) + 
+  geom_line() +
+  labs(x= TeX('$\\theta$'),
+       y = TeX('$P(\\theta)$'))
+```
+
+```{r, echo=F}
+b <-  fixef(M_ml)
+tau <- VarCorr(M_ml)  %>% unlist() %>% unname() %>% sqrt()
+pi_beta <- b + c(-1, 1) * tau * qnorm(0.975)
+```
+Given that this normal distribution with mean $b = `r b %>% round(3)`$ and standard deviation $\tau = `r tau %>% round(3)`$ is a model of the population from which the $\beta_1, \beta_2 \ldots \beta_j \ldots \beta_J$ are drawn, then we can make statements like the following.
+The expected value of the log odds of a tumour in a future batch of rats is `r b %>% round(3)` and with 95% probability, this log odds is between `r pi_beta[1] %>% round(3)` and `r pi_beta[2] %>% round(3)`.
+Equivalently, the expected value of the probability of a tumour in a future batch of rats is `r b %>% ilogit() %>% round(3)` and with 95% probability, this probability is between `r pi_beta[1] %>% ilogit() %>% round(3)` and `r pi_beta[2] %>% ilogit() %>%  round(3)`. 
+
+From this model, we can also obtain the estimates of $\xi_1, \xi_2 \ldots \xi_j \ldots \xi_J$ from the model by using the `ranef` command.
+```{r}
+ranef(M_ml)$batch %>% 
+  head()
+```
+We may obtain the estimates of $b$ using the `fixef` command.
+```{r}
+b <- fixef(M_ml)
+```
+We may then add on the estimates of $b$ to get the estimates of $\beta_1, \beta_2 \ldots \beta_j \ldots \beta_J$.
+```{r}
+b + ranef(M_ml)$batch %>% 
+  head()
+```
+We may obtain the estimates of $\beta_1, \beta_2 \ldots \beta_j \ldots \beta_J$ more directly by using the `coef` command.
+```{r}
+M_ml_estimates <- coef(M_ml)$batch
+
+M_ml_estimates %>% 
+  head()
+```
+
+Comparing these values to the corresponding values in the non-multilevel model, we can see how the estimates of $\beta_1, \beta_2 \ldots \beta_j \ldots \beta_J$ mutually constrain one another.
+This phenomenon is an example of *shrinkage*.
+In this model, it is easier to visualize this effect if we look at $\theta_1, \theta_2 \ldots \theta_j \ldots \theta_J$, which are simply the inverse logit transforms of $\beta_1, \beta_2 \ldots \beta_j \ldots \beta_J$.
+In Figure \ref{fig:shrinkage}, we compare the estimates of $\theta_1, \theta_2 \ldots \theta_j \ldots \theta_J$ from the flat or non-multilevel model `M` against those of the multilevel model `M_ml`.
+```{r, shrinkage, echo=F, fig.cap='Estimates for $\\theta_1, \\theta_2 \\dots \\theta_j \\ldots \\theta_J$ from the flat or non-multilevel model (left) and the multilevel model (right).', fig.align='center', out.width='0.75\\textwidth'}
+M_ml_estimates %>% 
+  rownames_to_column('batch') %>% 
+  inner_join(M_estimates, by='batch') %>% 
+  select(batch, multilevel = '(Intercept)', flat = beta) %>% 
+  gather(type, estimate, -batch) %>% 
+  mutate(estimate = ilogit(estimate)) %>% 
+  ggplot(aes(x = type, y = estimate, group = batch)) + 
+    geom_point() + 
+    geom_line(size = 0.5, alpha = 0.25) +
+    xlab('model type') +
+    ylab(TeX('$\\theta$'))
+```
+As we can see, the estimates for $\theta_1, \theta_2 \ldots \theta_j \ldots \theta_J$, and hence also for $\beta_1, \beta_2 \ldots \beta_j \ldots \beta_J$, in the case of the multilevel model are brought closer together towards the centre compared to the non-multilevel model.
+
+To understand why this phenomenon occurs, let us compare the likelihood functions for the non-multilevel and the multilevel model.
+In the non-multilevel model, there are $J$ unknowns: $\beta_1, \beta_1 \ldots \beta_j \ldots \beta_J$, and given the observed data, the likelihood function is 
+$$
+\prod_{j=1}^J \Prob{m_j \given n_j, \beta_j}.
+$$
+Maximising this function with respect to $\beta_j$ is equivalent to maximizing $\Prob{m_j \given n_j, \beta_j}$ with respect to $\beta_j$, which is $\hat{\beta}_j = \textrm{logit}(m_j/n_j)$.
+On the other hand, in the multilevel model, there are $J + 2$ unknowns: $\beta_1, \beta_1 \ldots \beta_j \ldots \beta_J$, $b$ and $\tau$, and the likelihood function is
+$$
+\prod_{j=1}^J \Prob{m_j \given n_j, \beta_j} \Prob{\beta_j \given b, \tau}.
+$$
+Maximising this function with respect to $\beta_j$ is equivalent to maximizing $\Prob{m_j \given n_j, \beta_j} \Prob{\beta_j \given b, \tau}$, which is a compromise between maximizing $\Prob{m_j \given n_j, \beta_j}$ and maximizing $\Prob{\beta_j \given b, \tau}$, with the latter being maximized as $\beta_j$ becomes closer to $b$.
+Maximising the multilevel model's likelihood with respect to $b$ is equivalent to maximizing $\prod_{j=1}^J  \Prob{\beta_j \given b, \tau}$ with respect to $b$, which occurs at $\hat{b} = \tfrac{1}{J} \sum_{j=1}^{J} \beta_j$.
+From this, we see that the estimate of each $\beta_j$ is based on the value of $m_j$ and $n_j$, but is also pulled towards the average of $\beta_1, \beta_1 \ldots \beta_j \ldots \beta_J$.
+
+
+# Normal random effects models
+
+Let us now consider a new data set.
+```{r}
+alcohol_df <- read_csv('data/alcohol.csv')
+alcohol_df
+```
+In this, we have the per capita average alcohol consumption in $J = `r alcohol_df %>% pull(country) %>% unique() %>% length()`$ countries in $K = `r alcohol_df %>% pull(year) %>% unique() %>% length()`$ different years, though we do not necessarily have data from each country in each year.
+Let us denote the per capita alcohol values by $y_1, y_2 \ldots y_i \ldots y_n$.
+For each $y_i$, we have an indicator variable $x_i \in 1 \ldots J$, which indicates the country that $y_i$ corresponds to. 
+An initial model for $y_1, y_2 \ldots y_i \ldots y_n$ could then be
+$$
+  y_i \sim N(\mu_{[x_i]}, \sigma^2),\quad\text{for $i \in 1 \ldots n$},
+$$
+  where $\mu_1, \mu_2 \ldots \mu_j \ldots \mu_J$ are the country alcohol per capita consumption averages for the $J$ countries.
+This model be represented by the Bayesian network diagram shown in Figure \ref{fig:nonmultilevel_alcohol}.
+\input{include/nonmultilevel_alcohol.tex}
+This is a non-multilevel model because the alcohol consumption averages in each country are being modelled independently of those of other countries.
+In this model, however, we do assume that the standard deviations of the alcohol consumption values across all countries are the same, and given by $\sigma$, whose value is fixed but unknown. 
+What this entails, therefore, is that this model is a one-way Anova model with the standard homogeneity of variance assumption.
+
+A multilevel counterpart to the above model would be as follows.
+$$
+\begin{aligned}
+y_i &\sim N(\mu_{[x_i]}, \sigma^2),\quad\text{for $i \in 1 \ldots n$},\\
+\mu_j &\sim N(\phi, \tau^2),\quad\text{for $j \in 1 \ldots J$}.
+\end{aligned}
+$$
+  This model, which is depicted by a Bayesian network diagram in Figure \ref{fig:multilevel_alcohol}, extends the previous one by assuming that the $\mu_1, \mu_2 \ldots \mu_j \ldots \mu_J$ are drawn from a normal distribution with mean $\phi$ and standard deviation of $\tau$.
+Given that $y_i$ can be rewritten as $y_i = \mu_{[x_i]} + \epsilon_i$, where $\epsilon_i \sim N(0, \sigma^2)$, and that $\mu_j$ can be rewritten as $\mu_j = \phi + \xi_j$ where $\xi_j \sim N(0, \tau^2)$, we can rewrite the above model as
+$$
+  y_i = \phi + \xi_{[x_i]} + \epsilon_i,\quad\text{for $i \in 1 \ldots n$,}
+$$
+  where each $\xi_j \sim N(0, \tau^2)$ and each $\epsilon_i \sim N(0, \sigma^2)$.
+Here, $\phi$ signifies the global average per capita alcohol consumption rate.
+Each $\xi_j$ is the *random offset* of country $j$ from $\phi$, and each $\epsilon_i$ is the residual error for each observation.
+In this model, the residual error $\epsilon_i$ gives the random year by year deviation from the country $x_i$'s average consumption rate.
+\input{include/multilevel_alcohol.tex}
+
+We can implement this model using `lme4::lmer` as follows.
+```{r}
+M_ml <- lmer(alcohol ~ 1 + (1|country),
+             data = alcohol_df)
+summary(M_ml)
+```
+```{r, echo=F}
+phi <-  fixef(M_ml)
+tau <- VarCorr(M_ml)  %>% unlist() %>% unname() %>% sqrt()
+sigma <- VarCorr(M_ml) %>% attr('sc')
+pi_mu <- phi + c(-1, 1) * tau * qnorm(0.975)
+```
+As we can see from the `(Intercept)` estimate in the `Fixed effects` and the `Std.Dev.` for `country` in the `Random effects`, the normal distribution of the $\mu$ values has a mean of $\phi = `r phi %>% round(3)`$ and standard deviation of $\tau = `r tau %>% round(3)`$.
+The residual standard deviation $\sigma$ is given by the `Std.Dev.` for `Residual` in the `Random effects`, and has the value of $\sigma = `r sigma %>% round(3)`$.
+
+Given the nature of the random effects model, i.e. each $y_i$ is modelled as $y_i = \phi + \xi_{[x_i]} + \epsilon_i$, the variance of $y$ is equal to $\tau^2 + \sigma^2$.
+The value 
+$$
+\frac{\tau^2}{\tau^2 + \sigma^2}
+$$
+is known as the *intraclass correlation* (\icc), which takes on values between 0 and 1.
+Obviously, \icc tells us how much of the total variance in the data is due to variation between the countries.
+If the \icc is relatively high, and so $\tau^2/\sigma^2$ is relatively high, the observed values *within* countries will be close together relative to the *between* country averages, and thus there will be relatively high clustering of the data.
+In this data, the \icc is `r round(tau^2/(tau^2 + sigma^2), 2)`.
+
+```{r, shrinkage_normal, echo=F, fig.cap='Estimates for $\\mu_1, \\mu_2 \\dots \\mu_j \\ldots \\mu_J$ from the flat or non-multilevel model (left) and the multilevel model (right). Shrinkage effects are minimal due to the high value of $\\tau^2$ relative to $\\sigma^2$.', fig.align='center', out.width='0.75\\textwidth'}
+M <- lm(alcohol ~ 0 + country,
+        data = alcohol_df)
+
+flat_estimates <- coef(M) %>%
+  enframe() %>% 
+  mutate(country = str_remove(name, 'country')) %>% 
+  select(country, estimate = value)
+
+coef(M_ml)$country %>% 
+  rownames_to_column('country') %>% 
+  inner_join(flat_estimates, by='country') %>% 
+  select(country, multilevel = '(Intercept)', flat = estimate) %>% 
+  gather(type, estimate, -country) %>% 
+  ggplot(aes(x = type, y = estimate, group = country)) + 
+    geom_point() + 
+    geom_line(size = 0.5, alpha = 0.25) +
+    xlab('model type') +
+    ylab(TeX('$\\mu$'))
+```
+One consequence of a high \icc, and specifically a high value of $\tau^2$ relative to $\sigma^2$, is that shrinkage effects will be less. 
+This can be seen in Figure \ref{fig:shrinkage_normal} where we compare the estimates of each $\mu_j$ from the non-multilevel and multilevel models.
+In more detail, in a normal random effects model, the estimate of a $\mu_j$ will be approximately as follows (see @gelman+hill:regressionbook, p253, for details):
+$$
+\mu_j \approx \frac{\tfrac{n_j}{\sigma^2} \bar{y}_j + \tfrac{1}{\tau^2} \bar{y} }{\tfrac{n_j}{\sigma^2} + \tfrac{1}{\tau^2} }, 
+$$
+where $\bar{y}_j$ is the average of the $y_i$ values corresponding to country $j$, and $\bar{y}$ is overall average of the $y_i$ values.
+In general, when $\tau^2$ is large relative to $\sigma^2$, the influence of the global average $\bar{y}$ on $\mu_j$ will be minimal.
+This will be especially the case as $n_j$ gets larger.
+
+```{r, echo=F, eval=F}
+A <- alcohol_df %>% 
+  group_by(country) %>% 
+  summarize(n = n(),
+            ybarj = mean(alcohol)) %>% 
+  ungroup() %>% 
+  mutate(tau = tau^2, sigma = sigma^2, ybar = sum(ybarj * n)/sum(n)) %>% 
+  mutate(a = n/sigma, b = 1/tau)
+
+B <- coef(M_ml)$country %>% 
+  rownames_to_column('country') %>% 
+  inner_join(flat_estimates, by='country') %>% 
+  select(country, multilevel = '(Intercept)', flat = estimate)
+
+inner_join(A, B)
+```
+
+# Linear mixed effects models
+
+We will now consider multilevel linear regression models.
+These are often referred to as linear mixed effects models, for reasons that will be clear after we describe them in more detail.
+As with random effects models, these models are best introduced by way of example.
+For this, we will use he `sleepstudy` data set from `lme4`, which provides the average reaction time for each person on each day of a sleep deprivation experiment that lasted 10 days.
+```{r}
+sleepstudy <- lme4::sleepstudy %>%
+  as_tibble()
+sleepstudy
+```
+This data is displayed in Figure \ref{fig:sleepstudy}.
+```{r, sleepstudy, echo=F, fig.align='center', fig.cap="Each figure shows the average reaction time data from a subject in sleep deprivation on each day of the 10 day experiment."}
+sleepstudy %>% 
+  ggplot(aes(x = Days, y = Reaction)) +
+  geom_point(size = 0.5) +
+  facet_wrap(~Subject) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+To begin our analysis, let us first focus on one arbitrarily chosen experimental subject, namely subject `350`. 
+```{r}
+sleepstudy_350 <- sleepstudy %>% 
+  filter(Subject == 350)
+sleepstudy_350
+```
+The trend over time in this subject's average reaction time can be modelled using the following normal linear model:
+$$
+y_d \sim N(\mu_d, \sigma^2),\quad\mu_d = \beta_0 + \beta_1 x_d,\quad\text{for $d \in 1 \ldots n$,}
+$$
+where $y_d$ represents the subject's reaction time on their $d$th observation, and $x_d \in \{0, 2, \ldots n=9\}$ indicates the day when this observation happened.
+Using $\vec{\beta} = [\beta_0, \beta_1]\strut^\intercal$, we can represent this model using a Bayesian network diagram as we do in Figure \ref{fig:bda_sleepstudy_j}.
+In that figure, we provide two equivalent diagrams, with Figure \ref{fig:bda_sleepstudy_j}b using a plate notation that denotes a repetition of nodes within a bounding plate according to an index, which in this case is $d\in 1\ldots n$.
+This model is implemented in R as follows.
+```{r, echo=T}
+M_350 <- lm(Reaction ~ Days, data = sleepstudy_350)
+```
+The estimated values of the coefficients are as follows.
+```{r}
+coef(M_350)
+```
+Thus, we estimate that the average reaction time of subject `350` increases by `r coef(M_350)[2] %>% round(2)` on each day of study.
+In addition, because the first day of the study was indicated by $x_i = 0$, this subject's average reaction prior to any sleep deprivation was `r coef(M_350)[1] %>% round(2)`.
+
+\input{include/sleepstudy_j}
+
+Were we to provide a similar model for each subject in the experiment, whom we will index by $j \in {1\ldots J}$, this would lead to $J$ independent normal linear models. 
+If we denote the average reaction time on observation $d$ for subject $j$ by $y_{jd}$, this set of models is as follows.
+$$
+y_{jd} \sim N(\mu_{jd}, \sigma_j^2),\quad\mu_{jd} = \beta_{j0} + \beta_{j1} x_{jd},\quad\text{for $j \in 1 \ldots J$, for $d \in 1 \ldots n_j$.}
+$$
+Note that here we have $J$ data sets, one for each each subject in the experiment, and $d$ is used to index the observations within each one. 
+Thus, for the $j$th data-set, $d$ ranges from $1$ to $n_j$.
+This model is represented in a Bayesian network diagram in Figure \ref{fig:bda_sleepstudy}a.
+If we assume that there is a common residual standard deviation term $\sigma$, rather than one per each of the $J$ subjects, this model is identical to a varying intercept and varying slope linear model.
+These models are linear regression models whose intercepts and slopes vary according to a categorical variable, which in this case is the `Subject` variable. 
+Using R, we can implement this model as follows.
+```{r}
+M_flat <- lm(Reaction ~ 0 + Subject + Subject:Days, data = sleepstudy)
+```
+Note that the `0 + Subject` in the formula ensures that we obtain a separate intercept term for each subject, rather than one subject being the *base* level and all others being represented as offsets from this base.
+Likewise, the `Subject:Days` ensures that we obtain a separate slope for each subject.
+Formally, this model is equivalent to 
+$$
+y_{jd} \sim N(\mu_{jd}, \sigma^2),\quad\mu_{jd} = \beta_{j0} + \beta_{j1} x_{jd},\quad\text{for $j \in 1 \ldots J$, for $d \in 1 \ldots n_j$,}
+$$
+and we have provided a Bayesian network diagram of it in Figure \ref{fig:bda_sleepstudy}b.
+We can see that it is identical to that represented in \ref{fig:bda_sleepstudy}a with the exception of the shared standard deviation $\sigma$.
+In other words, a (non-multilevel) varying intercept and varying slope model, where the intercepts and slopes vary by subject, is identical to a set of independent linear models, one per each subject, but with a single standard deviation term $\sigma$ shared across all subjects.
+\input{include/nonmultilevel_sleepstudy}
+
+Let us now consider a multilevel variant of this non-multilevel varying intercept and slope model.
+In this, we assume that the vector of coefficients $\vec{\beta}_j = [\beta_{j0}, \beta_{j1}]\strut^\intercal$ is drawn from a multivariate Normal distribution with mean vector $\vec{b}$ and covariance matrix $\Sigma$.
+This model can be written as follows.
+$$
+\begin{aligned}
+y_{jd} &\sim N(\mu_{jd}, \sigma),\quad\mu_{jd} = \beta_{j0} + \beta_{j1} x_{jd},\quad\text{for $j \in 1 \ldots J$, for $d \in 1 \ldots n_j$,},\\
+\vec{\beta}_{j} &\sim N(\vec{b}, \Sigma)\quad\text{for $j \in 1\ldots J$,}
+\end{aligned}
+$$
+The Bayesian network diagram for this model is shown in Figure \ref{fig:bda_sleepstudy_multilevel}.
+As we can see, this is an extension of the Bayesian network diagram in Figure \ref{fig:bda_sleepstudy}b, with the extension being that each $\vec{\beta}_j$ are modelled as functions of $\vec{b}$ and $\Sigma$.
+\input{include/multilevel_sleepstudy}
+
+We can rewrite this multilevel model in the following manner.
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i &= \beta_{[s_i]0} + \beta_{[s_i]1} x_i,\\
+\text{for $j \in 1\ldots J$,}\quad \vec{\beta}_{j} &\sim N(\vec{b}, \Sigma).
+\end{aligned}
+$$
+Note that here the $i$ index ranges over all values in the entire data-set, i.e. $i \in 1, 2 \ldots n$, and each $s_i \in 1, 2 \ldots J$ is an indicator variable that indicates the identity of the subject on observation $i$.
+This notation with a single subscript per observation and indicator variables is more extensible, especially for complex models.
+Using this new notation, given that $\vec{\beta}_{j} \sim N(\vec{b}, \Sigma)$, we can rewrite $\vec{\beta}_j$ as $\vec{\beta}_j = \vec{b} + \vec{\zeta}_j$ where $\vec{\zeta}_j \sim N(0, \Sigma)$.
+Substituting $\vec{b} + \zeta_j$ for $\vec{\beta}$, and thus substituting $b_0 + \zeta_{j0}$ and $b_1 + \zeta_{j1}$ for $\beta_{j0}$ and $\beta_{j1}$, respectively, we have the following model.
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i &= \beta_{[s_i]0} + \beta_{[s_i]1} x_i,\\
+\mu_i &= b_0 + \zeta_{[s_i]0} + (b_1 + \zeta_{[s_i]1}) x_i,\\
+      &= \underbrace{b_0 + b_1 x_i}_{\text{fixed effects}} + \underbrace{\zeta_{[s_i]0} + \zeta_{[s_i]1} x_i}_{\text{random effects}},\\
+\text{for $j \in 1\ldots J$,}\quad \vec{\zeta}_{j} &\sim N(0, \Sigma).
+\end{aligned}
+$$
+As we can see from this, a multilevel normal linear model is equivalent to a non-multilevel model (the *fixed effects* models) plus a normally distributed random variation to the intercept and slope for each subject (the *random effects*).
+The fixed effects are sometimes known as *population level* effects: they apply to all observations.
+The random effects, on the other hand, vary across each different value of the grouping variable, which in this example is an individual participant in the experiment.
+Put another way, the fixed effects give the average effects in the population.
+The extent to which each individual varies around this average is given by the random effects.
+That the multilevel linear model can be described in terms of fixed and random effects is why these models are known as a *linear mixed effects model*.
+
+We can implement this model in R using `lme4::lmer`.\label{sleepstudy_vivs_lmer}
+```{r}
+M_ml <- lmer(Reaction ~ Days + (Days|Subject),
+             data = sleepstudy)
+```
+The syntax here matches the fixed and random effects description of the model.
+The `Reaction ~ Days` tells us that the fixed effects model is a simple linear regression model with one predictor, and so with one intercept and one slope term.
+The `(Days|Subjects)` tells us that there is random variation to the slope for `Days` and implicitly there's also random variation to the intercept term.
+We could make the variation to the intercept term explicit by writing `(1 + Days|Subject)`, which is identical to `(Days|Subject)` because the `1 + ` is included always by default just as it is included by default in fixed effects part, as it is in any R regression formula syntax.
+
+The results of this model is obtained as follows.
+```{r}
+summary(M_ml)
+```
+The value of $\vec{b}$ is available under `Estimate` in the `Fixed effects`, and we can get these directly as follows.
+```{r}
+b <- fixef(M_ml)
+b
+```
+Thus, the average effect of sleep deprivation on reaction time across all individuals is that their reaction time increases by `r fixef(M_ml)['Days'] %>% round(2)` each day.
+Also, the average individual has an average reaction time of  `r fixef(M_ml)['(Intercept)'] %>% round(2)` on day 0 of the experiment, which means that this is the average reaction time of the average person generally.
+The values in the covariance matrix $\Sigma$ and of the residual standard deviation $\sigma$ can be obtained from the values provided under `Random effects`.
+These are available more directly as follows.
+```{r}
+VarCorr(M_ml)
+```
+Note that the covariance matrix is defined as follows.
+$$
+  \Sigma = \left[\begin{matrix}
+                  \tau^2_0 & \tau_0 \rho \tau_1\\
+                  \tau_0 \rho \tau_1 & \tau^2_1
+                  \end{matrix}\right].
+$$
+We can obtain this directly as follows.
+```{r}
+VarCorr(M_ml)$Subject %>% 
+  Matrix::bdiag() %>% 
+  as.matrix()
+```
+The values of the standard deviations $\tau_0$ and $\tau_1$ are also available as follows.
+```{r}
+s <- VarCorr(M_ml)$Subject %>% attr('stddev')
+s
+```
+The correlation matrix corresponding to $\Sigma$ is obtained as follows.
+```{r}
+P <- VarCorr(M_ml)$Subject %>% attr('correlation')
+P
+```
+From this, we have $\rho = \Sigma_{12} = \Sigma_{21} = `r VarCorr(M_ml)$Subject %>% attr('correlation') %>% extract(1,2) %>% round(3)`$.
+More generally, given that
+$$
+\Sigma = 
+  \left[\begin{matrix}
+         \tau^2_0 & \tau_0 \rho \tau_1\\
+         \tau_0 \rho \tau_1 & \tau^2_1
+         \end{matrix}\right]
+= 
+  \left[\begin{matrix}
+         \tau_0 & 0\\
+         0 & \tau_1
+         \end{matrix}\right]
+\underbrace{\left[\begin{matrix}
+                   0 & \rho\\
+                   \rho & 1
+                   \end{matrix}\right]}_{\text{corr. matrix}}
+\left[\begin{matrix}
+       \tau_0 & 0\\
+       0 & \tau_1
+       \end{matrix}\right],
+$$
+we can also obtain $\Sigma$ as follows:
+```{r}
+# create a diagonal matrix of the stddev
+s <- diag(s)
+
+Sigma <- s %*% P %*% s
+Sigma
+```
+The contours of the 2d normal distribution with mean vector $\vec{b}$ and covariance matrix $\Sigma$ are shown in Figure \ref{fig:contour_shrink}.
+
+The estimates of each $\vec{\beta}_j$ for $j \in 1\ldots J$ can be obtained using the `coef` function.
+```{r}
+coef(M_ml)$Subject %>% 
+  head()
+```
+These estimates are superimposed on the contours of the 2d normal distribution in Figure \ref{fig:contour_shrink}.
+They are represented by the tip of the arrow corresponding to each subject.
+The base of the arrow, by contrast, represents the estimates of the coefficients in the non-multilevel varying-intercept and varying-slope model.
+As we can see, the estimates in the multilevel model are shrunk towards the centre of the $N(\vec{b}, \Sigma)$ distribution.
+
+
+```{r, contour_shrink, echo=F, fig.align='center', fig.cap = 'The contour plot shows the contours of the 2d normal distribution centered at $\\vec{b}$ and whose covariance matrix is $\\Sigma$. Superimposed on this are the estimates of the coefficients of each subject, both in the non-multilevel model (base of arrow) and in the multilevel model (tip of arrow). As we can see, the estimates of the coefficients in the multilevel are all shrunk towards the overall mean $\\vec{b}$.', out.width='0.67\\textwidth', fig.height=6}
+library(ggrepel)
+library(cowplot)
+
+contour_df <- map(c(0.25, 0.5, 0.75, 0.9, 0.95),
+                  ~ellipse::ellipse(x = Sigma, centre = b, level = .) %>% 
+                    as_tibble()
+) %>% bind_rows(.id = 'level')
+
+M_ml_beta <- M_ml %>% 
+  coef() %>% 
+  extract2('Subject') %>% 
+  rename(intercept = `(Intercept)`, slope = Days) %>% 
+  rownames_to_column('subject')     
+
+M_beta <- M_flat %>% 
+  coef() %>% 
+  enframe() %>% 
+  separate(name, into=c('subject', 'coef'), sep = ':', fill = 'right') %>% 
+  spread(coef, value) %>% 
+  mutate(subject = str_remove(subject, 'Subject')) %>% 
+  select(subject, intercept = `<NA>`, slope=Days)
+
+beta_df2 <- inner_join(M_beta, M_ml_beta, by='subject', suffix = c('_flat', '_multilevel')) 
+
+beta_df <- beta_df2 %>% 
+  pivot_longer(-subject, 
+               names_to = c('.value','model_type'), 
+               names_pattern = "(intercept|slope)_(flat|multilevel)") 
+
+beta_df_flat <- beta_df %>% filter(model_type == 'flat')
+beta_df_ml <- beta_df %>% filter(model_type == 'multilevel')
+
+# Shrinkage of coefficients viewed by the lines of best fit
+p1 <- beta_df %>% 
+  ggplot() +
+  geom_abline(aes(intercept = intercept, slope = slope, colour = model_type)) +
+  facet_wrap(~subject) +
+  scale_color_manual(values=c( "#E69F00", "#56B4E9")) +
+  lims(x = c(0, 10),
+       y = c(200, 500)) +
+  theme_minimal()
+
+# Shrinkage of coefficients superimposed on multivariate normal
+p2 <- ggplot() + 
+  geom_path(data = contour_df,
+            mapping = aes(x = x, y = y, group = level), size = 0.5, alpha = 0.5) +
+  geom_segment(data = beta_df2, 
+               mapping = aes(x = intercept_flat, xend = intercept_multilevel, y = slope_flat, yend = slope_multilevel),
+               arrow = arrow(length = unit(0.01, "npc"))
+  ) + 
+  geom_text_repel(data = beta_df_flat, 
+                  mapping = aes(x = intercept, y = slope, label = subject), size = 3) +
+  theme(legend.position = "bottom") + scale_shape_manual(values=c(1, 16)) +
+  labs(x = TeX('$\\beta_0$'),
+       y = TeX('$\\beta_1$'))
+
+p2
+
+```
+
+## Inference
+
+The multilevel model above, i.e., 
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i &= \underbrace{b_0 + b_1 x_i}_{\text{fixed effects}} + \underbrace{\zeta_{[s_i]0} + \zeta_{[s_i]1} x_i}_{\text{random effects}},\\
+\text{for $j \in 1\ldots J$,}\quad \vec{\zeta}_{j} &\sim N(0, \Sigma),
+\end{aligned}
+$$
+can be rewritten in matrix notation as follows:
+$$
+\vec{y} = X\vec{b} + Z\vec{\gamma} + \vec{\epsilon},\quad \vec{\gamma} \sim N(0, \Omega), \quad\vec{\epsilon} \sim N(0, I_n\sigma^2).
+$$
+Here, $\vec{y}$ is an $n \times 1$ (column) vector. 
+The matrix $X$ is a $n \times 2$ matrix whose first column is a vector where each value is $1$ and the second column is $\vec{x} = [x_1, x_2 \ldots x_n]\strut^\intercal$.
+The matrix $Z$ is a $n \times 2J$ matrix.
+It is easiest to understand if viewed as the horizontal concatenation of two $n \times J$ matrices, $Z^0$ and $Z^1$:
+$$
+Z = [Z^0, Z^1].
+$$
+Row $i$ and column $j$ of $Z^0$ is $Z^0_{ij}$, which takes the value of $1$ if and only if $s_i = j$.
+In other words, each row $i$ of $Z^0$ is a $J$ dimensional (row) vector whose values are all zero with the exception of one element, namely element $s_i$, whose value is $1$.
+Likewise, in matrix $Z^1$, each row $i$ is a $J$ dimensional (row) vector whose values are all zero with the exception of one element, namely element $s_i$, whose value is $x_i$.
+The vector $\vec{\gamma}$ is $2J \times 1$ vector, and is easiest to understand at the vertical concatenation of two $J \times 1$ vectors:
+$$
+\vec{\gamma} = \left[\begin{matrix}\vec{\gamma}_0\\\vec{\gamma}_1\end{matrix}\right].
+$$
+The vector $\vec{\gamma}_0 = [\zeta_{1,0}, \zeta_{2,0}\ldots \zeta_{j,0} \ldots \zeta_{J,0}]\strut^\intercal$, where $\zeta_{j,0}$ is the first element of $\vec{\zeta}_j$ from the original description of the model.
+Likewise, the vector $\vec{\gamma}_1 = [\zeta_{1,1}, \zeta_{2,1}\ldots \zeta_{j,1} \ldots \zeta_{J,1}]\strut^\intercal$, where $\zeta_{j,1}$ is the second element of $\vec{\zeta}_j$.
+The $\vec{\gamma}$ is random vector with a $2J$ dimensional multivariate normal distribution with a zero mean vector and whose covariance matrix $\Omega$ has a $\Sigma_{[1,1]}$ as in its first $J$ elements and $\Sigma_{2,2}$ and its remaining $J$ elements.
+Its off-diagonal elements are zero except for elements $\Omega_{[j,{J+j}]}$ and $\Omega_{[J+j,j]}$, for each $j \in 1 ... J$, whose values are all $\Sigma_{[2,2]}$.
+The $n \times 1$ vector $\vec{\epsilon}$ is also a random vector distributed as a $n$ dimensional multivariate normal distribution with zero mean vector and a covariance matrix $I_n\sigma^2$ where $I_n$ is the $n$ dimensional identity matrix.
+In other words, this is a diagonal matrix whose diagonal elements are all equal to $\sigma^2$.
+
+From this, we have that $\vec{y}$ has a multivariate normal distribution:
+$$
+\vec{y} \sim N(X\vec{b}, V),\quad V = Z \Omega Z\strut^\intercal + I_{n}\sigma^2,
+$$
+where $V$ is a $n \times n$ covariance matrix.
+The density function for $\vec{y}$ is
+$$
+\Prob{\vec{y}\given X\vec{b}, V} = \frac{1}{(2\pi)^{n/2} \vert V \vert^{1/2}} 
+e^{-\tfrac{1}{2} (\vec{y} - X\vec{b})^\intercal V^{-1} (\vec{y} - X\vec{b})},
+$$
+and so the log the likelihood with respect to $\vec{b}$ and $V$ is
+$$
+L(\vec{b}, V\given \vec{y}, X) \propto 
+-\tfrac{1}{2}\left( \log\vert V^{-1} \vert + (\vec{y} - X\vec{b})^\intercal V^{-1} (\vec{y} - X\vec{b}) \right).
+$$
+If we knew $V$, then the maximum likelihood estimator of $\vec{b}$, $\hat{b}$, is 
+$$
+\hat{b} = (X\strut^\intercal V\strut^{-1} X)\strut^{-1} X\strut^\intercal V^{-1} \vec{y}.
+$$
+Setting $\vec{b}$ in the likelihood function equal to $\hat{b}$ gives the *profile likelihood* function, which may be then maximized with respect to the parameters of $V$, which are ultimately based on the parameters $\Sigma$ and $\sigma$.
+
+The maximum likelihood estimate for variance parameters are biased, however.
+As an alternative to the likelihood function, the *restricted* (also known as, *residual*) maximum likelihood (\reml) estimates are often used.
+These are obtained by maximizing the following variant of the likelihood function:
+$$
+L_{\text{reml}}(\vec{b}, V\given \vec{y}, X) \propto 
+-\tfrac{1}{2}\left( \log\vert V^{-1} \vert +
+(\vec{y} - X\vec{b})^\intercal V^{-1} (\vec{y} - X\vec{b}) 
++ \log \vert X\strut^\intercal V^{-1} X \vert \right).
+$$
+Maximising this with respect to $\vec{b}$ leads to the same solution as above, but the estimates of the variance parameters are unbiased.
+
+
+
+## Varying intercepts or varying slopes only models
+
+The above model allowed for random variation in both the intercepts and slopes but we can choose to have random variation in only one or the other.
+A varying intercept only multilevel model is defined as follows.
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i &= \beta_{[s_i]0} + b_1 x_i,\\
+\text{for $j \in 1\ldots J$,}\quad \beta_{j0} &\sim N(b_0, \tau^2_0),
+\end{aligned}
+$$
+which can be rewritten, using the same reasoning as above, 
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i &= b_0 + b_1 x_i + \zeta_{[s_i]0},\\
+\text{for $j \in 1\ldots J$,}\quad \zeta_{j0} &\sim N(0, \tau^2_0).
+\end{aligned}
+$$
+Using `lmer`, we would implement this as follows.
+```{r}
+M_ml_vi <- lmer(Reaction ~ Days + (1|Subject), 
+                data = sleepstudy)
+```
+The fixed effects give us an estimate of the slope and intercept as before.
+```{r}
+fixef(M_ml_vi)
+```
+The random effects just provide a measure of standard deviation $\tau_0$ for the random intercepts as well as residual standard deviation $\sigma$.
+```{r}
+VarCorr(M_ml_vi)
+```
+Absent here, compared to the varying intercepts and varying slopes model is the estimate for $\tau_1$ and $\rho$.
+The estimates of the coefficients are obtained using `coef`, as before.
+```{r}
+coef(M_ml_vi)$Subject %>% 
+  head()
+```
+As we can see, all the subjects' slopes are identical and have the value of the estimate of $b_1$, which is `r fixef(M_ml_vi)[2] %>% round(3)`.
+The lines corresponding to these coefficients are shown in Figure \ref{fig:vivs}a.
+
+The varying slope only multilevel model allows only the slopes to vary across subjects and it leaves the intercepts fixed.
+It is defined as follows.
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+                                 \mu_i &= b_0 + \beta_{[s_i]1} + x_i,\\
+\text{for $j \in 1\ldots J$,}\quad \beta_{j1} &\sim N(b_0, \tau^2_1),
+\end{aligned}
+$$
+which can be rewritten
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+                                 \mu_i &= b_0 + b_1 x_i + \zeta_{[s_i]1}x_i,\\
+\text{for $j \in 1\ldots J$,}\quad \zeta_{j1} &\sim N(0, \tau^2_1).
+\end{aligned}
+$$
+Using `lmer`, we would implement this as follows.
+```{r}
+M_ml_vs <- lmer(Reaction ~ Days + (0+Days|Subject), 
+                data = sleepstudy)
+```
+The fixed effects give us an estimate of both the slope and intercept as with the previous models.
+```{r}
+fixef(M_ml_vs)
+```
+The random effect provide a measure of standard deviation $\tau_1$ and $\sigma$.
+```{r}
+VarCorr(M_ml_vs)
+```
+Absent here compared to the full model is the estimate for $\tau_0$ and $\rho$.
+The estimates of the coefficients are obtained using `coef` as before.
+```{r}
+coef(M_ml_vs)$Subject %>% 
+  head()
+```
+Here, all the subjects' intercepts are identical and have the value of the estimate of $b_0$, which is `r fixef(M_ml_vs)[1] %>% round(3)`.
+The lines corresponding to these coefficients are shown in Figure \ref{fig:vivs}b.
+
+```{r, vivs, echo=F,fig.cap='Lines of best fit for each data group in a varying intercepts only a) or varying slopes only b) multilevel linear model.', fig.align="center", out.width="\\textwidth", fig.height=3}
+plot_vi_vs <- function(M){
+  M %>% 
+    coef() %>% 
+    extract2('Subject') %>% 
+    rename(intercept = `(Intercept)`, slope = Days) %>% 
+    rownames_to_column('subject') %>% 
+    ggplot() +
+    geom_abline(aes(intercept = intercept, slope = slope, colour = subject)) +
+    xlim(0, 10) +
+    ylim(100, 500) +
+    theme(legend.position = 'none')
+}
+
+p1 <- M_ml_vi %>% plot_vi_vs()
+p2 <- M_ml_vs %>% plot_vi_vs()
+
+plot_grid(p1, p2, labels=c('a', 'b'), hjust = -5)
+```
+
+One final variant of the full model is where we allow for both varying slopes and intercepts but assume no correlation between each $\beta_{j0}$ and $\beta_{j1}$.
+In other words, we assume that these are drawn from independent normal distributions.
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i &= \beta_{[s_i]0} + \beta_{[s_i]1} x_i,\\
+\text{for $j \in 1\ldots J$,}\quad \beta_{j0} &\sim N(b_0, \tau^2_0),\\
+\beta_{j1} &\sim N(b_1, \tau^2_1),
+\end{aligned}
+$$
+which is identical to each $\beta_{j}$ vector being drawn from a diagonal covariance matrix, i.e. where $\rho = 0$.
+
+Using `lmer`, we would implement this as follows.
+```{r}
+M_ml_diag <- lmer(Reaction ~ Days + (1|Subject) + (0+Days|Subject), 
+                  data = sleepstudy)
+```
+We can obtain the same model using the following formula syntax.
+```{r}
+M_ml_diag2 <- lmer(Reaction ~ Days + (Days||Subject), 
+                   data = sleepstudy)
+```
+The fixed effects give us an estimate of both the slope and intercept as with each of the previous models.
+```{r}
+fixef(M_ml_diag2)
+```
+The random effect provide a measure of the $\tau_0$, $\tau_1$ and $\sigma$ standard deviations.
+```{r}
+VarCorr(M_ml_diag2)
+```
+The only quantity that is absent here compared to the full model is the estimate for $\rho$.
+The estimates of the coefficients are obtained using `coef` as before.
+```{r}
+coef(M_ml_diag2)$Subject %>% 
+  head()
+```
+Here, both the intercepts and slopes vary across subjects. 
+
+
+## Models for nested and crossed data
+
+In all the examples considered thus far, our multilevel models had only two levels, which we can denote level 0 and level 1.
+For example, we had rats (level 0) within batches (level 1), observations of per capita alcohol consumption in different years (level 0) within different countries (level 1), individual observations of reaction times on different days (level 0) grouped by different experimental subjects (level 1).
+We can easily have groups within groups, and we usually refer to these models as *nested* multilevel models.
+Here, we will consider nested linear mixed effects models.
+
+```{r, echo=F}
+data('classroom', package = 'WWGbook')
+x <- classroom %>% 
+  mutate(mathscore = mathkind + mathgain) %>% 
+  select(mathscore, ses, classid, schoolid)
+
+left_join(x,
+          x %>%
+            select(schoolid, classid) %>%
+            distinct() %>%
+            group_by(schoolid) %>%
+            mutate(classid2 = row_number()) %>%
+            ungroup()
+)  %>% write_csv('data/classroom.csv')
+```
+
+Let us consider the following data which is based on a subset of the `classroom` data made available in R package `WWGbook`.
+```{r}
+classroom_df <- read_csv('data/classroom.csv')
+classroom_df
+```
+Each observation is of a child (level 0), and for each one we have their mathematics test score in their first grade (`mathscore`) and their home socioeconomic status (`ses`).
+There are $n$ children in total, indexed by $i \in 1 \ldots n$.
+Each child is in one of $J$ classes (level 1, denoted by `classid`), and each class is within one of $K$ schools (level 2, denoted by `schoolid`).
+This hierarchical arrangement of the data is shown in Figure \ref{fig:classroom:tree}.
+\input{include/classroom}
+
+
+The relationship between `ses` and `mathscore` can vary across different schools, see Figure \ref{fig:classroom}a.
+Furthermore, *within* each school, there may be variation in the effect of `ses` on `mathscore` across different classes, see Figure \ref{fig:classroom}b.
+Formally, a three-level multilevel varying intercepts and slopes linear model corresponding to the above problem may be presented as follows.
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i & = \gamma_{[c_i]0} + \gamma_{[c_i]1} x_i,\\
+\text{for $j \in 1\ldots J$,}\quad \vec{\gamma}_{j} &\sim N(\vec{\beta}_{[s_j]}, \Sigma_c),\\
+\text{for $k \in 1\ldots K$,}\quad \vec{\beta}_{k} &\sim N(\vec{b}, \Sigma_s),\\
+\end{aligned}
+$$
+For each one of the $n$ children, we have their `mathscore` variable $y_i$, their `ses` variable $x_i$, and an indicator variable $c_i \in 1 \ldots J$.
+The indicator variable indicates which of the $J$ different classes the child is a member of.
+For each of one of these $J$ classes, we have another indicator variable $s_j \in 1 \ldots K$.
+This indicates the school that class $j$ is a member of.
+For example, if $s_j = k$, this means that class $j$ is within school $k$.
+From this description, we see that there are $J$ vectors of coefficients, i.e. $\vec{\gamma}_1, \vec{\gamma}_2 \ldots \vec{\gamma}_J$, and each one corresponds to one of the $J$ different classes in the data set.
+Each vector $\vec{\gamma}_j$ is a sample from a multivariate normal distribution centered at $\vec{\beta}_{[s_j]}$, where $s_j$ is the school that class $j$ is a member of.
+The covariance matrix of this multivariate normal distribution is $\Sigma_c$.
+The $K$ different vectors $\vec{\beta}_1, \vec{\beta}_2 \ldots \vec{\beta_K}$ are themselves drawn from another multivariate normal distribution whose center is $\vec{b}$ and whose covariance matrix is $\Sigma_s$.
+
+
+```{r classroom, echo=F, fig.cap="In each scatterplot in both subfigure a and b, the points represent individual children, and for each one, we have their mathematics test score plotted against their home socioeconomic status. Each scatterplot is from a different school. In subfigure a, the line of best fit for the children in the school is shown. In subfigure b, a separate line of best fit for each class within each school is shown.", fig.align='center', out.width='0.75\\textwidth', fig.height=9}
+x <- classroom_df %>% 
+  filter(schoolid %in% c(31, 33, 71, 76, 77, 93)) 
+
+y <- left_join(x,
+               x %>% 
+                 select(schoolid, classid) %>% 
+                 distinct() %>% 
+                 group_by(schoolid) %>%
+                 mutate(k = row_number()) %>%
+                 ungroup()
+) %>% mutate(classid = as.factor(k))
+
+p1 <- y %>% 
+  ggplot(aes(x = ses, y = mathscore, colour = classid)) +
+  geom_point(size = 0.5) +
+  stat_smooth(size = 0.5, method = 'lm', se = F, fullrange = T) +
+  facet_wrap(~schoolid) +
+  theme_minimal() + 
+  theme(legend.position = 'none')
+
+p2 <- y %>% 
+  ggplot(aes(x = ses, y = mathscore)) +
+  geom_point(size = 0.5) +
+  stat_smooth(size = 0.5, method = 'lm', se = F, fullrange = T) +
+  facet_wrap(~schoolid) +
+  theme_minimal() + 
+  theme(legend.position = 'none')
+
+plot_grid(p2, p1, nrow = 2, labels = c('a', 'b'))
+
+
+
+```
+
+Using the same reasoning as above, we may rewrite $\vec{\gamma}_j \sim N(\vec{\beta}_{[s_j]}, \Sigma_c)$ as $\vec{\gamma}_j = \vec{\beta}_{[s_j]} + \vec{\xi}_j$ where $\vec{\xi}_j \sim N(0, \Sigma_c)$.
+Likewise, we may rewrite $\vec{\beta}_k \sim N(\vec{b},\Sigma_s)$ as $\vec{\beta}_k = \vec{b} + \vec{\zeta}_k$ where $\vec{\zeta}_k \sim N(0, \Sigma_s)$.
+Thus, we have
+$$
+\begin{aligned}
+\vec{\gamma}_j &= \vec{\beta}_{[s_j]} + \xi_j,\\
+               &= \vec{b} + \zeta_{[s_j]} + \xi_j.
+\end{aligned}
+$$
+This allows us to rewrite the original model as follows.
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+                                 \mu_i & = 
+                                 \underbrace{b_{0} + b_{1} x_i}_{\text{fixed effects}} +
+                                 \underbrace{\zeta_{[z_i]0} + \zeta_{[z_i]1} x_i}_{\text{school random effects}} +
+                                 \underbrace{\xi_{[c_i]0} + \xi_{[c_i]1} x_i}_{\text{class random effects}},\\
+\text{for $j \in 1\ldots J$,}\quad \vec{\xi}_{j} &\sim N(0, \Sigma_c),\\
+\text{for $k \in 1\ldots K$,}\quad \vec{\zeta}_{k} &\sim N(0, \Sigma_s).
+\end{aligned}
+$$
+Here, for notational simplicity, we have used a new indicator variable $z_i = s_{[c_i]} \in 1 \ldots K$ that indicates the school that child $i$ is a member of.
+
+Using `lmer`, we can implement this model as follows.
+```{r}
+M_classroom <- lmer(mathscore ~ ses + (ses|classid) + (ses|schoolid),
+                     data = classroom_df)
+```
+As we can see, we simply use random effects terms, one for random variation by school and the other for random variation by class.
+Before, we proceed, by examining the results of `VarCorr`, we see that there is a perfect correlation between the random slopes and random intercepts due to class.
+```{r}
+VarCorr(M_classroom)
+```
+This indicates overparameterization in the model, and can be avoided by removing the possibility of a correlation between the slopes and intercepts for class.
+```{r}
+M_classroom <- lmer(mathscore ~ ses + (ses||classid) + (ses|schoolid),
+                     data = classroom_df)
+```
+Now, just like previous linear mixed effects models, our fixed effects will consist of a single slope and intercept term.
+```{r}
+fixef(M_classroom)
+```
+From this, we see that at a population level, every unit increase in `ses` leads to a `r fixef(M_classroom)['ses'] %>% round(2)` increase in `mathscore`.
+Information concerning the random effects are available from `VarCorr`. 
+```{r}
+VarCorr(M_classroom)
+```
+From this, amongst other things, we see there is a minimal random variation in the `ses` slopes across the different classes.
+
+```{r, echo=F}
+set.seed(10101)
+```
+
+The variable `classid` unambiguously identified the class of children by giving each class in each school a unique identifier.
+In some cases, we do not have unique identifiers for nested groups.
+As an example, consider the `classid2` variable in the `classroom_df` data sets.
+Let us draw a sample of observations from `classroom_df`.
+```{r}
+classroom_df %>% 
+  sample_n(10)
+```
+Unlike `classid`, `classid2` provides an identifier for each class that is *relative* to its school. 
+Thus, we have class `1` in school `41`, and class `1` in school `97`.
+These are completely unrelated classes.
+In order to deal with variables like this, we must use an alternative formula syntax.
+For example, in order to have a varying intercepts only model, where the intercept varies by class and school, and assuming we are using the `classid2` variable, we use the following syntax in the formula to indicate that the values of `classid2` are relative to that of `schoolid`.
+```{r}
+M_classroom_vi <- lmer(mathscore ~ ses + (1|schoolid/classid2),
+                       data = classroom_df)
+```
+This is identical to the following model.
+```{r}
+M_classroom_vi2 <- lmer(mathscore ~ ses + (1|schoolid) + (1|schoolid:classid2),
+                        data = classroom_df)
+```
+The syntax in this second version makes it clear that we are effectively creating a unique identifier for the class by combining the values of `schoolid` and `classid2`.
+These two models, `M_classroom_vi` and `M_classroom_vi2`, are identical to that which would have been obtained had we used the unambiguous class identifier `classid` as in the following model.
+```{r}
+M_classroom_vi3 <- lmer(mathscore ~ ses + (1|schoolid) + (1|classid),
+                        data = classroom_df)
+```
+
+An alternative multilevel arrangement of data is known as a *crossed* structure.
+Again, this is easiest to illustrate by way of an example.
+Consider a type of cognitive psychology experiment known as a lexical decision task, which is used to understand the basic cognitive processes involved in reading words.
+In this experiment, multiple subjects are each shown multiple different letter strings, e.g. *dinosaur*, *morhet*, *children*, etc., and they have to respond as to whether the string is a word or not, and their reaction times to do so are also recorded.
+Thus, we would have subjects $s_1, s_2 \ldots s_j \ldots s_J$ being shown letter strings $w_1, w_2 \ldots w_k \ldots w_K$, and from each subject for each string, we have a response, e.g. a yes/no binary response, or reaction, or both.
+Over the entire experiment, our total set of responses could be denoted $r_1, r_2 \ldots r_n$.
+These are our level 0 observations.
+Crucially, each response is cross classified as belonging to a particular subject and a particular letter string. 
+See Figure \ref{fig:crossed_diagram}.
+\input{include/crossed_structures}
+
+In general, when dealing with crossed multilevel structures, we simply consider the random variation of slopes or intercepts according to more than one grouping variable.
+As an example, consider the British Lexicon Project data that we also considered in Chapter 3.
+This provides us with data from a large lexical decision experiment, and a small fraction of this data is provided in the file `data/blp-short2.csv`.
+```{r}
+blp_df <- read_csv('data/blp-short2.csv')
+blp_df
+```
+Here, each `rt` observation corresponds to a particular participant and a particular word (`spelling`).
+There are `r blp_df %>% pull(spelling) %>% unique() %>% length()` distinct words and `r blp_df %>% pull(participant) %>% unique() %>% length()` distinct participants.
+
+For simplicity, let us consider the multilevel linear model whereby average `rt` varies by both `participant` and `spelling`.
+This model is as follows.
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i &= \beta_{[s_i]} + \gamma_{[w_i]},\\
+\text{for $j \in 1\ldots J$,}\quad \beta_j &\sim N(b_s, \tau^2_{s}),\\
+\text{for $k \in 1\ldots K$,}\quad \gamma_k &\sim N(b_w, \tau^2_w).
+\end{aligned}
+$$
+We can rewrite $\beta_j$ as $\beta_j = b_s + \zeta_j$, where $\zeta_j \sim N(0, \tau^2_s)$, and rewrite $\gamma_j$ as $\gamma_j = b_w + \xi_k$, where $\xi_k \sim N(0, \tau^2_w)$.
+This leads to
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i &= \nu + \zeta_{[s_i]} + \xi_{[w_i]},\\
+\text{for $j \in 1\ldots J$,}\quad \beta_j &\sim N(0, \tau^2_{s}),\\
+\text{for $k \in 1\ldots K$,}\quad \gamma_k &\sim N(0, \tau^2_w),
+\end{aligned}
+$$
+where $\nu = b_s + b_w$.
+This is implemented in `lmer` as follows.
+```{r}
+M_blp <- lmer(rt ~ 1 + (1|participant) + (1|spelling),
+              data = blp_df)
+```
+From this, we see the estimate of $\nu$ is as follows.
+```{r}
+fixef(M_blp)
+```
+The estimates of $\tau_s$, $\tau_w$, and $\sigma$ are as follows.
+```{r}
+VarCorr(M_blp)
+```
+
+
+
+
+
+
+
+## Group level predictors
+
+In the examples thus far, the predictor variables were at the bottom level, level 0.
+For example, at level 0, we had children, and the values of the predictor variable `ses` were specific to each child.
+Consider the following two related data sets, which are based on the `MathAchieve` and `MathAchSchool` data sets, respectively, available in the `nlme` package:
+```{r}
+mathachschool_df <- read_csv('data/mathachieveschool.csv')
+mathach_df <- read_csv('data/mathachieve.csv')
+
+mathach_df
+mathachschool_df
+```
+In the `mathach_df` data, for each pupil in a school, we have variable related to their ethnic minority status, sex, home socioeconomic background, and their mathematical achieve score (`mathach`).
+Thus, in this data set, we have level 1 grouping variable, `school`, but all predictors are at level 0.
+The `mathachschool_df` data set, on the other hand, provides us with predictors related to the schools.
+For example, we have the school's size, whether it is public or private, etc., the proportion of students in the school on an academic track (`pracad`), a measure of the discrimination climate in the school (`disclim`), whether there is a high proportion of minority students (`himinty`), and the mean socioeconomic status of the school (`meanses`).
+In order to use the school level and pupil level predictors together, we will join these two data frames by `school`.
+```{r}
+mathach_df2 <- left_join(mathach_df,
+                         mathachschool_df, 
+                         by = 'school')
+```
+
+Group level predictors present do not special difficulty for linear mixed effects models but can not be treated identically to individual observation level predictors.
+For example, just like in similar examples above, we use a multilevel varying slope and varying intercept model to look at how `ses` affects `mathach` scores and how this effect varies by `school`.
+The `ses` variable is a pupil level variable, and we would be able to treat other pupil level variable s in a similar way.
+We would not, however, be able to use group level predictors, e.g. `pracad`, `disclim`, etc., in a similar way.
+For example, we could not perform the following model.
+```{r, eval=F}
+# does not work
+lmer(mathach ~ pracad + (pracad|school), data = mathach_df2)
+```
+This is simply because the effect of `pracad` on `mathach` can not vary by school: each school has exactly one value of `pracad`.
+
+We still can easily use `pracad` in a linear mixed effect model, for example as follows.
+```{r}
+# does work
+# glp: group level predictor
+M_glp <- lmer(mathach ~ pracad + (1|school), data = mathach_df2)
+```
+In this case, our model is that a pupil's `mathach` varies by the school's `pracad`, and there is variation across schools in the terms of the average `mathac`, with the latter effect being due to the random intercepts term.
+In this model, the fixed effects coefficients are as follows.
+```{r}
+fixef(M_glp)
+```
+We therefore see that a unit increase in `pracad` leads to a `r fixef(M_glp)['pracad'] %>% round(2)` increase in `mathach`.
+The random effects are as follows.
+```{r}
+VarCorr(M_glp)
+```
+From this, we see that the standard deviation in the intercept terms across schools is `r VarCorr(M_glp)$school %>% attr('stddev') %>% round(2)`.
+
+
+A more interesting situation involving group level predictors arises in the following situation. 
+Assuming that our outcome variable is still `mathach`, we could model how this varies by the pupil's `ses`, and how this effect varies across schools, using a multilevel varying slopes and intercepts model.
+We could also use a school level predictor, for example, `himinty`, and model how the school-level slopes and intercepts for the `ses` effect vary by it.
+```{r himinty_plot, echo=F, fig.align='center', fig.cap="How mathematical achievement varies by a child's socioeconomic background across a sample of different school. Schools are colour coded to indicate whether they have high ethnic minority proportions (lighter colour) or not."}
+set.seed(1045)
+left_join(mathach_df,
+          mathachschool_df, 
+          by = 'school') %>% 
+  filter(school %in% sample(unique(school), 20)) %>% 
+  ggplot(aes(x = ses, y = mathach, colour = himinty)) + 
+  geom_point(size = 0.5) +
+  stat_smooth(method = 'lm', se = F) +
+  facet_wrap(~school) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+Formally, this model would be as follows.
+$$
+\begin{aligned}
+\text{for $i \in 1 \ldots n$}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i &= \beta_{[s_i]0} + \beta_{[s_i]1} x_{i},\\
+\text{for $j \in 1 \ldots J$}\quad\vec{\beta}_{j} &\sim N(\vec{b}_{0} + \vec{b}_{1} z_j, \Sigma),
+\end{aligned}
+$$
+where $y_i$ is the `mathach` score and $x_i$ is the `ses` score of pupil $i$, and $z_j$ is the `himinty` score of school $j$.
+As before, we can rewrite $\vec{\beta}_j$ as follows,
+$$
+\begin{aligned}
+\vec{\beta}_j &= \vec{b}_0 + \vec{b}_1 z_j + \vec{\zeta}_j,\\
+\left[
+\begin{matrix}
+\beta_{j0}\\
+\beta_{j1}
+\end{matrix}
+\right] 
+&= 
+\left[
+\begin{matrix}
+b_{00}\\
+b_{01}
+\end{matrix}
+\right] +
+\left[
+\begin{matrix}
+b_{10}\\
+b_{11}
+\end{matrix}
+\right] z_j +
+\left[
+\begin{matrix}
+\zeta_{j0}\\
+\zeta_{j1}
+\end{matrix}
+\right],
+\end{aligned}
+$$
+where
+$$
+\vec{\zeta}_j = \left[
+\begin{matrix}
+\zeta_{j0}\\
+\zeta_{j1}
+\end{matrix}
+\right] \sim N(0, \Sigma).
+$$
+From this, we have
+$$
+\begin{aligned}
+\text{for $i \in 1 \ldots n$}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i &= 
+(b_{00} + b_{10} z_{[s_i]} + \zeta_{[s_i]0})
++
+(b_{01} + b_{11} z_{[s_i]} + \zeta_{[s_i]1}) x_i,\\
+&= 
+\underbrace{b_{00} + 
+b_{01} x_i +
+b_{10} z_{[s_i]}+
+b_{11} z_{[s_i]} x_i
+}_{\text{fixed effects}} +
+\underbrace{
+\zeta_{[s_i]0} + 
+\zeta_{[s_i]1} x_i
+}_{\text{random effects}},\\
+\text{for $j \in 1 \ldots J$}\quad\vec{\zeta}_{j} &\sim N(0, \Sigma),
+\end{aligned}
+$$
+From this we see that the role of the group level predictor $z_{[s_i]}$ interacts with the pupil level predictor $x_i$.
+
+To implement this model in R, we used the joined data set `mathach_df2`.
+Note that `himinty` is coded as binary variable where a value of `1` means that there is a high proportion of ethic minorities in the school. 
+```{r}
+# glp: group level predictor
+M_glp <- lmer(mathach ~ ses + himinty + ses:himinty + (ses|school),
+             data = mathach_df2)
+```
+The standard deviations of variation in random intercepts and slopes, and their correlation is as follows.
+```{r}
+VarCorr(M_glp)
+```
+The fixed effects coefficients are as follows:
+```{r}
+fixef(M_glp)
+```
+From this, we see that the role of `himinty` changing its value from 0 to 1 decreases the intercept by `r abs(fixef(M_glp)['himinty']) %>% round(2)` and decreases the slope of the effect of `ses` by `r abs(fixef(M_glp)['ses:himinty']) %>% round(2)`.
+
+# Bayesian multilevel models
+
+In practical terms, Bayesian approaches to multilevel modelling differ from their classical counterparts only by their method of inference.
+In both cases, we begin by specifying a probabilistic model of the observed data.
+For example, if our data was the sleep deprivation and reaction time data from above, regardless of whether a Bayesian or a classical approach is being taken, a reasonable model of this data would the multilevel varying slopes and intercepts linear model that we have used already and that can be stated as follows:
+$$
+\begin{aligned}
+\text{for $i \in 1\ldots n$,}\quad y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i &= b_0 + b_1 x_i + \zeta_{[s_i]0} + \zeta_{[s_i]1} x_i,\\
+\text{for $j \in 1\ldots J$,}\quad \vec{\zeta}_{j} &\sim N(0, \Sigma).
+\end{aligned}
+$$
+where $y_i$, $s_i$, $x_i$ are, respectively, the reaction time, subject index, and days of sleep deprivation corresponding to observation $i$.
+In general, how we specify this probabilistic model and the choices available to us are identical in both the Bayesian and classical approaches.
+Having specified the model, however, the Bayesian and classical approaches differ in terms of how they perform the inference of the unknown parameters. 
+As we have seen in previous chapters, classical approaches infer estimators of these unknowns, for example, by maximum likelihood estimation, and then consider the sampling distribution of these estimators for hypothetical true values of the parameters.
+From this, we obtain p-values for hypothesis tests, null or otherwise, and confidence intervals, and related concepts.
+Bayesian approaches, on the other hand, first posit a *prior* probability distribution over the unknown parameters.
+In the above model, for example, we can parameterize it in terms of 6 unknowns:
+$$
+b_0, b_1, \sigma, \tau_0, \tau_1, \rho,
+$$
+where $\tau_0^2$, $\tau_1^2$ are the diagonal elements of $\Sigma$, and $\rho$ is its off-diagonal element.
+Bayesian methods will therefore posit a probability distribution $\Prob{b_0, b_1, \sigma, \tau_0, \tau_1, \rho}$ over this six dimensional space.
+This prior is then combined, via Bayes' rule, with the *likelihood* function over the parameters to result in the posterior distribution.
+The posterior distribution tells us the probability that the true values of the parameters are a particular values, conditional on all the assumptions of the model.  
+
+If we accept default settings for priors and other quantities, performing a Bayesian multilevel linear model using `brms::brm` is identical to using `lme4::lmer`.
+For example, the following implements the Bayesian counterpart of the `lmer` based model that we used on Page \pageref{sleepstudy_vivs_lmer}, which clearly differs only by using the command `brm` instead of `lmer`:
+```{r m_bayes, cache=T}
+M_bayes <- brm(Reaction ~ Days + (Days|Subject),
+               data = sleepstudy)
+```
+The main results of this model may be obtained by `summary(M_bayes)`, or equivalently by just typing the name of the model `M_bayes`.
+```{r}
+M_bayes
+```
+In this output, amongst other information, for each one of the six variables $b_0, b_1, \sigma, \tau_0, \tau_1, \rho$, we have the mean of the posterior distribution (`Esimate`), the standard deviation of the posterior distribution (`Est.Error`), and the upper and lower limits of the 95% high posterior density interval (`l-95% CI`, `u-95% CI`).
+
+The prior on `M_bayes` can be seen as follows:
+```{r}
+M_bayes$prior
+```
+From this, we see that a improper uniform prior was specified for the fixed effect slope parameter, i.e. $b_1$ in our formula above.
+For $b_0$, a non-standard Student t-distribution was used.
+This is centered at the overall median of the `Reaction` variable, and its scale is set to the median absolute deviation from the median (\mad).
+For the covariance matrix corresponding to $\Sigma$, the `lkj_corr_cholesky` prior with hyperparameter of `1` is used.
+When the hyperparameter is set to `1`, this effectively puts uniform prior on on the correlation matrix.
+For $\tau_0$, $\tau_1$, and $\sigma$ a half t-distribution, centered at 0, and with a scale equal to the \mad of `Reaction` is used.
+Although it is not stated explicitly that a half t-distribution is used, this is the case because of the nature of these variable all being defined on the positive real line.
+
+In general, we may use the command `brm` in place of `lmer` to produce a Bayesian counterpart of any `lme4` based linear mixed effects model, assuming we accept the default priors set by `brm`.
+For example, 
+```{r m_glp_bayes, cache=T}
+M_glp_bayes <- brm(mathach ~ ses + himinty + ses:himinty + (ses|school),
+                   data = mathach_df2)
+```
+Very often, the results of the models in `brm` and `lmer` are very similar in terms of their practical conclusions.
+Consider, for example, the posterior means for the fixed effects from the Bayesian model, i.e.,
+```{r}
+M_glp_bayes %>%
+  summary() %>% 
+  extract2('fixed') %>% 
+  extract(,'Estimate')
+```
+These are very similar to the maximum (restricted) likelihood estimates from `lmer`:
+```{r}
+M_glp %>% fixef()
+```
+
+Bayesian multilevel models, however, assuming we are implementing them using a probabilistic programming language like Stan, on which `brms` is based, become easier to extend.
+Exploring how to do goes beyond the intended scope of this chapter, but we will cover examples of this in Chapter 17.
+
+
+
+# References

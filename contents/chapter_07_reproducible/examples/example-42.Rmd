@@ -1,0 +1,4 @@
+$$
+\underbrace{(x + y)(x - y)}_{\text{left hand side}} 
+= \overbrace{x^2 - y^2}^{\text{right hand side}}
+$$

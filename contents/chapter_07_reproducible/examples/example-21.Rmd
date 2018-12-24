@@ -1,0 +1,5 @@
+Einstein's famous formula for mass-energy equivalence is 
+$$
+E = mc^2.
+$$
+
