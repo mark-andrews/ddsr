@@ -1168,9 +1168,9 @@ In the absence of limits, we have an *indefinite integral* and this is the integ
 ### Roots
 
 We obtain the square root symbol by the `\sqrt` command. 
-To use this properly, we must include the expression with the `{}` after the command.
-In other words, to obtain $\sqrt{2}$, we must use `$\sqrt{2}$`.
-Had we written `$\sqrt 2$` or even `$\sqrt(2)$`, we would have obtained $\sqrt(2)$, which is not the desired result.
+To use this properly, unless the expression is a single digit, we must include the expression with the `{}` after the command.
+In other words, to obtain $\sqrt{2}$, we can use `$\sqrt 2$`, but to obtain $\sqrt{42}$, we must write `$\sqrt{42}$`.
+Had we written `$\sqrt 42$` or even `$\sqrt(42)$`, we would have obtained $\sqrt 42$ or $\sqrt(42)$, which is not the desired result.
 Note that `\sqrt` produces square root that stretches to enclose the expression to which it applies, as we see in the following example that gives the formula for a sample standard deviation.
 ```{r, echo=F, results='asis'}
 cat_file('examples/example-43.Rmd', start = 1, end = 3)

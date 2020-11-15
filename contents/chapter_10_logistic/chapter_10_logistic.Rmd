@@ -810,7 +810,7 @@ tibble(x = seq(-10, 10, length.out = 1000),
        logistic = dlogis(x),
        normal = dnorm(x, sd = 1.63)) %>% 
   pivot_longer(cols = -x, names_to = 'distribution', values_to = 'density') %>% 
-  ggplot(aes(x = x, y = density, colour = distribution)) + geom_line() +
+  ggplot(aes(x = x, y = density, linetype = distribution)) + geom_line() +
   scale_color_manual(values=c( "#E69F00", "#999999", "#56B4E9"))
 
 ```
@@ -932,7 +932,7 @@ p1 <- tibble(x = seq(0, 1, length.out = 1000),
   pivot_longer(cols = c(logit, qnorm),
                names_to = 'link',
                values_to = 'y') %>% 
-  ggplot(aes(x = x, y = y, colour = link)) + geom_line()+
+  ggplot(aes(x = x, y = y, linetype = link)) + geom_line()+
   scale_color_manual(values=c( "#E69F00", "#999999", "#56B4E9"))
 
 
@@ -942,7 +942,7 @@ p2 <- tibble(x = seq(-10, 10, length.out = 1000),
   pivot_longer(cols = c(ilogit, pnorm),
                names_to = 'inv_link',
                values_to = 'y') %>% 
-  ggplot(aes(x = x, y = y, colour = inv_link)) + geom_line()+
+  ggplot(aes(x = x, y = y, linetype = inv_link)) + geom_line()+
   scale_color_manual(values=c( "#E69F00", "#999999", "#56B4E9"))
 
 
@@ -1046,11 +1046,11 @@ wvs_df
 In this data set, we have a variable `poverty` that represents the responses to the survey question *Do you think that what the government is doing for people in poverty in this country is about the right amount, too much, or too little?*.
 This variable takes the values of `Too Little`, `About Right`, and `Too much`.
 Note that this variable is an ordered factor.
-```{r}
+```{r, echo=T}
 wvs_df %>% pull(poverty) %>% class()
 ```
 In other words, it is a factor variable whose levels have a defined order, namely the following.
-```{r}
+```{r, echo=T}
 wvs_df %>% pull(poverty) %>% levels()
 ```
 

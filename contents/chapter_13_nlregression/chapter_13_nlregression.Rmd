@@ -526,7 +526,7 @@ rpolynomial <- function(K = 5){
 
 get_polynomial_design_matrix(K=5) %>% 
   gather(degree, y, starts_with('degree')) %>% 
-  ggplot(mapping = aes(x = x, y = y, colour = degree)) + geom_line()
+  ggplot(mapping = aes(x = x, y = y, linetype = degree)) + geom_line()
 
 ```
 
@@ -539,7 +539,7 @@ rpolynomial_examples <- function(i){
     bind_rows() %>% 
     mutate_at(vars(example), as.character)
   
-  p <- Df %>% ggplot(mapping = aes(x = x, y = y, colour = example)) + 
+  p <- Df %>% ggplot(mapping = aes(x = x, y = y, linetype = example)) + 
     geom_line() +
     theme(legend.position="none")
   
@@ -573,7 +573,7 @@ eyefix_df_avg_targ <- filter(eyefix_df_avg, Object == 'Target')
 ```
 ```{r, eyefix_fig_1, out.width='0.65\\textwidth',fig.align='center', fig.cap='Average proportion of eye fixations at different types of objects (named \\emph{Competitor}, \\emph{Target}, \\emph{Unrelated}) in each time window in multisecond experimental trial.'}
 eyefix_df_avg %>% 
-  ggplot(mapping = aes(x = Time, y = mean_fix, colour = Object)) +
+  ggplot(mapping = aes(x = Time, y = mean_fix, shape = Object)) +
   geom_point() 
 ```
 
@@ -630,7 +630,7 @@ map(M_eyefix_targ, predict) %>%
   gather(degree, prediction, starts_with('degree_')) %>% 
   ggplot(mapping = aes(x = Time)) +
   geom_point(aes(y = mean_fix), size = 0.5, alpha = 0.5) +
-  geom_line(aes(y = prediction), col='red') +
+  geom_line(aes(y = prediction), col='black') +
   facet_wrap(~degree) +
   theme_minimal()
 ```
@@ -681,7 +681,7 @@ y %>%
   as_tibble() %>% 
   mutate(x = x) %>% 
   gather(degree, y, starts_with('degree')) %>% 
-  ggplot(mapping = aes(x = x, y = y, colour = degree)) + geom_line()
+  ggplot(mapping = aes(x = x, y = y, linetype = degree)) + geom_line()
 
 ```
 
@@ -733,7 +733,7 @@ We show the model fit for this in Figure \ref{fig:eyefix_mod_2_fits}.
 ```{r, eyefix_mod_2_fits, out.width='0.6\\textwidth',fig.align='center', fig.cap='The predicted functions for proportion of looking times to each category using a 9 degree polynomial. In this case, we use the categorical predictor \\texttt{Object} to vary to coefficients for the polynomial regression for the three object categories.'}
 eyefix_df_avg %>% 
   add_predictions(M_eyefix) %>% 
-  ggplot(mapping = aes(x = Time, colour=Object)) +
+  ggplot(mapping = aes(x = Time, shape=Object)) +
   geom_point(aes(y = mean_fix), size = 0.5, alpha = 0.5) +
   geom_line(aes(y = pred))
 ```
@@ -981,13 +981,13 @@ In this figure, we have colour coded the curve segments.
 
 
 ```{r bspline_basis, fig.align = 'center', out.width='0.5\\textwidth', fig.cap="A single cubic b-spline basis function defined on the knots $\\{-\\tfrac{1}{2}, -\\tfrac{1}{4}, 0, \\tfrac{1}{4}, \\tfrac{1}{2}\\}$."}
-x <- seq(-1, 1, length.out = 1000)
+x <- seq(-0.5, 0.5, length.out = 1000)
 knots <- seq(-0.5, 0.5, length.out = 5)
 b_spline(x, knots = knots, show_piece = T) %>%
   ggplot(mapping = aes(x = x, 
                        y = y, 
-                       colour = segment)) +
-  geom_point(size = 0.5) +
+                       linetype = segment)) +
+  geom_line() +
   theme(legend.position="none")
 ```
 
@@ -1039,7 +1039,7 @@ rbspline_examples <- function(i){
     bind_rows() %>% 
     mutate_at(vars(example), as.character)
   
-  p <- Df %>% ggplot(mapping = aes(x = x, y = y, colour = example)) + 
+  p <- Df %>% ggplot(mapping = aes(x = x, y = y, linetype = example)) + 
     geom_line() +
     theme(legend.position="none")
   
@@ -1071,7 +1071,7 @@ As before, the very high $R^2$ value must be treated with some initial caution, 
 ```{r, bspline_fit_1, out.width='0.6\\textwidth',fig.align='center', fig.cap='The fit of a cubic b-spline, with evenly spaced basis functions every 500ms, to the average eye fixation rates to each \\texttt{Object} category.'}
 eyefix_df_avg%>%
   add_predictions(M_bs) %>%
-  ggplot(mapping = aes(x = Time, group = Object, colour = Object)) +
+  ggplot(mapping = aes(x = Time, group = Object, linetype = Object)) +
   geom_point(aes(y = mean_fix), size = 0.5, alpha = 0.5) +
   geom_line(aes(y = pred))
 ```
@@ -1139,7 +1139,7 @@ random_rbf_examples <- function(i, sigma){
     bind_rows() %>% 
     mutate_at(vars(example), as.character)
   
-  p <- Df %>% ggplot(mapping = aes(x = x, y = y, colour = example)) + 
+  p <- Df %>% ggplot(mapping = aes(x = x, y = y, linetype = example)) + 
     geom_line() +
     theme(legend.position="none")
   
@@ -1181,7 +1181,7 @@ The predictions of this model are shown in Figure \ref{fig:rbf_fit}.
 
 eyefix_df_avg %>% 
   add_predictions(M) %>% 
-  ggplot(mapping = aes(x = Time, colour = Object, group = Object)) +
+  ggplot(mapping = aes(x = Time, linetype = Object, group = Object)) +
   geom_point(aes(y = mean_fix), size = 0.5, alpha = 0.5) +
   geom_line(aes(y = pred)) + 
   theme_minimal()

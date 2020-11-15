@@ -945,7 +945,7 @@ plot_bin_model <- function(m, n, a, b, xlim=c(0, 1)){
                posterior = prior * likelihood,
                posterior = posterior/sum(posterior)
   ) %>% pivot_longer(-theta, names_to = 'model', values_to = 'p') %>% 
-    ggplot(aes(x = theta, y = p, colour = model)) + 
+    ggplot(aes(x = theta, y = p, linetype = model)) + 
     geom_line() +
     labs(x = TeX('$\\theta$'), y = '') +
     theme(legend.position="bottom",
@@ -1055,7 +1055,7 @@ For the current problem, this is $\Prob{\theta \given Y=m, \alpha=5, \beta=5, n=
 From the properties of the beta distribution mentioned above, the mean and standard deviation of this posterior are as follows.
 $$
 \langle \theta \rangle = \frac{\alpha + m}{n + \alpha + \beta} = `r E_theta %>% round(3)`,\quad
-\textrm{Sd}(\theta) = \sqrt{\frac{\alpha\beta}{(\alpha+\beta)^2(\alpha + \beta + 1)}} = `r sd_theta %>% round(3)`.
+\textrm{SD}(\theta) = \sqrt{\frac{(\alpha + m)(\beta + n -m)}{(\alpha+\beta + n)^2(\alpha + \beta + n + 1)}} = `r sd_theta %>% round(3)`.
 $$
 We can also use the cumulative distribution function of the beta distribution to determine that 2.5th and 97.5% percentiles of the posterior.
 Between these two bounds, there is 95% of the posterior probability mass.

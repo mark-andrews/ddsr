@@ -564,11 +564,11 @@ tibble(x = seq(0, 25),
        y_2 = dpois(x, lambda = lambda_2),
        y_3 = dpois(x, lambda = lambda_3)
 ) %>% gather(lambda, density, -x) %>% 
-  ggplot(aes(x = x, y = density, col = lambda)) +
+  ggplot(aes(x = x, y = density, shape = lambda)) +
   geom_line() + 
   geom_point() +
   ylab('P(x)') + 
-  scale_colour_discrete(name = TeX("$\\lambda"), labels = c("3.5", "5", "10", "15"))
+  scale_shape_discrete(name = TeX("$\\lambda"), labels = c("3.5", "5", "10", "15"))
 ```
 
 
@@ -723,11 +723,11 @@ p1 <- tibble(x = seq(0, 25),
        y_3 = dpois(x, lambda = lambda_3),
        y_sum = (y_0 + y_1 + y_2 + y_3)/4
 ) %>% gather(lambda, density, -x) %>% 
-  ggplot(aes(x = x, y = density, col = lambda)) +
+  ggplot(aes(x = x, y = density, shape = lambda)) +
   geom_line() + 
   geom_point() +
   ylab('P(x)') +
-  scale_colour_discrete(name = TeX("$\\lambda"), labels = c("3.5", "5", "7", "10", "average"))
+  scale_shape_discrete(name = TeX("$\\lambda"), labels = c("3.5", "5", "7", "10", "average"))
 
 p2 <- tibble(x = seq(0, 10, length.out = 1000),
              y = dgamma(x, shape = 3, scale = 0.25/0.75)
@@ -1012,7 +1012,7 @@ p1 <- Df %>% ggplot(aes(x=x)) + geom_histogram(binwidth=1/2, col='white')
 
 p2 <- Df %>% ggplot(aes(x=x, fill=y)) +
   geom_histogram(binwidth=1/2, col='white', position = 'identity') +
-  guides(fill=FALSE)
+  guides(fill=FALSE)+ scale_fill_grey()
 
 plot_grid(p1, p2, labels = 'auto')
 ```
