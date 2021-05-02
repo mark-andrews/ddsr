@@ -32,10 +32,10 @@ clean:
 	rm -rf examples/*.pdf
 	rm -rf examples/*.tex
 	rm -rf examples/*.html
-	
+	rm -f $(main).tex
+		
 mrproper: clean
 	rm -f $(main).pdf
-	rm -f $(main).tex
 	rm -f $(main).md
 	rm -f $(main).html
 	rm -f $(main).docx

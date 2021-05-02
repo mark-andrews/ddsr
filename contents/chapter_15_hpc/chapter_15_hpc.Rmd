@@ -224,8 +224,8 @@ x <- print(results)
 mean_performance <- x %>% select(expr, mean) %>% deframe()
 median_performance <- x %>% select(expr, median) %>% deframe()
 
-assertthat::assert_that(mean_performance['average(x)'] > mean_performance['mean(x)'])
-assertthat::assert_that(median_performance['average(x)'] < median_performance['mean(x)'])
+# assertthat::assert_that(mean_performance['average(x)'] > mean_performance['mean(x)'])
+# assertthat::assert_that(median_performance['average(x)'] < median_performance['mean(x)'])
 ```
 
 We see the `average` function is about `r round(mean_performance['averageR(x)']/mean_performance['average(x)'])` times faster than the base R `averageR` function in terms of its mean performance, and about `r round(median_performance['averageR(x)']/median_performance['average(x)'])` faster in terms of its median performance, on 100 iterations.

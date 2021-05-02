@@ -23,13 +23,17 @@ $(main).docx: $(main).Rmd $(header) $(bibtex)
 $(main).pdf: $(main).tex
 	$(mkpdf) $(main).tex
 	$(mkpdf) $(main).tex
+	$(mkpdf) $(main).tex
+	$(mkpdf) $(main).tex
+	$(mkpdf) $(main).tex
+	$(mkpdf) $(main).tex
 
 M_dice_3.Rds: 
 	Rscript scripts/m_dice_3.R
-	
+
 M_dice_4.Rds:
 	Rscript scripts/m_dice_4.R
-	
+
 M_math.Rds:
 	Rscript scripts/m_normal.R
 
@@ -55,15 +59,19 @@ $(bibtex):
 	wget --no-check-certificate --no-cache --no-cookies https://raw.githubusercontent.com/mark-andrews/bibtex/master/mjandrews.bib -O $(bibtex)
 
 clean:
-	$(rm) $(main).{log,aux,tex} _minted-$(main)  
+	$(rm) _minted-$(main)
+	$(rm) $(main).aux
+	$(rm) _minted-$(main)
+	$(rm) $(main).log
+	$(rm) $(main).toc
+	$(rm) $(main).aux 
+	$(rm) _minted-$(main)
+	$(rm) $(main)_files
+	$(rm) $(main)_cache
 
-rds-clean:
+
+mrproper: clean
 	$(rm) *.Rds
-
-cache-clean:
-	$(rm) $(main)_files $(main)_cache
-	
-mrproper: clean cache-clean rds-clean
 	rm -rf $(main)_cache
 	rm -f $(main).pdf
 	rm -f $(main).tex

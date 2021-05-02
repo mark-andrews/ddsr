@@ -7,20 +7,42 @@ We assume that this will be built from inside an RStudio (server) session runnin
 ## Create docker image
 
 The docker image can be created from the accompanying [Dockerfile](Dockerfile).
-Run `Make docker` to create this image.
-The resulting image will always be called `jancek:latest`.
+Run 
+```
+make docker
+``` 
+to create this image.
+The resulting image will always be called `janacek:latest`.
 
 ## Run docker container
 
-The shell script [run_docker.sh](run_docker.sh) will run the container and allow the rocker based RStudio server session to accessed through port 8788.
+The shell script [run_docker.sh](run_docker.sh) will run the container and allow the rocker based RStudio server session to accessed through the browser.
+Do
+```
+source docker/run_docker.sh 
+```
+The open a browser at `http://localhost:8788`.
+
 
 ## Make individual chapters
 
-First, source the [setenv.sh](setenv.sh).
+In the RStudio server session, open the Linux terminal (not R console).
+Do the following to access the book's home directory.
+```
+cd book
+```
+
+Next, source the [setenv.sh](setenv.sh), which sets up the environment for building the book.
 ```
 source setenv.sh
 ```
 
-To build the individual chapters, `cd` into them, and run `make`, and then `make clean`. 
-The primary output document type is `pdf_document` but Markdown, html, and docx documents are also created.
-None except `pdf_document` will be rendered exactly as intended.
+Next, install `sparklyr`. (For some reason, this does not install automatically when making the docker container, despite being in the Dockerfile as a `run` command.)
+```
+Rscript -e "sparklyr::spark_install()"
+```
+
+The following script will make all chapter pdfs and copy them to a directory called `build`:
+```
+bash build.sh
+```

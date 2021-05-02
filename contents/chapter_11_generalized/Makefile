@@ -26,11 +26,11 @@ clean:
 	rm -f $(main).log
 	rm -f $(main).toc
 	rm -rf $(main)_files
-
-mrproper: clean
 	rm -rf $(main)_cache
-	rm -f $(main).pdf
 	rm -f $(main).tex
+	
+mrproper: clean
+	rm -f $(main).pdf
 	rm -f $(main).md
 	rm -f $(main).html
 	rm -f $(main).docx

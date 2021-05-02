@@ -22,18 +22,18 @@ $(bibtex):
 	wget --no-check-certificate --no-cache --no-cookies https://raw.githubusercontent.com/mark-andrews/bibtex/master/mjandrews.bib -O $(bibtex) 
 
 clean:
+	rm -f $(main).tex
 	rm -f $(main).aux
 	rm -f $(main).log
 	rm -f $(main).toc
 	rm -rf $(main)_files
 	rm -f data_*.csv
 	rm -f tmp_data.csv
-
+	rm -rf include_graphics/
+	
 mrproper: clean
-	rm -f $(main).tex
 	rm -f $(main).pdf
 	rm -f $(main).md
 	rm -f $(main).html
 	rm -f $(main).docx
 	rm -f $(bibtex)
-	rm -rf include_graphics/

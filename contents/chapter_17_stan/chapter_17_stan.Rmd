@@ -13,7 +13,7 @@ bibliography:
   - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
 biblio-style: apalike   
 header-includes:
-  - \input{header.tex}
+  - \input{./header.tex}
   - \usepackage{minted}
 ---
   

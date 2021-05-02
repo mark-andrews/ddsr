@@ -25,10 +25,10 @@ clean:
 	rm -f $(main).aux
 	rm -f $(main).log
 	rm -f $(main).toc
-	rm -rf $(main)_files 
+	rm -rf $(main)_files
+	rm -f $(main).tex
 		
 mrproper: clean
-	rm -f $(main).tex
 	rm -f $(main).pdf
 	rm -f $(main).md
 	rm -f $(main).html

@@ -26,12 +26,13 @@ clean:
 	rm -f $(main).log
 	rm -f $(main).toc
 	rm -rf $(main)_files
+	rm -f $(main).tex
+	rm -rf include_graphics/
 
 mrproper: clean
-	rm -f $(main).tex
 	rm -f $(main).pdf
 	rm -f $(main).md
 	rm -f $(main).html
 	rm -f $(main).docx
 	rm -f $(bibtex)
-	rm -rf include_graphics/
+

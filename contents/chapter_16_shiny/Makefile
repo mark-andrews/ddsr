@@ -24,12 +24,13 @@ clean:
 	rm -rf $(main).tex
 	rm -rf $(main).aux
 	rm -f $(main).toc
-
+	rm -rf $(main)_files
+	rm -rf $(main)_cache
+	
 mrproper: clean
 	rm -f $(main).pdf
 	rm -f $(bibtex)
-	rm -rf $(main)_files
-	rm -rf $(main)_cache
+
 
 $(bibtex):
 	wget --no-check-certificate --no-cache --no-cookies https://raw.githubusercontent.com/mark-andrews/bibtex/master/mjandrews.bib -O $(bibtex)

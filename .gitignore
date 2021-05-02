@@ -3,5 +3,4 @@
 .RData
 .Ruserdata
 _book
-packrat/lib*/
-packrat/src*/
+build
