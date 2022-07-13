@@ -14,6 +14,11 @@ make docker
 to create this image.
 The resulting image will always be called `janacek:latest`.
 
+This image is also available on [DockerHub](https://hub.docker.com) and can be obtained with the `docker pull` command:
+```
+docker pull xmjandrews/janacek:latest
+```
+
 ## Run docker container
 
 The shell script [run_docker.sh](run_docker.sh) will run the container and allow the rocker based RStudio server session to accessed through the browser.
@@ -21,7 +26,7 @@ Do
 ```
 source docker/run_docker.sh 
 ```
-The open a browser at `http://localhost:8788`.
+The open a browser at `http://localhost:8788`. Log in with username "rstudio" and password "foo".
 
 
 ## Make individual chapters
@@ -46,3 +51,11 @@ The following script will make all chapter pdfs and copy them to a directory cal
 ```
 bash build.sh
 ```
+
+The following script will make all chapter slides and copy them to a directory called `build_slides`:
+```
+bash build_slides.sh
+```
+
+
+

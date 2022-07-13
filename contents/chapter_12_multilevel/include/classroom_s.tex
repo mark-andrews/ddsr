@@ -1,0 +1,35 @@
+\begin{figure}
+\begin{center}
+\resizebox{\linewidth}{!}{
+\begin{tikzpicture}
+\node {data}
+child {node[level 1] (s_1) {$\text{school}_1$}
+  child {node[level 2] (s_1_c_1) {$\text{class}_{1}$}
+    child {node[level 3] (S_1_c_1_p_1) {$\text{child}_{1}$}}
+    child {node[level 3] (S_1_c_1_p_2) {$\text{child}_{2}$}}
+    child {node (S_1_c_1_p_dots) {$\ldots$}}
+  }
+  child {node[level 2] (s_1_c_2) {$\text{class}_{2}$}}
+  child {node (s_1_c_dots) {$\ldots$}}
+}
+child {node[level 1, xshift=10mm] (s_2) {$\text{school}_2$}
+  child {node (S_2_c_dots) {$\ldots$}}
+  child {node (S_2_c_dots2) {$\ldots$}}
+}
+child {node (s_dots) {$\ldots$}}
+child {node[level 1] (s_K) {$\text{school}_K$}
+  child {node (s_K_c_J_dots) {$\ldots$}}
+  child {node[level 2] (s_K_c_J_2) {$\text{class}_{J-1}$}}
+  child {node[level 2] (s_K_c_J) {$\text{class}_{J}$}
+    child {node (S_K_c_J_p_N_dots) {$\ldots$}}
+    child {node[level 3] (S_K_c_J_p_N-1) {$\text{child}_{n-1}$}}
+    child {node[level 3] (S_K_c_J_p_N) {$\text{child}_{n}$}}
+  }
+}
+;
+\end{tikzpicture}
+}
+\end{center}
+\caption{The hierarchical arrangement of the data in the \texttt{classroom\_df} data set. Each one of the $N$ children is in one of $J$ classes and each one of the $J$ classes is in one of $K$ schools.}
+\label{fig:classroom:tree}
+\end{figure}

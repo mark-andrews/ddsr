@@ -1739,8 +1739,10 @@ Instead, we will consider special purpose Git hosting sites, particularly GitHub
 GitHub is extremely popular, with around over 40 million users and 100 million repositories as of early 2020.
 
 ```{r github_new, out.width="\\textwidth", fig.cap="A screenshot of a GitHub page for creating a new repository.", fig.align='center'}
-knitr::include_graphics(file.path(chapter_wd, "include_graphics/github_screenshot.png"))
+png_path <- file.path(chapter_wd, "include_graphics/github_screenshot.png")
+knitr::include_graphics(path = png_path, error = FALSE) # not sure why error = FALSE is needed, but see https://github.com/yihui/knitr/issues/1825#issuecomment-645479306
 ```
+
 
 To share your Git repository, the first step is to create a new repository on GitHub.
 This assumes that you already have a GitHub account.

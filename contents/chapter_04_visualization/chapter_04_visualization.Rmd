@@ -381,7 +381,7 @@ ggplot(weight_df,
 
 ## Barplots 
 ```{r, echo=F}
-titanic_df <- read_csv('data/TitanicSurvival.csv') %>% select(-X1)
+titanic_df <- read_csv('data/TitanicSurvival.csv') %>% select(-1)
 ```
 Both histograms and density plots assume that the variables are continuous.
 For discrete variables, their counterpart is a *bar plot*.
@@ -389,7 +389,7 @@ For each value of the discrete variable, the bar plot displays the number of obs
 As example, the following `titanic` data frame tells us, for each of the `r nrow(titanic_df)` passengers on the *RMS Titanic* on its fateful maiden voyage in 1912, their sex, age, and passenger class, and whether they survived or not.
 
 ```{r}
-titanic_df <- read_csv('data/TitanicSurvival.csv') %>% select(-X1)
+titanic_df <- read_csv('data/TitanicSurvival.csv') %>% select(-1)
 glimpse(titanic_df)
 ```
 

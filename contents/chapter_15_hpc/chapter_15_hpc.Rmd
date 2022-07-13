@@ -219,7 +219,7 @@ results
 
 ```{r, echo = F, results='hide'}
 # I have to print to get results table into a data frame I think
-x <- print(results) 
+x <- summary(results) 
 
 mean_performance <- x %>% select(expr, mean) %>% deframe()
 median_performance <- x %>% select(expr, median) %>% deframe()

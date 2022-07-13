@@ -1,0 +1,103 @@
+\RequirePackage{pifont,manfnt}
+\RequirePackage{booktabs}
+\usepackage{subcaption}
+\RequirePackage[T1]{fontenc}
+\RequirePackage{mathpazo}
+\RequirePackage{eulervm}
+\linespread{1.05}
+\RequirePackage{tikz}
+\usepackage{pgfplots}
+\usetikzlibrary{arrows,positioning,matrix} 
+\RequirePackage{xspace}
+%\RequirePackage{apacite}
+\RequirePackage{rotating}
+\RequirePackage{multirow}
+\usepackage{fontawesome}
+\usepackage{nth}
+\pgfplotsset{compat=1.16}
+\newcommand{\Prob}[1]{\mathrm{P}( #1 )}
+\newcommand{\dcat}[1]{\mathrm{dcat}( #1 )}
+\newcommand{\ddirichlet}[1]{\mathrm{ddirichlet}( #1 )}
+\newcommand*{\given}{\vert}
+\newcommand{\hdpmm}{\textsc{hdptm}\xspace}
+\newcommand{\bnc}{\textsc{bnc}\xspace}
+\newcommand{\brms}{Brms\xspace}
+\newcommand{\mcmc}{\textsc{mcmc}\xspace}
+\newcommand{\icc}{\textsc{icc}\xspace}
+\newcommand{\reml}{\textsc{reml}\xspace}
+\newcommand{\mad}{\textsc{mad}\xspace}
+
+\newcommand\iidsim{\mathrel{\overset{\makebox[0pt]{\mbox{\normalfont\tiny iid}}}{\sim}}}
+\newcommand\defeq{\mathrel{\overset{\makebox[0pt]{\mbox{\normalfont\tiny def}}}{=}}}
+\newcommand{\hpd}{\textsc{hpd}\xspace}
+\newcommand{\Probc}[1]{\mathrm{P}_{\text{\!\tiny \textsc{c}}}( #1 )}
+\newcommand{\Proba}[1]{\mathrm{P}_{\text{\!\tiny \textsc{a}}}( #1 )}
+\newcommand{\wnew}{w_{j}}
+\newcommand{\wjinew}{w_{ji}}
+\newcommand{\pinew}{\pi_{j}}
+\newcommand{\data}{\mathcal{D}}
+\newcommand{\dic}{\textsc{dic}\xspace}
+\newcommand{\studentt}[1]{t_{#1}}
+
+\RequirePackage{tikz}
+\usetikzlibrary{trees}
+\usetikzlibrary{matrix}
+
+\RequirePackage{amssymb,latexsym,amsmath,amsfonts,amscd}
+
+
+
+\newcommand{\rreallytiny}{\fontsize{3}{3}\selectfont}
+\newcommand{\reallytiny}{\fontsize{5}{5}\selectfont}
+
+\usetikzlibrary{decorations.pathmorphing} % noisy shapes
+\usetikzlibrary{fit}					% fitting shapes to coordinates
+\usetikzlibrary{backgrounds}	% drawing the background after the foreground
+\usetikzlibrary{matrix}
+
+\tikzstyle{background}=[rectangle, fill=none,
+						draw=black,
+                                                inner sep=0.3cm,
+                                                rounded corners=3mm]
+
+\tikzstyle{observation}=[circle,font=\small,minimum size=5mm,inner sep=0mm,
+                                    draw=black!70,
+                                    fill=black!10]
+
+\tikzstyle{state}=[circle,font=\small,minimum size=5mm,inner sep=0mm,
+                                   draw=black!70,
+                                    fill=none]
+
+\tikzstyle{limit}=[rectangle,font=\small,minimum size=0mm,inner sep=0mm,
+                                    fill=none]
+
+\tikzstyle{parameter}=[circle,font=\small,minimum size=5mm,inner sep=0mm,
+                                   draw=black!70,
+                                    fill=none]
+% tikz stuff
+\usepackage{tikz}
+\usetikzlibrary{shapes}
+\usetikzlibrary{positioning,shapes,trees,arrows,shadows,arrows.meta,backgrounds,fit}
+
+\tikzset{every path/.style={-latex,thick}}
+
+\tikzset{
+  basic/.style = {font=\sffamily},
+  % material/.style  = {basic, text width=8mm, font=\footnotesize\sffamily, fill=yellow!60},
+  % revision/.style  = {material, fill=blue!30},
+  % root/.style   = {basic,  align=center, fill=pink!60},
+  level 1/.style = {basic, align=center, sibling distance = 30mm},
+  level 2/.style = {basic, sibling distance = 20mm},
+  level 3/.style = {basic, sibling distance = 15mm},
+  % level 4/.style = {level distance=10mm,basic, fill=pink!60, sibling distance = 20mm}
+}
+
+
+\graphicspath{{../images/}}
+
+\DeclareSymbolFont{legacymaths}{OT1}{cmr}{m}{n}
+\DeclareMathAccent{\dot}     {\mathalpha}{legacymaths}{95}
+\DeclareMathAccent{\bar}     {\mathalpha}{legacymaths}{22}
+\DeclareMathAccent{\tilde}     {\mathalpha}{legacymaths}{126}
+
+\setbeamertemplate{footline}[frame number]

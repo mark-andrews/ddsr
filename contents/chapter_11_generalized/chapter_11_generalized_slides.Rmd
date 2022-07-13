@@ -1,0 +1,647 @@
+---
+title: "Chapter 11: Generalized Linear Models for Count Data"
+author: |
+  | Mark Andrews
+  | Psychology Department, Nottingham Trent University
+  | 
+  | \faEnvelopeO\  ```mark.andrews@ntu.ac.uk```
+fontsize: 10pt
+output:
+ beamer_presentation:
+  keep_tex: true
+  fonttheme: "serif"
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+---
+
+
+```{r, echo=F}
+knitr::opts_chunk$set(echo = F, prompt = F, warning = F, message = F, comment='#>')
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+```
+
+```{r}
+library(tidyverse)
+library(here)
+library(knitr)
+library(cowplot)
+library(modelr)
+library(pscl)
+library(MASS)
+theme_set(theme_classic())
+
+set.seed(10101)
+
+biochemists_Df <- read_csv('data/biochemist.csv')
+
+theme_set(theme_classic())
+
+set.seed(10101)
+
+data("bioChemists")
+publications <- bioChemists$art
+
+
+```
+
+# The Poisson Distribution
+
+-   The Poisson distribution is a discrete probability distribution over
+    the non-negative integers $0,1,2 \ldots$.
+
+```{r, out.width='0.75\\textwidth', fig.align='center'}
+lambda <- 3.5
+tibble(x = seq(0, 25),
+       y = dpois(x, lambda = lambda)
+) %>% ggplot(aes(x = x, y = y)) +
+  geom_point() +
+  geom_segment(aes(x = x, xend = x, y = 0, yend = y), color = "grey50") +
+  ylab('P(x)')
+```
+Shown here is a Poisson distribution with $\lambda = `r lambda`$.
+
+# The Poisson Distribution
+
+-   The Poisson distribution is used to model the probability of a given
+    number of events occurring in a fixed interval of time, e.g. the
+    number of emails you get per hour, the number of shark attacks on
+    Bondi beach every summer, etc.
+
+-   It has a single parameter $\lambda$, known as the *rate*.
+
+-   If $x$ is a Poisson random variable whose, its probability mass
+    function is
+    $$\Prob{x=k\given \lambda} = \frac{e^{-\lambda}\lambda^k}{k!}.$$
+
+# The Poisson Distribution
+
+-   The mean of a Poisson distribution is equal to its rate parameter
+    $\lambda$.
+
+-   Its variance is also equal to $\lambda$.
+
+```{r, out.width='0.75\\textwidth', fig.align='center'}
+lambda_0 <- 3.5
+lambda_1 <- 5.0
+lambda_2 <- 10.0
+lambda_3 <- 15.0
+tibble(x = seq(0, 25),
+       y_0 = dpois(x, lambda = lambda_0),
+       y_1 = dpois(x, lambda = lambda_1),
+       y_2 = dpois(x, lambda = lambda_2),
+       y_3 = dpois(x, lambda = lambda_3)
+) %>% gather(lambda, density, -x) %>% 
+  ggplot(aes(x = x, y = density, col = lambda)) +
+  geom_line() + 
+  geom_point() +
+  ylab('P(x)') +
+  guides(col = FALSE)
+```
+As $\lambda$ increases, so too does the variance.
+
+
+# The Poisson Distribution
+
+-   The Poisson distribution can be seen as the limit of a Binomial
+    distribution as $N \to \infty$, and $\lambda = p N$.
+
+
+-   Shown are (left) $\text{Binomial}(N,p=\lambda/N)$ where
+    $N\approx10^3$ and $\lambda=7.5$, and (right) $\text{Poisson}(\lambda)$.
+
+```{r, out.width='0.8\\textwidth', fig.align='center'}
+lambda <- 7.5
+N <- 10^3
+
+Df <- tibble(x = seq(0, 25),
+             y_bin = dbinom(x, size = N, prob = lambda/N),
+             y_pois = dpois(x, lambda = lambda)
+)
+
+p1 <- ggplot(Df, aes(x = x, y_bin)) + geom_line() + geom_point() + ylab('P(x)') + guides(col = FALSE)
+p2 <- ggplot(Df, aes(x = x, y_pois)) + geom_line() + geom_point() + ylab('P(x)') + guides(col = FALSE)
+
+
+plot_grid(p1, p2, labels = c("A", "B"))
+
+
+```
+
+# Poisson Regression
+
+-   In any regression problem, our data are
+    $(y_1,x_1), (y_2,x_2) \ldots (y_n,x_n)$, where each $y_i$ is
+    modelled as a stochastic function of $x_i$.
+
+-   In Poisson regression, we assume that each $y_i$ is a Poisson random
+    variable rate $\lambda_i$ and
+    $$\log(\lambda_i) = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},$$ or
+    equivalently
+    $$\lambda_i = e^{\beta_0 + \sum_{k=1}^K \beta_k x_{ki}}.$$
+
+# Poisson Regression
+
+-   As an example of Poisson regression, we can look at the number
+    visits to a doctor in a fixed period as a function of predictors
+    such as gender.
+
+-   Using a data-set of over 5000 people, we estimate (using mle) that
+    $$\log(\lambda_i) = 1.65 + 0.43\times x_i$$ where $x_i=1$ for a
+    female, and $x_i=0$ for a male.
+
+# Poisson Regression
+
+-   Using this example, we see that for a female $$\begin{aligned}
+    \lambda_{\text{Female}} &= e^{1.65 + 0.43} = 8.004\end{aligned}$$
+    and for males $$\begin{aligned}
+    \lambda_{\text{Male}} &= e^{1.65} = 5.2\end{aligned}$$
+
+-   In other words, the expected value for females is 8.2 and for males
+    it is 5.2.
+
+# Coefficients
+
+-   In Poisson regression, coefficients can be understood as follows.
+
+-   In the previous example, $$\begin{aligned}
+    \lambda_{\text{Female}} &= e^{1.65 + 0.43},\\
+    &= e^{1.65} e^{0.43},\\
+    \lambda_{\text{Male}} &= e^{1.65}.\end{aligned}$$
+
+-   This means that the exponent of the gender coefficient, i.e.
+    $e^{0.43}$, signifies the multiplicative increase to the average
+    rate of doctor visits for women relative men.
+
+-   In other words, women visit doctors on average $e^{0.43} = 1.53$
+    times more than men.
+
+# Coefficients
+
+-   In an arbitrary example with a single continuous predictor variable,
+    $$
+    \begin{aligned}
+    \lambda &= e^{\alpha+ \beta x_i},\\
+    &= e^{\alpha} e^{\beta x_i},\\
+    \end{aligned}
+    $$
+    If we increase $x_i$ by 1, we have
+    $$
+    \begin{aligned}
+    \lambda^+ &= e^{\alpha+ \beta (x_i+1)},\\
+     &= e^{\alpha+ \beta x_i + \beta},\\
+     &= e^{\alpha} e^{\beta x_i} e^\beta,\\
+     \end{aligned}
+     $$
+
+-   As $\lambda^+ = \lambda e^\beta$, we see that $e^\beta$ is the
+    multiplicative effect of an increase in one unit to the predictor
+    variable.
+
+# Example
+
+```{r, echo=T, results='hide'}
+doc_df <- read_csv('data/DoctorAUS.csv') %>%
+  mutate(gender = ifelse(sex == 1, 'female', 'male'))
+
+M <- glm(doctorco ~ gender,
+         data = doc_df,
+         family = poisson)
+
+doc_df_new <- tibble(gender = c('female', 'male'))
+
+doc_df_new %>% 
+  add_predictions(M)
+
+doc_df_new %>% 
+  add_predictions(M, type='response')
+
+```
+
+# Model comparison
+
+```{r, echo=T, results='hide'}
+M_1 <- glm(doctorco ~ gender + insurance,
+           data = doc_df,
+           family = poisson)
+
+anova(M, M_1, test='Chisq')
+```
+
+# Exposure and offset
+
+-   In some problems, the length of time during which events are
+    measured varies across individuals.
+
+-   In the doctor visits example, we might have recordings of number of
+    visits per year for some people and number of visits per 9 months,
+    etc, for others.
+
+-   These situations are dealt with using an *exposure* term for each
+    individual.
+
+# Exposure and offset
+
+-   When using an exposure term, we use the original count data as
+    before, and treat $$y_i \sim \text{Poisson}(\lambda_i).$$
+
+-   But our model is $$\begin{aligned}
+    \log(\lambda_i/u_i) &= \alpha + \beta x_i,\\
+    \log(\lambda_i) &= \alpha + \beta x_i + \log(u_i)\end{aligned}$$
+    where
+    $u_i$ is a term signifying the relative exposure time for observation
+    $i$.
+    
+
+
+# Exposure and offset
+
+-   For example, suppose we monitor people's drinking at social
+    occasions. We find that three people drink $12$, $7$ and $3$ drinks
+    over the course of $7$, $5$ and $2$ hours, respectively.
+
+-   If we are trying to predict drinking as a function of predictor
+    variables, we ought to calibrate by the different time frames.
+
+-   Treating e.g. $12$ as a draw from $\text{Poisson}(\lambda_i)$
+    where $\log(\lambda_i/7) = \alpha + \beta x_i$ is identical to
+    treating $12$ as a draw from $\text{Poisson}(\lambda_i)$ where
+    $\log(\lambda_i) = \alpha + \beta x_i + \log(7)$.
+
+# Exposure and offset
+
+-   In general, exposure terms are treated as fixed offsets.
+
+-   If our data is $(y_1,x_1), (y_2,x_2) \ldots (y_n,x_n)$ with
+    exposures $u_1, u_2 \ldots u_n$, then we treat
+    $$y_i \sim \text{Poisson}(\lambda_i),$$ where
+    $$\log(\lambda_i) = \log(u_i) + \beta_0 + \sum_{k=1}^K\beta_k x_{ki}.$$
+
+# Example
+
+```{r, echo=T, results='hide'}
+insur_df <- read_csv('data/Insurance.csv') %>%
+  mutate(District = factor(District))
+
+M <- glm(Claims ~ District + Group + Age + offset(log(Holders)),
+         data = insur_df,
+         family = poisson)
+
+```
+
+
+
+
+# The Poisson Distribution
+
+
+-   The mean of a Poisson distribution is equal to its rate parameter
+    $\lambda$.
+
+-   Its variance is also equal to $\lambda$.
+
+```{r, out.width='0.75\\textwidth', fig.align='center'}
+lambda_0 <- 3.5
+lambda_1 <- 5.0
+lambda_2 <- 10.0
+lambda_3 <- 15.0
+tibble(x = seq(0, 25),
+       y_0 = dpois(x, lambda = lambda_0),
+       y_1 = dpois(x, lambda = lambda_1),
+       y_2 = dpois(x, lambda = lambda_2),
+       y_3 = dpois(x, lambda = lambda_3)
+) %>% gather(lambda, density, -x) %>% 
+  ggplot(aes(x = x, y = density, col = lambda)) +
+  geom_line() + 
+  geom_point() +
+  ylab('P(x)') +
+  guides(col = FALSE)
+```
+As $\lambda$ increases, so too does the variance.
+
+# Means and variances in a Poisson distribution:
+
+- In a Poisson distribution, the variance of a sample should be approximately 
+  the same as the mean of a sample. 
+
+- Example 1:
+```{r, echo=T}
+x <- rpois(25, lambda = 5)
+c(mean(x), var(x), var(x)/mean(x))
+```
+- Example 2:
+```{r, echo=T}
+x <- rpois(25, lambda = 5)
+c(mean(x), var(x), var(x)/mean(x))
+```
+
+    
+# Overdispersion
+
+- If the variance of a sample is greater than would be expected according to a 
+  given theoretical model, then we say the data is *overdispersed*.
+  
+- In count data, if the variance of a sample is much greater than its
+  mean, we say it is overdispersed.
+  
+- Using a Poisson distribution in this situation, this is an example of model mis-specification.
+
+- It will also usually underestimate the standard errors in the Poisson model.
+  
+
+# Overdispersion
+
+- In the `bioChemists` data set, we have counts of the number of articles published
+  by PhD students in the last three years (`publications`):
+```{r, out.width='0.7\\textwidth', fig.align='center'}
+ggplot(bioChemists, aes(x=art)) + geom_histogram(col='white', binwidth = 1)
+```
+  
+
+```{r, echo=T}
+var(publications)/mean(publications)
+```
+
+
+# Overdispersion
+
+- This leads standard errors to be *under*estimated if we use a Poisson model:
+```{r, echo=T}
+M <- glm(publications ~ 1, family=poisson)
+summary(M)$coefficients
+```
+
+
+# Fixing overdispersion using a Quasi-poisson model
+
+- A *quasi* Poisson model allows us to correct over-dispersion
+```{r, echo=T}
+M <- glm(publications ~ 1, family=quasipoisson)
+summary(M)$coefficients
+```
+- It does so by calculating an overdispersion parameter 
+  (roughly, the ratio of the variance to the mean)
+  and multiplying the standard error by its square root.
+  
+- In this example, the overdispersion parameter is 
+  `r summary(M)$dispersion` and so its
+  square root is `r summary(M)$dispersion %>% sqrt()`.
+
+- Alternatively, a *negative binomial regression* is an alternative to Poisson regression
+  that can be used with overdispersed count data.
+  
+# Negative binomial distribution
+
+- A negative binomial distribution is a distribution over non-negative integers.
+- To understand the negative binomial distribution, we start with the binomial
+  distribution:
+- If, for example, we have a coin whose probability of coming up heads is $\theta$,
+  then the number of Heads in a sequence of $n$ flips will follow a 
+  binomial distribution.
+- In this example, an outcome of Heads can be termed a *success*.
+  
+  
+# Negative binomial distribution
+
+- Here is a binomial distribution where $n=25$ and $\theta=0.75$.
+```{r, out.width='0.9\\textwidth', fig.align='center'}
+
+n <- 25
+
+tibble(x = seq(0, n),
+       p = dbinom(x, size=n, prob=0.75)
+) %>% ggplot(aes(x = x, y = p)) + geom_bar(stat = 'identity')
+
+```
+  
+ 
+  
+# Negative binomial distribution
+
+- A *negative* binomial distribution gives the 
+  probability distribution over the number of *failures* (e.g. Tails)
+  before $r$ *successes* (e.g. $r$ Heads).
+- For example, here we have the number of Tails (*failures*) that occur before we observe $r=2$ Heads (*sucesses*), when the probability of Heads is $\theta=0.75$:
+```{r, out.width='0.8\\textwidth', fig.align='center'}
+
+n <- 25
+
+tibble(x = seq(0, n),
+       p = dnbinom(x, size=2, prob=0.75)
+) %>% ggplot(aes(x = x, y = p)) + geom_bar(stat = 'identity')
+
+```
+  
+  
+# Negative binomial distribution
+
+- Here, we have the number of Tails (*failures*) that occur before we observe $r=3$ Heads (*successes*), when the probability of Heads is $\theta=0.5$:
+```{r, out.width='0.9\\textwidth', fig.align='center'}
+n <- 25
+
+tibble(x = seq(0, n),
+       p = dnbinom(x, size=3, prob=0.5)
+) %>% ggplot(aes(x = x, y = p)) + geom_bar(stat = 'identity')
+
+```
+  
+    
+# Negative binomial distribution
+
+- The probability mass function for the negative binomial distribution is:
+$$
+\Prob{x = k \given r, \theta} = \binom{r+k-1}{k} \theta^r(1-\theta)^k
+$$
+or more generally
+$$
+\Prob{x = k \given r, \theta} = \frac{\Gamma(r + k)}{\Gamma(r) k!} \theta^r(1-\theta)^k,
+$$
+where $\Gamma()$ is a Gamma function ($\Gamma(n) = (n-1)!$).
+
+- In R, for any $k$, $r$, and $\theta$, we can calculate $\Prob{x = k \given r, \theta}$ using `dnbinom`, e.g.
+$\Prob{x = k = 2 \given r=3, \theta=0.75}$ is
+```{r, echo=T}
+dnbinom(2, 3, 0.75)
+```
+  
+# Negative binomial distribution
+
+- In the negative binomial distribution, the mean is 
+$$
+\mu = \frac{\theta}{1-\theta} \times r,
+$$
+and so 
+$$
+\theta = \frac{r}{r + \mu},
+$$
+and we can generally parameterize the distribution by $\mu$ and $r$.
+  
+# Why use negative binomial distribution?
+
+- A negative binomial distribution is equivalent as weighted sum of Poissons.
+
+```{r, out.width='0.75\\textwidth', fig.align='center'}
+lambda_0 <- 3.5
+lambda_1 <- 5.0
+lambda_2 <- 7.0
+lambda_3 <- 10.0
+tibble(x = seq(0, 25),
+       y_0 = dpois(x, lambda = lambda_0),
+       y_1 = dpois(x, lambda = lambda_1),
+       y_2 = dpois(x, lambda = lambda_2),
+       y_3 = dpois(x, lambda = lambda_3),
+       y_sum = (y_0 + y_1 + y_2 + y_3)/2
+) %>% gather(lambda, density, -x) %>% 
+  ggplot(aes(x = x, y = density, col = lambda)) +
+  geom_line() + 
+  geom_point() +
+  ylab('P(x)') +
+  guides(col = FALSE)
+```
+
+- So it is appropriate to use when the data can be seen as arising from a mixture of
+  Poisson distributions, each with different means.
+  
+  
+# Negative binomial regression
+
+- In negative binomial regression, we have observed counts $y_1, y_2 \ldots y_n$, and 
+  some predictor variables $x_1, x_2 \ldots x_n$,
+  and we assume that
+  $$
+  y_i \sim \mathrm{NegBinomial}(\mu_i, r),
+  $$
+  where $\mathrm{NegBinomial}(\mu_i, r)$ is a negative binomial with mean $\mu_i$ and a 
+  dispersion parameter $r$,
+  and then 
+  $$
+  \log(\mu_i) = \beta_0 + \beta x_i.
+  $$
+
+   
+# Example
+
+```{r, echo=T, results='hide'}
+M <- glm.nb(publications ~ gender, data = biochemists_Df)
+M1 <- glm.nb(publications ~ gender + married + I(children > 0), data = biochemists_Df)
+
+```
+
+# Binomial logistic regression
+
+* If $y_i$ is the number of "successes" in $n_i$ "trials", we can model this as
+$$
+\begin{aligned}
+y_i &\sim \textrm{Binomial}(\theta_i, n_i),\\
+\textrm{logit}(\theta_i) &= \beta_0 + \sum_{k=1}^K \beta_k x_{ki}
+\end{aligned}
+$$
+
+* If $n_i = 1$ for all $i$, then this is exactly binary logistic regression.
+
+* In general, it models the probability of something happening in a number of independent trials, and how the probability varies by the values of predictors.
+
+# Example 
+```{r, echo=T}
+golf_df <- read_csv('data/golf_putts.csv') %>% 
+  mutate(failure = attempts - success,
+         p = success/attempts)
+
+M <- glm(cbind(success, failure) ~ distance,
+         family = binomial(link = 'logit'),
+         data = golf_df)
+```
+
+
+
+
+# Poisson Distribution
+```{r,echo=F}
+lambda <- 5.5
+```
+
+A sample from a Poisson distribution with $\lambda=`r lambda`$.
+```{r, out.width='0.75\\textwidth', fig.align='center'}
+tibble(x = seq(0, 25),
+       y = dpois(x, lambda = lambda)
+) %>% ggplot(aes(x = x, y = y)) +
+  geom_point() +
+  geom_segment(aes(x = x, xend = x, y = 0, yend = y), color = "grey50") +
+  ylab('P(x)')
+```
+
+
+# Zero inflated Poisson Distribution
+```{r,echo=F}
+lambda <- 5.5
+n <- 25
+z <- 0.2
+```
+
+A sample from a zero inflated Poisson distribution with $\lambda=`r lambda`$, with probability of *zero-component* is `r z`. 
+```{r, out.width='0.75\\textwidth', fig.align='center'}
+tibble(x = seq(0, n),
+       y = ((1-z)*dpois(x, lambda = lambda)) + (z * c(1, rep(0, n)))
+) %>% ggplot(aes(x = x, y = y)) +
+  geom_point() +
+  geom_segment(aes(x = x, xend = x, y = 0, yend = y), color = "grey50") +
+  ylab('P(x)')
+```
+
+
+# Poisson regression to Zero-Inflated Poisson regression
+
+-   In Poisson regression (with a single predictor, for simplicity), we
+    assume that each $y_i$ is a Poisson random variable with rate
+    $\lambda_i$ that is a function of the predictor $x_i$.
+
+-   In Zero-Inflated Poisson regression, we assume that each $y_i$ is
+    distributed as a Zero-Inflated Poisson mixture model:
+    $$y_i \sim \begin{cases} \textrm{Poisson}(\lambda_i)\quad &\text{if $z_i=0$},\\ 0, \quad &\text{if $z_i=1$} \end{cases}$$
+    where rate $\lambda_i$ and $\Prob{z_i=1}$ are functions of the
+    predictor $x_i$.
+
+# Zero-Inflated Poisson regression
+
+-   Assuming data $\{(x_i,y_i),(x_2,y_2) \ldots (x_n,y_n)\}$, Poisson
+    regression models this data as: $$\begin{aligned}
+    y_i &\sim \begin{cases} \textrm{Poisson}(\lambda_i)\quad &\text{if $z_i=0$},\\ 0, \quad &\text{if $z_i=1$} \end{cases},\\
+    z_i &\sim \textrm{Bernoulli}(\theta_i),\end{aligned}$$ where
+    $\theta_i$ and $\lambda_i$ are functions of $x_i$.
+
+# Zero-Inflated Poisson regression
+
+-   The $\theta_i$ and $\lambda_i$ variables are the usual suspects,
+    i.e. $$\log(\lambda_i ) = \alpha + \beta x_i,$$ and
+    $$\log\left(\frac{\theta_i}{1-\theta_i}\right) = a + bx_i.$$
+
+-   In other words, $\lambda_i$ is modelled just as in ordinary Poisson
+    regression and $\theta_i$ is modelled in logistic regression.
+
+# Examples
+
+```{r, echo=T, results='hide'}
+smoking_df <- read_csv('data/smoking.csv')
+M <- glm(cigs ~ educ, data = smoking_df)
+M_zip <- zeroinfl(cigs ~ educ, data=smoking_df)
+
+Df_new <- data.frame(educ = seq(20))
+# Predited average smoking rate
+Df_new %>% 
+  add_predictions(M_zip, type='response')
+
+# Predicted average smoking rate of "smokers" 
+Df_new %>%
+  add_predictions(M_zip, type='count')
+
+# Predicted probability of being a "smoker" 
+Df_new %>% 
+  add_predictions(M_zip, type='zero') %>% 
+  mutate(pred = 1-pred)
+```

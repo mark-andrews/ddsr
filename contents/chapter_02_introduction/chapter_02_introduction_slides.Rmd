@@ -1,0 +1,429 @@
+---
+title: "Chapter 2: Introduction to R"
+author: |
+  | Mark Andrews
+  | Psychology Department, Nottingham Trent University
+  | 
+  | \faEnvelopeO\  ```mark.andrews@ntu.ac.uk```
+fontsize: 10pt
+output:
+ beamer_presentation:
+  keep_tex: true
+  fonttheme: "serif"
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+---
+
+
+
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+options(scipen=9)
+set.seed(42)
+
+library(dplyr)
+library(stringr)
+
+available_packages <- available.packages(repos = "http://cran.us.r-project.org") %>% as_tibble()
+
+open_licences <- str_detect(available_packages$License, 
+                            regex('gpl|bsd|mit|apache|cc|GNU|artistic', ignore_case = T)) %>% 
+  mean()
+```
+
+# What is R and why should you care
+
+* R is a program for doing statistics and data analysis.
+* R's advantages or selling points relative to other programs (e.g, SPSS, SAS, Stata, Minitab,
+Python, Matlab, Maple, Mathematica, Tableau, Excel, SQL, and many others) come down to three
+inter-related factors:
+  * It is immensely powerful.
+  * It is open-source.
+  * It is very and increasingly widely used.
+
+# R: A power tool for data analysis
+
+The range and depth of statistical analyses and general data analyses that can
+be accomplished with R is immense.
+
+* Built into R are virtually the entire repertoire
+  of widely known and used statistical methods. 
+
+* Also built in to R is an extensive graphics library.
+
+* R has a vast set of add-on or contributed
+  packages. As of `r format(Sys.Date(), "%B %Y")`, there are 
+  `r nrow(available_packages)` additional contributed
+  packages.  
+  
+* R is a programming language that is specialized to efficiently
+  manipulate and perform calculations on data.  
+
+* The R programming language itself can be extended by interfacing with other
+  programming languages like C, C++, Fortran, Python, and high performance computing or big
+  data tools like Hadoop, Spark, SQL. 
+
+# R: Open source software
+
+* R is free and open source software, distributed according to the GNU
+public license. 
+* Likewise, virtually all of contributed R packages are likewise free and open source.
+* In practical terms, this means that is freely available for everyone to use, now and forever, on more
+or less any device they choose.
+* Open source software always has the potential to *go viral* and
+develop a large self-sustaining community of user/developers. This has arguably happened with R.
+
+# R: Popularity and widespread use
+
+* When it comes to the computational implementation of modern statistical
+methods, R is the de facto standard. For example, the
+\href{https://www.jstatsoft.org}{Journal of Statistical Software} is
+overwhelmingly dominated by programs written in R.
+* R is also currently very highly ranked according to many rankings of
+widely used programming languages of any kind. It ranked in the top 10 or top 20 
+most widely used programming languages. 
+* R is ranked as one of the top five
+most popular data science programs in jobs for data scientists, and in
+multiple surveys of data scientists, it is often ranked as the first or
+second mostly widely used data science tool.
+
+# Introducing R commands
+```{r, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, prompt = TRUE, warning = FALSE, message = FALSE, comment='#>')
+
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+
+```
+
+* A useful way to think about R, and not an inaccurate one either, is that it is
+simply a calculator.
+```{r}
+2 + 2 # addition
+3 - 5 # subtraction
+3 * 2 # multiplication
+4 / 3 # division
+(2 + 2) ^ (3 / 3.5) # exponents and brackets
+```
+
+#  Equality/inequality operations
+
+* Testing for the equality or inequality of pairs of numbers,
+already starts to go beyond the usual capabilities of handheld calculator.
+
+```{r}
+12 == (6 * 2)         # test for equality
+(3 * 4) != (18 - 7)   # test for inequality
+3 < 10                # less than
+(2 * 5) <= 10         # less than or equal
+```
+
+# Logical values and logical operations
+
+* In the previous step, the results are returned as either `TRUE` or `FALSE`. These are logical or *Boolean*
+values.
+* Just as we can represent numbers and operations on
+numbers, so too can we have two logical values, `TRUE` and `FALSE` (always written in
+all uppercase), and Boolean operations (*and*, *or*, and *not*) on logical values.
+```{r}
+TRUE & FALSE  # logical and
+TRUE | TRUE   # logical or
+!TRUE         # logical not
+(TRUE | !TRUE) & !FALSE
+```
+
+# Variables and assignment
+
+* If we type the following at the command prompt and then press Enter, the result is displayed but not stored.
+```{r}
+(12/3.5)^2 + (1/2.5)^3 + (1 + 2 + 3)^0.33
+```
+
+* We can, however, assign the value of the above calculation to a variable named `x`.
+```{r}
+x <- (12/3.5)^2 + (1/2.5)^3 + (1 + 2 + 3)^0.33           
+```
+
+* Now, we can use `x` as is it were a number.
+```{r}
+x
+x ^ 2
+x * 3.6
+```
+
+# Assignment rules
+
+* In general, the assignment rule is 
+```
+name <- expression
+```
+The `expression` is any R code that returns some value.
+
+* The `name` must consist of letters, numbers, dots, and underscores. 
+``` 
+x123   # acceptable
+.x
+x_y_z
+xXx_123
+```
+* It must begin with a letter or a dot that is not followed by a number. 
+``` 
+_x   # not acceptable
+.2x 
+x-y-z
+```
+* The recommendation is to use names that are
+meaningful, relatively short, without dots (using `_` instead for punctuation), and primarily consisting 
+of lowercase characters.
+
+
+# Vectors
+
+* Vectors are one dimensional sequences of values.
+* For example, if we want to
+create a vector of the first 6 primes numbers, we could do the following.
+```{r}
+primes <- c(2, 3, 5, 7, 11, 13)
+```
+* We can now perform operations (arithmetic, logical, etc) on the `primes` vector.
+```{r}
+primes + 1
+primes / 2
+primes == 3
+primes >= 7
+```
+
+# Indexing vectors
+
+* For any vector, we can refer to individual elements using indexing
+operations.  
+```{r}
+primes[1]
+primes[5]
+```
+
+* If we want to refer to sets of elements, rather than just individual elements,
+we can use vectors (made with the `c()` function) inside the indexing square
+brackets. 
+```{r}
+primes[c(3, 5, 2)]
+```
+
+* If we use a negative valued index, we can refer to or all elements *except* one.
+```{r}
+primes[-1]
+primes[-2]
+```
+
+# Vector types
+
+* A vector be a sequence of numbers, logical values, or characters.
+```{r}
+nation <- c('ireland', 'england', 'scotland', 'wales')
+```
+* We can index this vector as we did with a vector of numbers.
+```{r}
+nation[1]
+nation[2:3]
+nation == 'ireland'
+```
+
+* The `class` function in R will identify the data type of the vector.
+```{r}
+class(primes)
+class(nation)
+class(nation == 'ireland')
+```
+
+# Data frames
+
+* Data frames are rectangular data structures; they have certain number of
+columns, and each column has the same number of rows. Each column is in fact a
+vector.
+
+* Usually, data frames are created when read in the contents of a data file, but we can
+produce them on the command line with the `data.frame()`.
+```{r}
+Df <- data.frame(name = c('billy', 'joe', 'bob'), 
+                 age = c(21, 29, 23))
+Df
+```
+
+# Indexing data frames
+
+* We can refer to elements of a data frame in different ways.
+* The simplest is to use double indices, one for the rows, one for the columns. 
+```{r}
+Df[3, 2] # row 3, col 2
+Df[c(1, 3), 2] # rows 1 and 3, col 2
+Df[1,] # row 1, all cols
+Df[, 2] # all rows, col 2
+```
+
+
+# Indexing data frames (contined)
+
+* We could also refer to the column by name. To do so, we
+could use the following `$` notation.
+```{r}
+Df$age
+```
+* An alternative syntax that accompishes the same thing is to use
+*double* square brackets as follows.
+```{r}
+Df[['age']]
+```
+* A *single* square brackets, we would
+obtain the following.
+```{r}
+Df['age']
+```
+
+# Functions
+
+* In functions, we put data in, calculations or
+done to or using this data, and new data, perhaps just a single
+value, is then returned.
+* There are probably hundreds of thousands of functions in R.
+* For example, 
+```{r}
+length(primes)
+sum(primes)
+mean(primes)
+median(primes)
+sd(primes)
+var(primes)
+```
+
+# Custom functions
+
+* R makes it easy to create new functions. 
+```{r}
+my_mean <- function(x){ sum(x)/length(x)}
+```
+* This `my_mean` takes a vector as
+input and divides its sum by the number of elements in it. It then returns this values. The `x` is a
+placeholder for whatever variable we input into the function. 
+* We would use it just as we would use `mean`.
+```{r}
+my_mean(primes)
+```
+
+
+# Writing R scripts
+
+* Scripts are files where we write R commands, which can be then saved for later
+use.
+* You can bring up RStudio's script editor with Ctrl+Shift+N, or go to the
+File/ New File/ R script, or click on the New icon on the left of
+the taskbar below the menu and choose R script.
+
+* In a script, you can have as many lines of code as you wish, and there can be
+as many blank lines as you wish.  
+```{#numCode .R .numberLines}
+composites <- c(4, 6, 8, 9, 10, 12)
+
+composites_plus_one <- composites + 1
+
+composites_minus_one <- composites - 1
+```
+* If you place the cursor on line 1, you can then click the Run icon, or press the Ctrl+Enter keys.
+
+# Writing R scripts (continued)
+
+One reason why writings in scripts is very practically
+valuable, even if you don't wish to save the scripts, is when you are write long
+and complex commands.  
+```{.R .numberLines}
+Df <- data.frame(name = c('jane', 'joe', 'billy'),
+                 age = c(23, 27, 24),
+                 sex = c('female', 'male', 'male'),
+                 occupation = c('tinker', 'tailor', 'spy')
+)
+```
+We can execute this command as if it were on a single line by placing the cursor
+anywhere on any line and pressing Ctrl+Enter.
+
+# Code comments
+
+* An almost universal feature of programming language is the option to
+write *comments* in the code files. 
+* A comment allows you write to notes or
+comments around the code that is then skipped over when the script or the code
+lines are being executed. 
+* In R, anything following the `#` symbol on any line is 
+treated as a comment. 
+```{.R .numberLines}
+# Here is a data frame with four variables.
+# The variables are name, age, sex, occupation.
+Df <- data.frame(name = c('jane', 'joe', 'billy'),
+                 # This line is a comment too.
+                 age = c(23, 27, 24), # Another comment. 
+                 sex = c('female','male', 'male'),
+                 occupation = c('tinker', 'tailor', 'spy')
+)
+
+```
+
+# Packages
+
+* There are presently 
+  `r nrow(available_packages)` contributed
+  packages in R.
+  
+* The easiest way to install a package is to click the  Install button on
+the top left of the *Packages* window in the lower right pane.
+
+* You can also install a package or packages with the `install.packages` command.
+```{r, eval=FALSE}
+install.packages("dplyr")
+install.packages(c("dplyr", "tidyr", "ggplot2"))
+```
+  
+* Having installed a package, it must be loaded to be used. This can be done by clicking the tick box before the package name in the *Packages* window, or use the `library` command.
+```{r, eval=FALSE}
+library("tidyverse")
+```
+  
+# Reading in data
+
+* R allows you to import data from a very large
+variety of data file types, including from other statistics programs like SPSS,
+Stata, SAS, Minitab, and so on, and common file formats like `.xlsx` and `.csv`.
+
+* When learning R initially, the easiest way to import data is using the Import Dataset button in the Environment window.
+
+* If we use the *From Text (readr)...* option, it runs the `read_csv` R command, which we can run ourselves on the command line, or write in a script.
+
+```{r}
+library(readr)
+test_data <- read_csv("data/weight.csv")
+```
+
+# Viewing data
+
+
+* The easiest way to view a data frames is to type its name.
+
+
+```{r}
+test_data
+```
+
+
+# Viewing data (continued)
+
+* Another option to view a data frame is to `glimpse` it.
+
+```{r}
+library(dplyr)
+glimpse(test_data)
+```
+

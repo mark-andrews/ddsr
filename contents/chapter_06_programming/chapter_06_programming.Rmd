@@ -1038,7 +1038,7 @@ for (i in seq_along(file_names)){
 data_df <- bind_rows(df_list)
 ```
 ```{r, echo=F}
-stopifnot(all_equal(XX, data_df))
+stopifnot(all.equal(as.matrix(XX),as.matrix(data_df)))
 ```
 In this example, there were just `r length(file_names)` files to read in and concatenate, but had there been hundreds or thousands of code, the required code would have been identical and the total running time might only be seconds or minutes.
 

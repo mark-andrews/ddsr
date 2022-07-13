@@ -7,6 +7,7 @@
 \usepackage{lipsum}
 \usepackage{mathtools}
 \usepackage{pgfplots}
+\usepackage{fontawesome}
 
 % this is needed somewhere but not everywhere
 % and conflicts with subfigure
@@ -72,7 +73,7 @@
 \pgfplotsset{compat=1.16}
 
 % TikZ settings
-\usetikzlibrary{positioning,shapes,trees,arrows,shadows,arrows.meta,backgrounds,fit}
+\usetikzlibrary{positioning,shapes,trees,arrows,shadows,arrows.meta,backgrounds,fit,matrix}
 
 \tikzset{
     %Define style for boxes
@@ -103,6 +104,26 @@
                           edge from parent/.style = {draw, -latex},
                           sloped}
 }
+
+\tikzstyle{background}=[rectangle, fill=none,
+						draw=black,
+                                                inner sep=0.3cm,
+                                                rounded corners=3mm]
+
+\tikzstyle{observation}=[circle,font=\small,minimum size=5mm,inner sep=0mm,
+                                    draw=black!70,
+                                    fill=black!10]
+
+\tikzstyle{state}=[circle,font=\small,minimum size=5mm,inner sep=0mm,
+                                   draw=black!70,
+                                    fill=none]
+
+\tikzstyle{limit}=[rectangle,font=\small,minimum size=0mm,inner sep=0mm,
+                                    fill=none]
+
+\tikzstyle{parameter}=[circle,font=\small,minimum size=5mm,inner sep=0mm,
+                                   draw=black!70,
+                                    fill=none]
 
 
 

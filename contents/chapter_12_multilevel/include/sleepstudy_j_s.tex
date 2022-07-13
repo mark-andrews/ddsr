@@ -1,0 +1,53 @@
+\begin{figure} \centering
+\begin{subfigure}[b]{0.4\linewidth}
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[mynode/.style={draw,circle, fill=red!10,minimum width=10mm,align=center},
+                    mynodex/.style={draw,circle, minimum width=10mm,align=center}]
+\node[mynode] (y_1) {$y_1$};
+\node[mynode,right =of y_1] (y_2) {$y_2$};
+\node[right =of y_2] (y_dots) {$\ldots$};
+\node[mynode,right =of y_dots] (y_n) {$y_n$};
+
+\node[mynode,above = of y_1] (x_1) {$x_1$};
+\node[mynode,right =of x_1] (x_2) {$x_2$};
+\node[right =of x_2] (x_dots) {$\ldots$};
+\node[mynode,right =of x_dots] (x_n) {$x_n$};
+
+\node[mynodex, below=of y_2] (beta) {$\vec{\beta}$};
+\node[mynodex, right=of beta] (sigma) {$\sigma$};
+
+\foreach \value in {1,2,n}{
+  \draw[->] (x_\value) to (y_\value);
+  \draw[->] (beta) to (y_\value);
+  \draw[->] (sigma) to (y_\value);
+}
+\end{tikzpicture}}
+\subcaption{}
+\end{subfigure} %
+\hspace{10mm}
+\begin{subfigure}[b]{0.4\linewidth}
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[mynode/.style={draw,circle, fill=red!10,minimum width=10mm,align=center},mynodex/.style={draw,circle, minimum width=10mm,align=center}]
+
+\node[mynode] (y_1) {$y_d$};
+\node[mynode,above = of y_1] (x_1) {$x_d$};
+\node[right=5mm of y_1] (i) {$d \in 1\ldots n$};
+
+\node[mynodex, below=15mm of y_1] (beta) {$\vec{\beta}$};
+\node[mynodex, right=15mm of beta] (sigma) {$\sigma$};
+
+\node[draw,rounded corners=2mm,inner sep=5mm,fit=(y_1) (x_1) (i)] {};
+
+\foreach \value in {x_1,beta,sigma}
+\draw[->] (\value) to (y_1);
+%\draw[->] (sigma) to (y_1);
+
+\end{tikzpicture}}
+\subcaption{}
+\label{fig:b}    
+\end{subfigure} 
+\caption{Two equivalent Bayesian network diagrams representing a normal linear model with one predictor variable. Diagram b) uses a compact plate notation whereby all variables within the plate are repeated for all values of the index $i$, which takes values from $1$ to $n$.}
+\label{fig:bda_sleepstudy_j}
+\end{figure}

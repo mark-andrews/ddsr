@@ -1,0 +1,388 @@
+---
+title: "Chapter 3: Data Wrangling"
+author: |
+  | Mark Andrews
+  | Psychology Department, Nottingham Trent University
+  | 
+  | \faEnvelopeO\  ```mark.andrews@ntu.ac.uk```
+fontsize: 10pt
+output:
+ beamer_presentation:
+  keep_tex: true
+  fonttheme: "serif"
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+---
+
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, prompt = FALSE, warning = FALSE, message = FALSE, comment='#>')
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+
+options(scipen=9)
+```
+
+
+```{r, echo=F}
+library(tidyverse)
+```
+
+# Data wrangling with the `tidyverse`
+
+* There are many tools in R for doing data wrangling. 
+* Here, we will focus of a core set of inter-related `tidyverse` tools. 
+* These include the commands available in the `dplyr` package, particularly its so-called *verbs* such as the following:
+  * select
+  * rename
+  * slice
+  * filter
+  * mutate
+  * arrange
+  * group_by
+  * summarize
+
+# Data wrangling with the `tidyverse`
+
+* In addition, `dplyr` provides tools for merging and joining data sets. 
+* Next, there are the tools in the `tidyr` package, particularly the following:
+  * gather
+  * spread
+  * unite
+  * separate
+  * pivot_longer
+  * pivot_wider
+* Other packages such as `lubridate` and `stringr` provide essential tools for dealing with and manipulating dates and strings, respectively.
+* All of these tools are can be combined together using the `%>%` pipe operator
+
+# The `dplyr` verbs
+
+As an example data set, we will use the data contained in the file `blp-trials-short.txt`. 
+
+```{r}
+blp <- read_csv('data/blp-trials-short.txt')
+```
+
+# Select variables with `select`
+
+The `dplyr` command `select` allows us to select columns from a data frame. 
+For example, if we just want `participant`, `lex`, `resp`, and `rt`, then we would do the following.
+```{r}
+select(blp, participant, lex, resp, rt)
+```
+
+# Select variables with `select`
+
+We can select a range of variables by specifying the first and last variables in the range with a `:` between them as follows.
+```{r}
+select(blp, spell:prev.rt)
+```
+
+# Select variables with `select`
+
+We can also select a range of variables using indices as in the following example.
+```{r}
+select(blp, 2:5) # columns 2 to 5
+```
+
+# Select variables with `select`
+
+We can select variables according to the character or characters that they begin with. For example, we select all variables that being with `p` as follows. 
+```{r}
+select(blp, starts_with('p'))
+```
+
+# Select variables with `select`
+
+Or we can select variables by the characters they end with.
+```{r}
+select(blp, ends_with('t'))
+```
+
+# Select variables with `select`
+
+We can select variables that contain a certain set of characters in any position. 
+For example, the following selects variables whose names contain the string `rt`.
+```{r}
+select(blp, contains('rt'))
+```
+
+
+# Select variables with `select`
+
+We can also match by regular expressions. For example, the regular expression `^rt|rt$` will match the `rt` if it begins or ends a string. Therefore, we can select the variables that contain `rt`, where the string `rt` means reaction time, as follows.
+```{r}
+select(blp, matches('^rt|rt$'))
+```
+
+# Remove variables with `select`
+
+We can use `select` to *remove* variables as well as select them. To remove a variable, we precede its name with a minus sign. 
+```{r}
+select(blp, -participant) # remove `participant`
+```
+
+# Remove variables with `select`
+
+Just as we selected ranges or sets of variables above, we can remove them by preceding their selection functions with minus signs.
+```{r}
+select(blp, -(2:6))
+```
+
+# Remove variables with `select`
+
+Or, as another example, we can remove the variables that contain the string `rt` as follows.
+```{r}
+select(blp, -contains('rt'))
+```
+
+# Renaming variables with `select`
+
+When we select individual variables with `select`, we can rename them too, as in the following example.
+```{r}
+select(blp, subject=participant, reaction_time=rt)
+```
+
+# Renaming variables with `rename`
+
+If we want to rename some variables, and get a data frame with all variables, including the renamed ones, we should use `rename`.
+```{r}
+rename(blp, subject=participant, reaction_time=rt)
+```
+
+
+# Selecting observations by indices with `slice` 
+
+We use `slice` to select observations by their indices. For example, 
+to select rows 10, 20, 50, 100, 500, we would simply do the following.
+```{r}
+slice(blp, c(10, 20, 50, 100, 500))
+```
+
+# Selecting observations by indices with `slice` 
+
+Given that, for example, `10:100` would list the integers 10 to 100 inclusive, we can select just these observations as follows.
+```{r}
+slice(blp, 10:100)
+```
+
+# De-selecting observations by indices with `slice` 
+
+Just as we did with `select`, we can precede the indices with a minus sign to drop the corresponding observations. Thus, for example, we can drop the first 10 observations as follows.
+```{r}
+slice(blp, -(1:10))
+```
+
+# Selecting observations by condition with `filter`
+
+The `filter` command is a powerful means to filter observations according to their values. For example, 
+we can select all the observations where the `lex` variable is `N` as follows.
+```{r}
+filter(blp, lex == 'N')
+```
+
+# Selecting observations by condition with `filter`
+
+We can also filter by multiple conditions by listing each one with commas between them. For example, the following gives us the observations where `lex` has the value of `N` and `resp` has the value of `W`.
+```{r}
+filter(blp, lex == 'N', resp=='W')
+```
+
+
+# Selecting observations by condition with `filter`
+
+The following gives us those observations where where `lex` has the value of `N` and `resp` has the value of `W` and `rt.raw` is less than or equal to 500.
+```{r}
+filter(blp, lex == 'N', resp=='W', rt.raw <= 500)
+```
+
+# Selecting observations by condition with `filter`
+
+The previous command is equivalent to making a conjunction of conditions using `&` as follows.
+```{r}
+filter(blp, lex == 'N' & resp=='W' & rt.raw <= 500)
+```
+
+# Selecting observations by condition with `filter`
+
+We can make a *disjunction* of conditions for filtering using the logical-or symbol `|`. For example, 
+to filter observation where the `rt.raw` was either less than 500 or greater than 1000, we can
+do the following.
+```{r}
+filter(blp, rt.raw < 500 | rt.raw > 1000)
+```
+
+
+# Changing variables and values with `mutate`
+
+To create a new variable `is_accurate` that takes the value of `TRUE`
+whenever `lex` and `resp` have the same value, we can do the following:
+```{r}
+mutate(blp, acc = lex == resp)
+```
+
+# Changing variables and values with `mutate`
+
+As another example, we can create a new variable that gives the length of the word given by the `spell` variable.
+```{r}
+mutate(blp, len = str_length(spell))
+```
+
+
+# Changing variables and values with `mutate`
+
+We can also create multiple new variable at the same time as in the following example.
+```{r}
+mutate(blp, 
+       acc = lex == resp, 
+       fast = rt.raw < mean(rt.raw, na.rm=TRUE))
+```
+
+
+
+# Sorting observations with `arrange`
+
+Sorting observations in a data frame is easily accomplished with `arrange`. For
+example to sort by `participant` and then by `spell`, we would do the following.
+```{r}
+arrange(blp, participant, spell)
+```
+
+# Sorting observations with `arrange`
+
+We can sort by the reverse order of any variable by using the `desc` command on the variable. In the following example,
+we sort by `participant`, and then by `spell` in reverse order.
+```{r}
+arrange(blp, participant, desc(spell))
+```
+
+
+# Reducing data with `summary`
+
+The `dplyr` package has a function `summarize` (or, equivalently, `summarise`)
+that applies summarizing functions to variables. 
+
+For example, we may calculate some summary statistics of the particular variables as in the following example.
+```{r}
+summarize(blp, 
+          mean_rt = mean(rt, na.rm = T),
+          median_rt = median(rt, na.rm = T),
+          sd_rt.raw = sd(rt.raw, na.rm = T)
+)
+```
+(Note that here it is necessary to use `na.rm = T` to remove the `NA` values in the variables.)
+
+# Reducing data with `summary` and `group_by`
+
+The `summarize` command, and its variants, become considerably more powerful
+when combined with the `group_by` command. Effectively, `group_by` groups the
+observations within a data frame according to the values of specified variables.
+For example, the following command groups `blp` into groups of observations
+according to value of the `lex` variable.
+```{r}
+blp_by_lex <- group_by(blp, lex)
+```
+
+# Reducing data with `summary` and `group_by`
+
+If we now apply `summarize` to this grouped data frame, we will obtain summary
+statistics for each group, as in the following example.
+```{r}
+summarize(blp_by_lex, mean = mean(rt, na.rm=T))
+```
+
+
+# The %>% operator
+
+The `%>%` operator in R is known as the *pipe*. It available from the `magrittr` package, which is part of the `tidyverse`. In RStudio, the keyboard shortcut Ctrl+Shift+M types `%>%`.
+
+To understand pipes, let us begin with a very simple example. The following
+`primes` variable is a vector of the first 10 prime numbers.
+```{r}
+primes <- c(2, 3, 5, 7, 11, 13, 17, 19, 23, 29)
+```
+We can calculate the sum of `primes` as follows.
+```{r}
+sum(primes)
+```
+We may then calculate the square root of this sum.
+```{r}
+sqrt(sum(primes))
+```
+We may then calculate the logarithm of this square root.
+```{r}
+log(sqrt(sum(primes)))
+```
+
+
+#  The %>% operator
+
+The `%>%` is *syntactic sugar* that reexpresses nested functions as sequences. 
+
+Returning to some of our examples above, we will see how they can be rewritten with pipes. In each case,
+we will precede the piped version with a comment showing its original version.
+```{r}
+# sum(primes)
+primes %>% sum()
+```
+```{r}
+# sum(primes, na.rm=T)
+primes %>% sum(na.rm=T)
+```
+```{r}
+# log(sqrt(sum(primes)))
+primes %>% sum() %>% sqrt() %>% log()
+```
+
+
+
+# Reshaping with `pivot_longer` and `pivot_wider`
+
+A so-called *tidy* data set is a data set where all rows are observations, all columns are variables, and each variable is a single value.
+
+Consider the following data frame.
+```{r}
+recall_df <- read_csv('data/repeated_measured_a.csv')
+recall_df
+``` 
+In this data frame, for each subject, we have three values, which are their scores on a memory test in three different conditions of an experiment.
+The conditions are `Neg` (negative), `Neu` (neutral), `Pos` (positive).
+However, each column is not a variable. 
+The `Neg`, `Neu`, `Pos` are, in fact, *values* of a variable, namely the condition of the experiment.
+
+# Reshaping with `pivot_longer` 
+
+To tidy this data frame, we need a variable for the subject, another for the experiment's condition, and another for the memory score for the corresponding subject in the corresponding condition.
+To do so, we perform what is sometimes known as a *wide to long*  transformation.
+The `tidyr` package has a function `pivot_longer` for this transformation.
+
+To use `pivot_longer`, we must specify the variables (using the `cols` argument) that we want to pivot from wide to long.
+Next, we must provide a name for the column that will indicate the experimental condition.
+Finally, we must provide a name for the column that will indicate the memory scores.
+
+# Reshaping with `pivot_longer` 
+
+Here is the necessary code:
+```{r}
+recall_long <- pivot_longer(
+  recall_df, cols = -Subject, names_to = 'condition', 
+  values_to = 'score')
+recall_long
+```
+
+# Reshaping with `pivot_wider` 
+
+The inverse of a `pivot_longer` is a `pivot_wider`.
+It is very similar to `pivot_longer` and we use `names_from` and `values_from` in the opposite sense to `names_to` and `values_to`.
+```{r}
+pivot_wider(recall_long, 
+            names_from = 'condition', values_from = 'score')
+```
+
+

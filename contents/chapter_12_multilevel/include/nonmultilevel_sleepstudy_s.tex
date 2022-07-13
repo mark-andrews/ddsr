@@ -1,0 +1,95 @@
+\begin{figure} \centering
+\begin{subfigure}[b]{0.4\linewidth}
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[mynode/.style={draw,circle, fill=red!10,minimum width=10mm,align=center},mynodex/.style={draw,circle, minimum width=10mm,align=center}]
+\node[mynode] (y_1) {$y_{jd}$};
+\node[mynode,above = of y_1] (x_1) {$x_{jd}$};
+\node[right=5mm of y_1] (i) {$d \in 1\ldots n_j$};
+
+\node[mynodex, below=20mm of y_1] (beta) {$\vec{\beta}_j$};
+\node[mynodex, right=20mm of beta] (sigma) {$\sigma_j$};
+\node[below=3mm of beta] (j) {$j \in 1\ldots J$};
+
+\node[draw,rounded corners=2mm,inner sep=5mm,fit=(y_1) (x_1) (i)] {};
+\node[draw,rounded corners=2mm,inner sep=10mm,fit=(y_1) (x_1) (beta) (sigma)] {};
+
+\foreach \value in {x_1,beta,sigma}
+\draw[->] (\value) to (y_1);
+\draw[->] (sigma) to (y_1);
+\end{tikzpicture}}
+\end{subfigure}
+\hspace{10mm}
+\begin{subfigure}[b]{0.4\linewidth}
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[mynode/.style={draw,circle, fill=red!10,minimum width=10mm,align=center},mynodex/.style={draw,circle, minimum width=10mm,align=center}]
+
+\node[mynode] (y_1) {$y_{jd}$};
+\node[mynode,above = of y_1] (x_1) {$x_{jd}$};
+\node[right=5mm of y_1] (i) {$d \in 1\ldots n_j$};
+
+\node[mynodex, below=20mm of y_1] (beta) {$\vec{\beta}_j$};
+\node[below=3mm of beta] (j) {$j \in 1\ldots J$};
+\node[mynodex, left=13mm  of beta] (sigma) {$\sigma$};
+\node[right=20mm of beta] (phantom) {$$};
+
+\node[draw,rounded corners=2mm,inner sep=5mm,fit=(y_1) (x_1) (i)] {};
+\node[draw,rounded corners=2mm,inner sep=10mm,fit=(y_1) (x_1) (beta) (phantom)] {};
+
+\foreach \value in {x_1,beta}
+\draw[->] (\value) to (y_1);
+\draw[->] (sigma) [bend left] to (y_1);
+
+\end{tikzpicture}}
+\end{subfigure}
+\caption{Bayesian network diagrams for a) a set of $J$ independent normal linear models, and b) a varying slope and varying intercept linear model whereby the slope and intercept vary by a categorical variable with $J$ levels.}
+\label{fig:bda_sleepstudy}
+\end{figure}
+
+% 
+% 
+% \begin{figure}
+% \centering
+% \begin{tikzpicture}[mynode/.style={draw,circle, fill=red!10,minimum width=10mm,align=center},mynodex/.style={draw,circle, minimum width=10mm,align=center}]
+% \node[mynode] (y_1) {$y_{jd}$};
+% \node[mynode,above = of y_1] (x_1) {$x_{jd}$};
+% \node[right=5mm of y_1] (i) {$d \in 1\ldots n_j$};
+% 
+% \node[mynodex, below=20mm of y_1] (beta) {$\vec{\beta}_j$};
+% \node[mynodex, right=20mm of beta] (sigma) {$\sigma_j$};
+% \node[below=3mm of beta] (j) {$j \in 1\ldots J$};
+% 
+% \node[draw,rounded corners=2mm,inner sep=5mm,fit=(y_1) (x_1) (i)] {};
+% \node[draw,rounded corners=2mm,inner sep=10mm,fit=(y_1) (x_1) (beta) (sigma)] {};
+% 
+% \foreach \value in {x_1,beta,sigma}
+%   \draw[->] (\value) to (y_1);
+% %\draw[->] (sigma) to (y_1);
+% \end{tikzpicture}
+% 
+% \caption{Bayesian network diagrams for a) a set of $J$ independent normal linear models, and b) a varying slope and varying intercept linear model whereby the slope and intercept vary by a categorical variable with $J$ levels.}
+% \label{fig:bda_sleepstudy}
+% \end{figure}
+% 
+% \begin{subfigure}[b]{0.4\linewidth}
+% \centering
+% \begin{tikzpicture}[mynode/.style={draw,circle, fill=red!10,minimum width=10mm,align=center},mynodex/.style={draw,circle, minimum width=10mm,align=center}]
+% 
+% \node[mynode] (y_1) {$y_{jd}$};
+% \node[mynode,above = of y_1] (x_1) {$x_{jd}$};
+% \node[right=5mm of y_1] (i) {$d \in 1\ldots n_j$};
+% 
+% \node[mynodex, below=20mm of y_1] (beta) {$\vec{\beta}_j$};
+% \node[below=3mm of beta] (j) {$j \in 1\ldots J$};
+% \node[mynodex, left=13mm  of beta] (sigma) {$\sigma$};
+% \node[right=20mm of beta] (phantom) {$$};
+% 
+% \node[draw,rounded corners=2mm,inner sep=5mm,fit=(y_1) (x_1) (i)] {};
+% \node[draw,rounded corners=2mm,inner sep=10mm,fit=(y_1) (x_1) (beta) (phantom)] {};
+% 
+% \foreach \value in {x_1,beta}
+% \draw[->] (\value) to (y_1);
+% \draw[->] (sigma) [bend left] to (y_1);
+% 
+% \end{tikzpicture}
