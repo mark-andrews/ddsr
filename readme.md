@@ -21,7 +21,7 @@ docker pull xmjandrews/janacek:latest
 
 ## Run docker container
 
-The shell script [run_docker.sh](run_docker.sh) will run the container and allow the rocker based RStudio server session to accessed through the browser.
+The shell script [run_docker.sh](docker/run_docker.sh) will run the container and allow the rocker based RStudio server session to accessed through the browser.
 Do
 ```
 source docker/run_docker.sh 
