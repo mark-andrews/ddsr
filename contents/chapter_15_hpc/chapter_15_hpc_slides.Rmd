@@ -1,0 +1,328 @@
+---
+title: "Chapter 15: High Performance Computing with R"
+author: "Mark Andrews"
+output:
+ beamer_presentation:
+  keep_tex: true
+  fonttheme: "serif"
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+  - \usepackage{minted}
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+options(tinytex.engine_args = '-shell-escape')
+```
+
+```{r, echo=F}
+knitr::opts_chunk$set(warning = FALSE,
+                      message = FALSE, 
+                      comment='#>',
+                      echo = T)
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+knitr::knit_hooks$set(document = hook1)
+
+
+
+cat_script <- function(filename, start=NA, end=NA, filename_in_comment = T, minted='stan', comment_symbol = "//", leading_trim = T){
+  
+  basename <- function(path){
+    path %>% str_split(pattern = '/') %>% 
+      extract2(1) %>% 
+      tail(1)
+  }
+  
+  lines <- readLines(filename)
+  
+  if (leading_trim){
+    lines <- remove_leading_spaces(lines)
+  }
+  
+  start <- ifelse(is.na(start), 1, start)
+  end <- ifelse(is.na(end), length(lines), end)
+  cat(sprintf("\\begin{minted}{%s}", minted), sep='\n')
+  #cat(sprintf("\\begin{minted}[bgcolor=LightGray]{%s}", minted), sep='\n')
+  if (filename_in_comment){
+    cat(str_c(comment_symbol, ' ', basename(filename)), sep="\n")
+  } 
+  
+  lines <- lines[start:end]
+  
+  if (leading_trim){
+    lines <- remove_leading_spaces(lines)
+  }
+  
+  cat(lines, sep='\n')
+  cat("\\end{minted}")
+}
+
+
+set.seed(10101)
+
+
+```
+
+```{r, echo=F}
+library(tidyverse)
+theme_set(theme_classic())
+library(magrittr)
+```
+
+# Introduction
+
+* R is a high level programming language.
+* Like most programming languages of this kind, R is designed for expressiveness --- expressing complex statements and instructions in a simple, clear, and minimal syntax --- rather than speed of execution.
+* Often, R's relative lack of speed has no practical consequences for us.
+* However, there are times when speed matters, and matters greatly.
+* In this chapter, we will explore interfacing with C++ code using `Rcpp` and coarse-grained parallel processing.
+
+In addition to using C++ and parallel programming,  we will also provide a very brief introduction to using Spark with R.
+
+
+# Using C++ code with `Rcpp`
+
+* C++ is a low level (relative to R, Python, etc), general purpose programming language.
+* What this means is that C++ code is more explicit, detailed, and less expressive than R.
+* In addition, we must declare the data type of each variable in C++.
+* However, C++ is much faster than R.
+* We can easily obtain orders of magnitude speed-ups if we rewrite computationally demanding R code in C++.
+* The `Rcpp` package [@rcpp:package] has made the use of C++ based functions etc from R particularly easy to accomplish.
+
+
+# Using `Rcpp` interactively
+
+This C++ function calculates the arithmetic mean of vector of values.
+```{Rcpp, eval=F}
+double average(NumericVector x){
+
+  // Declare loop variable
+  int i;
+  // Declare vector length variable
+  int n = x.size();
+  // Declare variable that accumulates values
+  double total = 0;
+
+  for (i = 0; i < n; i++){
+    total += x[i];
+  }
+
+  return total/n;
+}
+```
+
+# 
+
+Now, let us compile `average` using the `cppFunction` from `Rcpp`.
+```{r}
+library(Rcpp)
+cppFunction('double average(NumericVector x){
+
+// Declare loop variable
+int i;
+// Declare vector length variable
+int n = x.size();
+// Declare variable that accumulates values
+double total = 0;
+
+for (i = 0; i < n; i++){
+  total += x[i];
+}
+
+return total/n;
+}')
+```
+
+# 
+
+With this, `average` is now available to use in our R session just like any other function in R.
+```{r}
+x <- runif(1e4)
+average(x)
+```
+We can verify that this is correct with R's `mean`:
+```{r}
+mean(x)
+```
+
+# Parallel processing in R
+
+* Parallel processing is arguably *the* defining feature of high performance computing.
+* Simply put, parallel processing is whenever we simultaneously execute multiple programs in order perform some task.
+* R provides many packages related to parallel computing.
+* Here, we will focus exclusively on the R `parallel` package.
+* The `parallel` package is pre-installed in R and is loaded with the usual `library` command.
+```{r}
+library(parallel)
+```
+
+# Using `clusterCall`
+
+* The `clusterCall` function calls the same function on each worker.
+* As a very simple example, let us create a function that returns the square of a given number.
+```{r}
+square <- function(x) x^2
+```
+* To apply this in parallel, first, we start a set of workers.
+```{r}
+the_cluster <- makeCluster(4)
+```
+Now we call `square` with input argument `10` on each worker.
+\tiny
+```{r}
+clusterCall(cl = the_cluster, square, 10)
+```
+\normalsize
+
+# Using `clusterApply`
+
+To call the same function with different arguments, we can use `clusterApply` and related function.
+In the following, we apply `square` to each element of vector of five elements.
+```{r}
+clusterApply(cl = the_cluster, x = c(2, 3, 5, 10), square)
+```
+
+
+
+# 
+
+With `clusterApply`, we can still use anonymous functions and we can also supply optional input arguments.
+```{r}
+clusterApply(cl = the_cluster, x = c(2, 3, 5, 10), function(x, k) x^k, 3)
+```
+
+# Using `parLapply`
+
+Very similar to `clusterApply` is `parLapply`, which is the parallel counterpart to base R's `lapply`.
+The `parLapply` uses an identical syntax to base R's `lapply` but the the cluster being the first argument.
+```{r}
+parLapply(cl = the_cluster, list(x = 1, y = 2, z = 3), function(x) x^2)
+```
+
+When we are finished with the parallel processing, we must shut down the cluster.
+```{r}
+stopCluster(the_cluster)
+```
+
+
+
+# Spark
+
+* Apache Spark is a very popular framework for big data analysis.
+* Spark can be used from R via packages like `sparklyr`.
+* In this chapter, we will provide a brief introduction to using `sparklyr`.
+
+# Installing `sparklyr` and Spark
+
+* The usual way of working with Spark is on a remote Spark cluster.
+* But when learning about Spark, especially when using `sparklyr`, it is easier to use a local Spark installation on the computer on which you are working.
+* We install `sparklyr` just as we would any R package using `install.packages`, and load it with `library`.
+```{r}
+library(sparklyr)
+```
+Once installed and loaded, we can install Spark locally as follows.
+```{r, eval=F}
+spark_install()
+```
+* Now we can create a connection to it as follows.
+```{r}
+connection <- spark_connect(master = 'local')
+```
+
+# Copying data to Spark
+
+* Now we need to get data to our local Spark cluster.
+* As an example, we will choose the `HI` data frame from the `Ecdat` package.
+```{r}
+data(HI, package = 'Ecdat')
+```
+* We can copy `HI` to our Spark cluster with `dplyr::copy_to` as follows.
+```{r}
+hi_df <- copy_to(connection, HI)
+```
+
+# Data wrangling with Spark
+
+We can do exploratory analysis of Spark based data frames using the `dplyr` verbs just like we would normally.
+For example, we can select with `select`.
+```{r}
+hi_df %>% select(whrswk, hhi, starts_with('kids'))
+```
+
+# 
+
+We can filter with `filter`.
+```{r}
+hi_df %>% filter(education == '13-15years', hispanic == 'no')
+```
+
+# 
+
+We can modify the data frame with `mutate`.
+For example, here we select sum `kidslt6` and `kids618` as `kids`
+```{r}
+hi_df %>% mutate(kids = kidslt6 + kids618) %>% select(starts_with('kids'))
+```
+
+# `summarize`
+
+When dealing with large data frames, we often want to reduce them.
+For this, `summarize` and `group_by` are vital.
+```{r}
+hi_df %>% 
+  group_by(education) %>% 
+  summarise(whrswk = mean(whrswk, na.rm = T))
+```
+
+# 
+
+If we wanted to return this intermediate data frame to R, we'd use `collect` as in the following example.
+```{r}
+whrswk_summary_df <-  hi_df %>% 
+  group_by(education) %>% 
+  summarise(whrswk = mean(whrswk, na.rm = T)) %>% 
+  collect()
+```
+We see that `whrswk` is just a regular tibble.
+```{r}
+class(whrswk_summary_df)
+```
+
+
+
+# Machine learning using Spark
+
+
+* Spark provides many machine learning tools.
+* In R, a logistic regression predicting `whi`, whether a wife has health insurance through her job, from `husby`, husband's income, in the `HI` data set is accomplished as follows.
+```{r}
+M <- glm(whi ~ husby, data = HI, family = binomial(link = 'logit'))
+```
+Using `sparklyr`, we can do the following.
+```{r}
+M_spark <- ml_logistic_regression(hi_df, whi ~ husby)
+```
+
+#
+
+What is returned by the `ml_logistic_regression` output are the coefficients.
+```{r}
+M_spark
+```
+We can verify that these match those returned by `glm`.
+```{r}
+coefficients(M)
+```
+
+
+
+
+
+
+# References

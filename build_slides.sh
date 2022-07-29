@@ -26,25 +26,25 @@ cd $BOOK/contents/chapter_05_exploratory
 make chapter_05_exploratory_slides.pdf
 make clean
 
- ## chapter 06
- #cd $BOOK/contents/chapter_06_programming
- #make chapter_06_programming_slides.pdf
- #make clean
- #
- ## chapter 07
- #cd $BOOK/contents/chapter_07_reproducible
- #make chapter_07_reproducible_slides.pdf
- #make clean
- #
- ## chapter 08
- #cd $BOOK/contents/chapter_08_inference
- #make chapter_08_inference_slides.pdf
- #make clean
- #
- ## chapter 09
- #cd $BOOK/contents/chapter_09_linear
- #make chapter_09_linear_slides.pdf
- #make clean
+ # chapter 06
+cd $BOOK/contents/chapter_06_programming
+make chapter_06_programming_slides.pdf
+make clean
+
+# chapter 07
+cd $BOOK/contents/chapter_07_reproducible
+make chapter_07_reproducible_slides.pdf
+make clean
+
+# chapter 08
+cd $BOOK/contents/chapter_08_inference
+make chapter_08_inference_slides.pdf
+make clean
+
+# chapter 09
+cd $BOOK/contents/chapter_09_linear
+make chapter_09_linear_slides.pdf
+make clean
 
 # chapter 10
 cd $BOOK/contents/chapter_10_logistic
@@ -61,30 +61,30 @@ cd $BOOK/contents/chapter_12_multilevel
 make chapter_12_multilevel_slides.pdf
 make clean
 
- ## chapter 13
- #cd $BOOK/contents/chapter_13_nlregression
- #make chapter_13_nlregression_slides.pdf
- #make clean
- #
- ## chapter 14
- #cd $BOOK/contents/chapter_14_sem
- #make chapter_14_sem_slides.pdf
- #make clean
- #
- ## chapter 15
- #cd $BOOK/contents/chapter_15_hpc
- #make chapter_15_hpc_slides.pdf
- #make clean
- #
- ## chapter 16
- #cd $BOOK/contents/chapter_16_shiny
- #make chapter_16_shiny_slides.pdf
- #make clean
- #
- ## chapter 17
- #cd $BOOK/contents/chapter_17_stan
- #make chapter_17_stan_slides.pdf
- #make clean
+# chapter 13
+cd $BOOK/contents/chapter_13_nlregression
+make chapter_13_nlregression_slides.pdf
+make clean
+
+# chapter 14
+cd $BOOK/contents/chapter_14_sem
+make chapter_14_sem_slides.pdf
+make clean
+
+# chapter 15
+cd $BOOK/contents/chapter_15_hpc
+make chapter_15_hpc_slides.pdf
+make clean
+
+# chapter 16
+cd $BOOK/contents/chapter_16_shiny
+make chapter_16_shiny_slides.pdf
+make clean
+
+# chapter 17
+cd $BOOK/contents/chapter_17_stan
+make chapter_17_stan_slides.pdf
+make clean
 
 ### 
 

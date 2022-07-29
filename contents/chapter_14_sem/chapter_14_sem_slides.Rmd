@@ -1,0 +1,478 @@
+---
+title: "Chapter 14: Structural Equation Modelling"
+author: |
+  | Mark Andrews
+  | Psychology Department, Nottingham Trent University
+  | 
+  | \faEnvelopeO\  ```mark.andrews@ntu.ac.uk```
+fontsize: 10pt
+output:
+ beamer_presentation:
+  keep_tex: true
+  fonttheme: "serif"
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+  - \usepackage{subfigure}
+---
+
+```{r, echo=F}
+knitr::opts_chunk$set(echo = F, prompt = F, warning = F, message = F, comment='#>')
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+
+
+cat_file <- function(filename, start=NA, end=NA, prepend = '', verbatim=T){
+  lines <- readLines(filename) %>% paste(prepend, ., sep = '')
+  start <- ifelse(is.na(start), 1, start)
+  end <- ifelse(is.na(end), length(lines), end)
+  if (verbatim) cat("\\begin{verbatim}",sep='\n')
+  cat(lines[start:end], sep='\n')
+  if (verbatim) cat("\\end{verbatim}")
+}
+
+```
+
+```{r}
+library(tidyverse)
+library(magrittr)
+library(GGally)
+
+set.seed(101010)
+
+```
+
+# Introduction
+
+* In practice, the term *structural equation modelling* (\sem) refers to a collection of related multivariate statistical techniques. 
+* These include factor analysis, path analysis, latent variable modelling, causal modelling, and combinations thereof.
+* In this chapter, we will cover classical factor analysis, a special case of path analysis known as mediation analysis, and then the more general classic \sem model that includes elements of both factor analysis and path analysis. 
+* In this coverage, we will primarily use the `lavaan` R package. 
+
+# Factor analysis
+
+```{r}
+pairwise_scatterplot <- function(Df, pointsize = 0.5, n_bin = 50){
+  
+  # This is a bespoke function for doing cross-correlation plots
+  
+  triangle_f <- function(data, mapping, ...){
+    ggplot(data = data, mapping = mapping) + 
+      geom_point(size=0.5) +
+      geom_smooth(method=lm, se = F, color="red", ...)
+  }
+  
+  diag_f <- function(data, mapping, ...){
+    ggplot(data = data, mapping = mapping) + 
+      geom_histogram(color="white", bins=n_bin, ...)
+  }
+  
+  ggpairs(Df,
+          diag = list(continuous = diag_f),
+          lower = list(continuous = triangle_f)
+  )
+  
+}
+```
+
+As a motivating example for introducing factor analysis, let us consider the following data set that is a subset of the `sat.act` data set in the `psych` package.
+```{r, echo=T}
+sat_act <- read_csv('data/sat_act.csv')
+```
+```{r sat_act_fig, out.width='0.67\\textwidth', fig.align='center', fig.cap = 'Pairwise scatterplots and histograms of three measures of academic ability: ACT, SAT-V, SAT-Q.'}
+pairwise_scatterplot(sat_act, n_bin = 20) + theme_minimal()
+```
+
+# 
+
+* This provides us with scores from `r nrow(sat_act)` students on three measures of academic ability: ACT (American College Testing), SAT-V (Scholastic Aptitude Test, Verbal), SAT-Q (Scholastic Aptitude Test, Quantitative).
+* There is a relatively high degree of positive inter-correlation between scores on these three tests. 
+* We could hypothesize, therefore, that students' scores on these three tests are all a result of some underlying ability, which we might refer to as general academic ability.
+* From this perspective, general academic ability is a *latent* variable.
+* There are many different types of latent variable models, but factor analysis is one very widely used one. 
+
+# The factor analysis model
+
+* In factor analysis, the observed variables are vectors. 
+* In general therefore, we can denote the observed variables by $\vec{y}_1, \vec{y}_2 \ldots \vec{y}_i \ldots \vec{y}_n$, where each $\vec{y}_i$ is 
+$$
+\vec{y}_i = [y_{1i}, y_{2i} \ldots y_{di} \ldots y_{Di}]^\intercal.
+$$
+Here, $n$ is the number of independent observations we have, and $D$ is the number of variables per each observation. 
+
+* For each $\vec{y}_i$, there is a corresponding set of $K$ latent variables, which we can denote as 
+$$
+\vec{x}_i = [x_{1i}, x_{2i} \ldots x_{Ki}]^\intercal.
+$$
+Here, $K$ can be said to denote the number of *factors*, or equivalently, the dimensionality of the latent space in the model.
+
+# The factor analysis model
+
+* Each $\vec{y}_i$ is a linear function of $\vec{x}_i$ plus normally distributed errors. 
+* Given that $\vec{y}_i$ and $\vec{x}_i$ are vectors, the linear relationship between them is easiest to state using matrix notations as follows.
+$$
+\vec{y}_i = A \vec{x}_i + \vec{b} + \vec{\epsilon}_i.
+$$
+* Here, $A$ is a $D \times K$ matrix.
+This is known as the *factor loading matrix*. 
+
+# Exploratory versus confirmatory factor analysis
+
+* In *exploratory* factor analysis the dimensionality of the latent variable space $K$ is assumed to be unknown, and there are no specific hypotheses about how each factor relates to the elements of the observed vectors. 
+* In *confirmatory* factor analysis, by contrast, $K$ is assumed to be known and the $A$ matrix is assumed to have zero elements that reflect that certain factors are assumed to not relate to certain elements of the observed vector.
+
+# Factor analysis example 1
+
+* Using `sat_act`, we will perform a factor analysis with $K=1$ (the default), using maximum likelihood as the estimation method, and, initially, with no rotation.
+* For this, we will use the `factanal` function from the `stats` package.
+```{r, echo=T}
+sat_act %<>% na.omit()
+M <- factanal(~ act + satv + satq, 
+              data = sat_act, 
+              factors = 1, 
+              rotate = 'none')
+```
+
+# 
+
+The $A$ factor loading matrix is obtained as follows.
+```{r, echo=T}
+M$loadings
+```
+
+
+# Factor analysis example 2
+
+```{r}
+data(bfi, package = 'psych')
+```
+
+* For this, we will use the `bfi` data set from the `psych` package. 
+* This provides data on `r bfi %>% select(A1:O5) %>% ncol()` personality variables from `r bfi %>% select(A1:O5) %>% nrow()` participants in a psychology study.
+In the following code, we select just the personality variables from `bfi`, and reverse code selected items as required.
+```{r, echo=T}
+data(bfi, package = 'psych')
+bfi_df <- bfi %>% 
+  select(A1:O5) %>% 
+  # reverse code selected items
+  mutate_at(c('A1', 'C4', 'C5', 'E1', 'E2', 'O2', 'O5'),
+            ~ 7 - .)
+```
+
+# 
+
+In Figure \ref{fig:bfi_cormat}, we show the correlation matrix heatmap of `bfi_df`.
+```{r bfi_cormat, echo=F, fig.align='center', fig.cap='Heatmap of the correlation matrix of 25 personality variables.', out.width='0.675\\textwidth'}
+bfi_df %>%
+  as.matrix() %>%
+  cor(use = 'complete.obs') %>%
+  as_tibble(rownames = 'x') %>%
+  pivot_longer(cols = -x, names_to = 'y', values_to = 'cor') %>% 
+  ggplot(mapping = aes(x = x, y = y, fill = cor)) +
+  geom_tile(colour = 'white') +
+  scale_fill_gradient(low = "white", high = "steelblue")
+
+```
+
+# 
+
+* For factor analysis of this data, we will use the `fa` function from the `psych` package.
+* This function is more powerful and versatile than the previously used `factanal`.
+* In the following code, we perform a factor analysis with 5 factors (`nfactors`) using factoring method  of maximum likelihood (`fm = "ml"`), and also request no rotation.
+```{r, echo=T}
+library(psych)
+M <- fa(bfi_df, nfactors = 5, fm="ml", rotate = 'none')
+```
+* In the following code, therefore, we request a *varimax* rotation.
+```{r, echo=T}
+Mv <- fa(bfi_df, nfactors = 5, fm="ml", rotate = 'varimax')
+```
+
+
+# Model fit statistics
+
+* To evaluate model fits in factor analysis, we can use methods that are standard throughout all of statistics for model evaluation. 
+* Nonetheless, in factor analysis and, as we will see, in \sem generally, a particular special set of model fit indices are widely used. 
+* For example, the *model chi-square* is defined as 
+$$
+\chi^2_M = n^\prime \fmle,
+$$
+where $\fmle$ is the minimum value of the objective function that is being minimized to maximize the log of likelihood. 
+* In `psych::fa`, we can obtain the value of $\fmle$ as follows.
+```{r, echo=T}
+Mv$objective
+```
+The value of $\chi^2_M$ is obtained as follows.
+```{r, echo=T}
+Mv$STATISTIC
+```
+
+# 
+
+* Given that $\chi^2_M$ a function of $\fmle$ scaled primarily by sample size, then the *lower* the $\chi^2_M$, the better the fit. 
+* Furthermore, for the hypothesis that the model is an exact fit of the observed data, $\chi^2_M$ will be distributed as $\chi^2$ distribution whose degrees of freedom are so-called *model degrees of freedom*. 
+* In `psych::fa`, the model degrees of freedom are obtained as follows.
+```{r, echo=T}
+Mv$dof
+```
+* In the case of model `Mv`, the value of $\chi^2_M$ is much greater than `r Mv$dof` and so the corresponding p-value is very low. 
+We can obtain this p-value as follows.
+```{r, echo=T}
+Mv$PVAL
+```
+
+# Inferring the number of factors
+
+```{r}
+# why am I using this and not psych::fa_parallel? I forget.
+source('src/fa_parallel_src.R')
+set.seed(424242)
+```
+
+In the following code, we perform the same factor analyses as we used previously, and compare the scree plot these factor analyses to the average scree plot of the from `n.iter = 100` random matrices.
+```{r, echo=T, eval=F}
+fa.parallel(bfi_df, fm = 'ml', fa = 'fa', n.iter = 100)
+```
+```{r fa_parallel, fig.align='center', out.width='0.5\\textwidth', fig.cap='Parallel analyses scree plots to indentify the number of factors to use the factor analysis.', results='hide'}
+S <- fa.parallel(bfi_df, fm = 'ml', fa = 'fa', n.iter = 100, main='')
+```
+
+
+# Mediation analysis
+
+```{r}
+set.seed(101010)
+```
+
+
+
+* In a mediation model, the effect of one variable $x$ on another $y$ is due to its effect on a third variable $m$, which then affects $y$.
+* One possibility, known as *pure* or *full* mediation model, assumes that the effect of $x$ on $y$ is entirely due to its effect on $m$.
+\begin{center}
+\begin{tikzpicture}
+\tikzstyle{every node} = [circle, fill=gray!30]
+\node (x) at (0, 0) {$x$};
+\node (y) at (4, 0) {$y$};
+\node (m) at (2,0) {$m$};
+\draw[->] (x) -- (m);
+\draw[->] (m) -- (y); 
+\end{tikzpicture}
+\end{center}
+
+* Another possibility is a *partial mediation* model. 
+\begin{center}
+\begin{tikzpicture}
+\tikzstyle{every node} = [circle, fill=gray!30]
+\node (x) at (0, 0) {$x$};
+\node (y) at (4, 0) {$y$};
+\node (m) at (2, 2) {$m$};
+\draw[->] (x) -- (m);
+\draw[->] (m) -- (y); 
+\draw[->] (x) -- (y); 
+\end{tikzpicture}
+\end{center}
+
+# 
+
+* Assuming that we are dealing with a normal linear model, we can write a pure mediation model as follows:
+\begin{align*}
+\text{for $i \ldots 1\ldots n$,}\quad y_i &\sim N(\mu^y_i, \sigma_y^2),
+\quad \mu^y_i = \beta_{y0} + \beta_{ym} m_i,\\
+m_i &\sim N(\mu^m_i, \sigma_m^2),
+\quad \mu^m_i = \beta_{m0} + \beta_{mx} x_i,
+\end{align*}
+
+* By contrast, the partial mediation model can be written as follows.
+\begin{align*}
+\text{for $i \ldots 1\ldots n$,}\quad y_i &\sim N(\mu^y_i, \sigma_y^2),
+\quad \mu^y_i = \beta_{y0} + \beta_{ym} m_i + \beta_{yx} x_i,\\
+m_i &\sim N(\mu^m_i, \sigma_m^2),
+\quad \mu^m_i = \beta_{m0} + \beta_{mx} x_i,
+\end{align*}
+
+
+# Mediation example
+
+* In order to explore mediation models, let us begin with data generated according to a specific model.
+```{r, echo=T}
+N <- 100
+
+b_m0 <- 1.25; b_mx <- 1.25; 
+b_y0 <- -0.5; b_ym <- 1.75; b_yx <- 0.75;
+sigma_m <- 1.5; sigma_y <- 2.0
+
+mediation_df <- tibble(
+  x = rnorm(N, sd = 2),
+  m = b_m0 + b_mx * x + rnorm(N, sd = sigma_m),
+  y = b_y0 + b_ym * m + b_yx * x + rnorm(N, sd = sigma_y)
+)
+```
+
+# Mediation example
+
+* Let us now set up this model using `lavaan`.
+```{r, echo=T}
+library(lavaan)
+
+mediation_model_spec_1 <- '
+y ~ 1 + m + x
+m ~ 1 + x
+'
+```
+
+* Now we call `lavaan::sem` with reference to `mediation_model_spec_1`, and this fits the model using maximum likelihood estimation.
+```{r, echo=T}
+mediation_model_1 <- sem(mediation_model_spec_1, 
+                         data = mediation_df)
+```
+
+# 
+
+\small
+```{r, echo=T}
+parameterEstimates(mediation_model_1)
+```
+\normalsize
+
+# Model comparison 
+
+* The following is a full mediation model.
+```{r, echo=T}
+mediation_model_spec_0 <- '
+  y ~ 1 + m 
+  m ~ 1 + x
+'
+mediation_model_0 <- sem(mediation_model_spec_0, 
+                         data = mediation_df)
+```
+* Now, let us look at how well these two models fit the data using \aic.
+```{r, echo=T}
+mediation_models <- c(model_0 = mediation_model_0,
+                      model_1 = mediation_model_1)
+
+map_dbl(mediation_models, AIC)
+```
+```{r}
+stopifnot(AIC(mediation_model_1) < AIC(mediation_model_0))
+```
+
+As we can see, the \aic for `mediation_model_1` is lower than that of `mediation_model_0` by approximately `r round(AIC(mediation_model_0) - AIC(mediation_model_1), digits = 2)`.
+
+# Structural Equation Modelling
+
+\begin{figure}
+\centering
+\subfigure[]
+{
+\resizebox{.4\textwidth}{!}{
+\begin{tikzpicture}
+\node[circle, fill=gray!30] (y_1) at (-1, 3) {$y_1$};
+\node[circle, fill=gray!30] (y_2) at (0, 3) {$y_2$};
+\node[circle, fill=gray!30] (y_3) at (1, 3) {$y_2$};
+\node[circle, fill=gray!30] (y_4) at (3, 3) {$y_3$};
+\node[circle, fill=gray!30] (y_5) at (4, 3) {$y_4$};
+\node[circle, draw=gray!80] (x_1) at (0, 1) {$x_1$};
+\node[circle, draw=gray!80] (x_2) at (2, 1) {$x_2$};
+\node[circle, draw=gray!80] (x_3) at (4, 1) {$x_3$};
+\draw[->] (x_1) -- (y_1);
+\draw[->] (x_1) -- (y_2);
+\draw[->] (x_1) -- (y_3);
+\draw[->] (x_2) -- (y_3);
+\draw[->] (x_2) -- (y_4);
+\draw[->] (x_3) -- (y_4);
+\draw[->] (x_3) -- (y_5);
+\draw[->] (x_3) to [bend left=30] (x_1);
+\draw[->] (x_2) -- (x_1);
+\end{tikzpicture}
+}
+}
+\hspace{2cm}
+\subfigure[]
+{
+\resizebox{.4\textwidth}{!}{
+\begin{tikzpicture}
+\node[circle, fill=gray!30] (y_1) at (-1, 3) {$y_1$};
+\node[circle, fill=gray!30] (y_2) at (0, 3) {$y_2$};
+\node[circle, fill=gray!30] (y_3) at (1, 3) {$y_2$};
+\node[circle, fill=gray!30] (y_4) at (3, 3) {$y_3$};
+\node[circle, fill=gray!30] (y_5) at (4, 3) {$y_4$};
+\node[circle, draw=gray!80] (x_1) at (0, 1) {$x_1$};
+\node[circle, draw=gray!80] (x_2) at (2, 1) {$x_2$};
+\node[circle, draw=gray!80] (x_3) at (4, 1) {$x_3$};
+\node[circle, fill=gray!30] (x_4) at (4, -0.5) {$x_4$};
+\draw[->] (x_1) -- (y_1);
+\draw[->] (x_1) -- (y_2);
+\draw[->] (x_1) -- (y_3);
+\draw[->] (x_2) -- (y_3);
+\draw[->] (x_2) -- (y_4);
+\draw[->] (x_3) -- (y_4);
+\draw[->] (x_3) -- (y_5);
+\draw[->] (x_3) to [bend left=30] (x_1);
+\draw[->] (x_2) -- (x_1);
+\draw[->] (x_4) to [bend left=30] (x_1);
+\draw[->] (x_4) -- (x_3);
+\end{tikzpicture}
+}
+}
+\caption{\scriptsize Two \sem models. In (a), a set of observed variables are functions of a set of latent variables, which are functions of one another. In (b), a set observed variables are functions of both observed and latent variables, which are also functions on one another. We use the convention here of shading the nodes representing observed variables.}
+\label{fig:grad_mediation_diagrams}
+\end{figure}
+
+# 
+
+* Here, we will explore \sem using `lavaan` R package.
+* We will use the `PoliticalDemocracy` data set provided by `lavaan`. 
+* In it, there are the following variables: `y1`, `y2`, `y3`, `y4`, `y5`, `y6`,`y7`, `y8`, `x1`, `x2`, `x3`.
+* The variables `y_1`, `y_2`, `y_3` and `y_4` measures democracy variables in 1960.
+* The variables `y_5`, `y_6`, `y_7`, and `y_8` measure the same democracy variables but in 1965.
+* The variables `x_1`, `x_2`, and `x_3` are all measures of the economy in the represented countries in 1960. 
+
+# 
+
+* A reasonable \sem model is that variables `y_1`, `y_2`, `y_3` and `y_4` are all functions of a single underlying latent variable. 
+* Likewise, `y_5`, `y_6`, `y_7`, and `y_8` are all functions of a single latent variable that represents democracy in 1965. 
+* Finally, `x_1`, `x_2`, and `x_3` are all measures of a single latent variable representing industrialization in 1960.
+* If we leave the model as such, this leads to a confirmatory factor analysis model.
+```{r, echo=T}
+sem_model_1_spec <- '
+  ind60 =~ x1 + x2 + x3
+  dem60 =~ y1 + y2 + y3 + y4
+  dem65 =~ y5 + y6 + y7 + y8
+'
+```
+
+# 
+
+* Let us now expand this model.
+* The pairs of variables (`y1`, `y5`), (`y2`, `y6`), (`y3`, `y7`), (`y4`, `y8`), given that they each measure the same variable but in different years, ought to be correlated. 
+* Also, let us model `dem65` as a function of `dem60` and `ind60`, `dem60` as a function of `ind60`.
+
+#
+
+* We can specify this model as follows.
+```{r, echo=T}
+sem_model_3_spec <- '
+  ind60 =~ x1 + x2 + x3
+  dem60 =~ y1 + y2 + y3 + y4
+  dem65 =~ y5 + y6 + y7 + y8
+  
+  dem65 ~ dem60 + ind60
+  dem60 ~ ind60
+
+  y1 ~~ y5
+  y2 ~~ y6
+  y3 ~~ y7
+  y4 ~~ y8
+'
+sem_model_3 <- sem(sem_model_3_spec, 
+                   orthogonal = T,
+                   std.lv = T,
+                   data = PoliticalDemocracy)
+```
+
+

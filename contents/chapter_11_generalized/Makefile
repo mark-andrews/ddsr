@@ -33,6 +33,7 @@ clean:
 	rm -f $(main).tex
 	rm -rf $(main)_slides_files 
 	rm -rf $(main)_slides.tex
+	rm -rf $(main)_slides_cache
 
 
 mrproper: clean

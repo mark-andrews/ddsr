@@ -1,0 +1,203 @@
+---
+title: "Chapter 7: Reproducible Data Analysis"
+author: |
+  | Mark Andrews
+  | Psychology Department, Nottingham Trent University
+  | 
+  | \faEnvelopeO\  ```mark.andrews@ntu.ac.uk```
+fontsize: 10pt
+output:
+ beamer_presentation:
+  keep_tex: true
+  fonttheme: "serif"
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+---
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r}
+options(knitr.duplicate.label = 'allow')
+
+library(tidyverse)
+
+cat_file <- function(filename, start=NA, end=NA, prepend = '', verbatim=T){
+  lines <- readLines(filename) %>% paste(prepend, ., sep = '')
+  start <- ifelse(is.na(start), 1, start)
+  end <- ifelse(is.na(end), length(lines), end)
+  if (verbatim) cat("\\begin{verbatim}",sep='\n')
+  cat(lines[start:end], sep='\n')
+  if (verbatim) cat("\\end{verbatim}")
+}
+
+cat_bash <- function(filename, start=NA, end=NA, prepend = '', verbatim=T){
+  lines <- readLines(filename) %>% paste(prepend, ., sep = '')
+  start <- ifelse(is.na(start), 1, start)
+  end <- ifelse(is.na(end), length(lines), end)
+  if (verbatim) cat("```bash",sep='\n')
+  cat(lines[start:end], sep='\n')
+  if (verbatim) cat("```")
+}
+
+
+
+
+```
+
+# Introduction
+
+The aim of *reproducible data analysis*, at its most general, is to make the data analysis factory or pipeline as open and transparent as possible, and to allow all others, including our future selves, to be able to exactly reproduce any of the results that were produced by it.
+  
+Doing reproducible data analysis is often motivated by a general commitment to doing *open science*.
+Reproducible data analysis can also be motivated simply as a means of doing more high quality and robust data analysis, even when this analysis is not being done as part of scientific research per se, such as with confidential analyses that is done in business and industry.
+
+This chapter is about doing *open*, *transparent*, and *reproducible* research using R and related software tools.
+
+# Open, transparent, and reproducible research
+
+Open
+
+:   Open data analysis, like open source software or open science generally, is data analysis where all the data, code, and any other required materials are fully disclosed to and shared with others, usually by being made publicly available.
+
+Transparent 
+
+:   Transparent data analysis is analysis where, as mentioned above, it is possible to determine exactly where and how any given table, figure, or statistical result was obtained.
+ 
+Reproducible 
+
+:   Reproducible data analysis is any data analysis where an independent analyst can exactly reproduce all the results.
+ 
+
+# Using RMarkdown for reproducible reports
+
+For a report to be reproducible, the data, code, and resulting document need to be inextricably coupled in a manner that goes beyond how documents are traditionally written.
+The most popular, and arguably the best, way of doing this using R is to use *RMarkdown*, or more precisely to use RMarkdown and a combination of tools including *knitr*, *pandoc*, \latex, and others. 
+
+
+# A minimal RMarkdown example
+
+An RMarkdown file is essentially a script containing two types of code: Markdown and normal R code. 
+The following is the contents of small RMarkdown file, named `example.Rmd`.
+\footnotesize
+```{r echo = FALSE, results='asis'}
+cat_file("examples/example-1.Rmd", prepend = '')
+```
+\normalsize
+
+# A minimal RMarkdown example: rendered
+
+```{r, echo=T, child = 'examples/example-1.Rmd'}
+```
+
+# An extended RMarkdown example {.fragile}
+
+\newcommand{\tinytiny}{\fontsize{4}{5}\selectfont}
+
+\tinytiny
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd')
+```
+\tinytiny
+
+# The YAML header {.fragile}
+
+The first few lines of an RMarkdown document, specifically those lines that are delimited by the lines with the three dashes (i.e., `---`) constitute its *YAML* header.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 1, end = 7)
+```
+
+# The setup R chunk {.fragile}
+
+It is common, though not necessary to have a setup R chunk like the following at the beginning of our RMarkdown file.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 9, end = 14)
+```
+In addition to including a common configuration statement, this example also has some important general RMarkdown features.
+
+
+
+# Markdown sections  {.fragile}
+
+The use of the `#` followed by some text at the start of a line in the Markdown language indicates a section header.
+Thus, in our case, the following line indicates we should have a section entitled *Introduction* in our document.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 16, end = 16)
+```
+
+# R chunk outputs {.fragile}
+
+Just as we see the output of R commands when those commands are run in the console, the output of R commands will appear in the output document unless we specify request otherwise.
+Consider the following lines from our example RMarkdown file.
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 28, end = 30)
+```
+
+# \latex mathematical typesetting  {.fragile}
+
+On the following line
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 37, end = 37)
+```
+we have the terms `$x$` and `$y$`. These are rendered as the mathematical symbols $x$ and $y$.
+ 
+# Figures  {.fragile}
+
+If the R code in the a chunk generates a figure, for example by using `ggplot`, then that figure is inserted into the document immediately after the location of the chunk. 
+```{r, echo=F, results='asis'}
+cat_file('examples/example-2.Rmd', start = 40, end = 44)
+```
+This chunk will create a `ggplot` figure that will float. 
+
+
+# Git \& GitHub
+
+* Git is version control software, initially developed for version control of the Linux operating system kernel.
+* It is now extremely widely used for almost all kinds of software development projects. 
+* Git works on a decentralized system whereby a code-base can be *cloned*, developed independently, and possible re-merged. 
+* For collaborating on one project, two developers use a *remote* host, clone it, develop locally, *commit* and then *push* back to and *pull* from the remote host.
+* GitHub is one of the most widely used hosting sites (but there are others, e.g. BitBucket; and running your own git hosting server is simple and inexpensive).
+* Git is designed for source code (i.e. text files) management. Data and other "assets" can be attached to (rather than kept within) the repository using `git fat`, `git annex`, `git lfs`, etc.
+
+# Git: Tiny tutorial
+
+- Start by cloning a remote repository:
+```{r, engine = 'bash', eval = FALSE, echo = TRUE}
+      git clone https://github.com/yihui/knitr.git
+      cd knitr
+      git log # Read all the commit logs
+```
+- Work as normal, i.e. edit files, create new files, delete files. 
+- You now *stage* your changes, e.g.
+```{r, engine = 'bash', eval = FALSE, echo = T}
+      git add foo.file.1 foo.file.2 # for edits or new files
+      git rm foo.file.3 # for removed files
+```
+- You then *commit* these:
+```{r, engine = 'bash', eval = FALSE, echo = T}
+      git commit # Editor opens for your log msg
+```
+
+
+# Git: Tiny tutorial (2)
+
+- Pull down any recent changes by others from the remote:
+```{r, engine = 'bash', eval = FALSE, echo = T}
+      git pull
+      git log # If new changes, read their logs
+```
+- Now, push your own changes to the remote
+```{r, engine = 'bash', eval = FALSE, echo = T}
+      git push # requires permissions
+```
+
+- Undo changes:
+```{r, engine = 'bash', eval = FALSE, echo = T}
+      git reset a381f2f # move back "head"
+      git revert a381f2f # applies new change to revert 
+```
+

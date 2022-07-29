@@ -1,0 +1,267 @@
+---
+title: "Chapter 8: Statistical Models & Statistical Inference"
+author: |
+  | Mark Andrews
+  | Psychology Department, Nottingham Trent University
+  | 
+  | \faEnvelopeO\  ```mark.andrews@ntu.ac.uk```
+fontsize: 10pt
+output:
+ beamer_presentation:
+  keep_tex: true
+  fonttheme: "serif"
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+---
+
+
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = T, warning = F, message = F)
+
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+
+library(tidyverse)
+library(knitr)
+library(xtable)
+library(kableExtra)
+library(cowplot)
+library(latex2exp)
+library(magrittr)
+library(knitr)
+
+library(brms)
+brm <- function(...) brms::brm(silent = TRUE, refresh = 0, seed = 1011, ...)
+
+theme_set(theme_classic())
+
+```
+
+# Statistical inference
+
+* Statistical inference is the inference of the values of unknown variables in a statistical model.
+* There are two major approaches to statistical inference.
+* The first approach is variously referred to as the *classical*, *frequentist*, or *sampling theory* based approach.
+* The second is the Bayesian approach.
+* The classical approach is still the dominant one in practice, particularly for the more introductory or medium level topics.
+* The Bayesian approach, on the other hand, although having its origins in the 18th century and being used in practice throughout the 19th century, had a long hiatus in statistics until around the end of the 1980s. Since then, it has steadily grown in terms of its popularity and widespread usage throughout statistics and data science.
+
+# Example problem
+
+* The problem we will consider was described in the Guardian newspaper in January 4, 2002^[https://www.theguardian.com/world/2002/jan/04/euro.eu2]: "Polish mathematicians Tomasz Gliszczynski and Waclaw Zawadowski... spun a Belgian one euro coin 250 times, and found it landed heads up 140 times."
+* Here, the data is the observed number of heads, $m=140$.
+* The total number of spins $n=250$ is the sample size.
+* Here, $m$ is a realization of a random variable $Y$ whose possible values are $0\ldots n$ and whose probability distribution is $\Pop{Y}$.
+* The only viable option for this model is the binomial distribution: $Y \sim \textrm{Binomial}(\theta, n=250)$.
+
+# Classical statistical inference
+
+* Classical statistical inference begins with an *estimator* of the value of $\theta$, denoted by $\hat{\theta}$, and then considers the *sampling distribution* of $\hat{\theta}$ for any hypothetical true value of $\theta$.
+* Informally speaking, we can see the estimator $\hat{\theta}$ as an educated guess of what the true value of $\theta$ is.
+* One widely used method of estimation, perhaps the most widely used method, is *maximum likelihood estimation*.
+
+# Maximum likelihood estimation
+
+* The maximum likelihood estimator of $\theta$ is the value of $\theta$ that maximizes the *likelihood function*.
+* The likelihood function is a function over the set of all possible values of $\theta$, which we will denote by $\Theta$. 
+* It gives the probability of observing the data given any particular value of $\theta$.
+
+# 
+
+```{r, loglike, echo=F, fig.align='center', fig.cap='a) The binomial likelihood function for $\\theta$ when $m=140$ and $n=250$. b) The logarithm of the likelihood function.', out.width='\\textwidth', fig.height=2.5}
+m <- 140
+n <- 250
+foo_df <- tibble(x = seq(0, 1, length.out = 1e4),
+       y = x^m * (1-x)^(n-m)
+)
+
+p1 <- foo_df %>% ggplot(aes(x = x, y = y)) + 
+  geom_line() + 
+  theme(axis.ticks.y = element_blank(),
+        axis.text.y = element_blank()) +
+  xlab(TeX('$\\theta$')) +
+  ylab(TeX('$L(\\theta | n, m)$'))
+
+
+p2 <- foo_df %>% ggplot(aes(x = x, y = log(y))) + 
+  geom_line() + 
+  theme(axis.ticks.y = element_blank(),
+        axis.text.y = element_blank()) +
+  xlab(TeX('$\\theta$')) +
+  ylab(TeX('$\\log L(\\theta | n, m)$'))
+
+plot_grid(p1, p2, labels = c('a', 'b'))
+
+```
+
+
+# Sampling distribution of $\hat{\theta}$
+
+The maximum likelihood estimator can be seen as a random variable.
+The sampling distribution for $\thetahat$ when the true value of $\theta$ is $\thetastar$ can be written as follows.
+$$
+\Prob{\thetahat \given \thetastar, n} = \binom{n}{\thetahat n} \thetastar^{\thetahat n} (1-\thetastar)^{n-\thetahat n}.
+$$
+
+* The expected value of the sampling distribution of $\thetahat$ is $\thetastar$.
+* The standard deviation of the sampling distribution is $\tfrac{1}{\sqrt{n}} \sqrt{\thetastar (1-\thetastar)}$.
+* This is known as the *standard error*, and often plays an important role in classical statistical inference, as we will see in later examples.
+
+# \pvalues
+
+* Informally speaking, a \pvalue tells us whether the value of an estimator, or more generally, the value of any statistic or function of the observed data, is consistent with some hypothetical value of the unknown variable.
+* If the \pvalue is low, the estimator's value is not consistent with the hypothesized value.
+* The higher the \pvalue is, the more consistent the estimator's value is with the hypothesized value.
+* If the \pvalue is sufficiently low, we can, practically speaking, rule out or reject the hypothesized value. 
+
+# \pvalues
+
+* Technically speaking, \pvalues are tail areas of the sampling distribution of the estimator corresponding to a particular hypothesized value of the unknown variable.
+* In order to be precise in our statement of whether $\thetahat = 0.56$ is beyond what we would expect if $\thetastar = 0.64$, we calculate the tail areas of the sampling distribution defined by values *as or more extreme* than $\thetahat = 0.56$.
+* The total area in these tails defines the \pvalue.
+In other words, the \pvalue is the probability of observing a value of the estimator *as or more extreme* than $\thetahat = 0.56$ if $\thetastar = 0.64$.
+If the \pvalue is low, then we know that $\thetahat = 0.56$ is far into the tails of the sampling distribution when $\theta = 0.64$.
+
+# Null hypotheses and significance
+
+* In general, we can test any hypothetical value of the unknown variable.
+* Often some hypothetical values have a special meaning in that they correspond to values that entail that there is no effect of any interesting kind.
+* Hypotheses of this kind are known as *null* hypotheses.
+* In the present example, the hypothesis that $\theta = 0.5$ entails that the coin is completely unbiased; it is no more likely to come up heads than tails, and so any differences in the observed numbers of heads and tails in a set of spins or flips is just a matter of chance.
+* As such, this hypothesis would usually be seen as a null hypothesis.
+
+
+# Confidence intervals
+
+* Confidence intervals are counterparts to \pvalues.
+* As we've seen, each \pvalue corresponds to a particular hypothesis about the true value of $\theta$.
+* If the \pvalue is sufficiently low, we will reject the corresponding hypothesis. 
+* If the \pvalue is not sufficiently low, we can not reject the hypothesis. 
+* However, not rejecting a hypothesis does not entail that we should accept that hypothesis; it just simply means that we can not rule it out.
+* The set of hypothetical values of $\theta$ that we do *not* reject at the $\alpha$ \pvalue threshold corresponds to the $1-\alpha$ confidence interval.
+* Practically speaking, we can treat all values in this range as the set of plausible values for $\theta$.
+
+
+# Bayesian statistical inference
+
+* Bayesian approaches to statistical inference ultimately aim to solve the same problem as that of classical approaches, namely the inference of the unknown values of variables in a statistical model.
+* While the classical approaches is based on calculation of estimators and their sampling distributions, Bayesian approaches rely on an 18th century mathematical result known as *Bayes' rule* or *Bayes' theorem* to calculate a probability distribution over the possible values of the unknown variable.
+* This probability distribution, known as the *posterior distribution*, gives us the probability that the unknown variable takes on any given value, contingent on  the assumptions of the model.
+
+# Priors
+
+* To perform Bayesian inference on the value of $\theta$, we must first provide a probability distribution for the possible values that $\theta$ can take on in principle.
+* This is known as the *prior* distribution.
+* As an example, if we assume that $\theta$ can take on any possible value in the interval $[0, 1]$ and each value has equal likelihood, our prior would be a uniform distribution over $\theta$.
+* On the other hand, if we assume that $\theta$ values are more likely to be equal to $\theta = 0.5$, but possibly be above or below $\theta=0.5$ too, our prior might be a symmetrical unimodal distribution centered at $\theta=0.5$.
+
+# 
+
+```{r, thetaprior, echo=F, fig.cap="Examples of priors over $\\theta$. a) A uniform prior. b-c) Priors where $\\theta$ is more likely to be $0.5$ than otherwise but values greater and less than $0.5$ are probable too, and more so in the case of c) whose variance is wider than the prior in b). d) A prior where $\\theta$ is more likely to be $\\theta=0.6$ than any other value and more likely to be above rather than below $0.5$.", fig.align='center', out.width='0.8\\textwidth'}
+theta_df <- tibble(theta = seq(0, 1, length.out = 1e3),
+                   uniform = dbeta(theta, shape1 = 1, shape2 = 1),
+                   unimodal1 = dbeta(theta, shape1 = 20, shape2 = 20),
+                   unimodal2 = dbeta(theta, shape1 = 5, shape2 = 5),
+                   unimodal3 = dbeta(theta, shape1 = 30, shape2 = 20)
+)
+
+p1 <- theta_df %>% 
+  ggplot(aes(x = theta, y = uniform)) + 
+  geom_line() +
+  labs(x = TeX('$\\theta$'),
+       y = TeX('$P(\\theta)$'))
+
+p2 <- theta_df %>% 
+  ggplot(aes(x = theta, y = unimodal1)) + 
+  geom_line() +
+  labs(x = TeX('$\\theta$'),
+       y = TeX('$P(\\theta)$'))
+
+p3 <- theta_df %>% 
+  ggplot(aes(x = theta, y = unimodal2)) + 
+  geom_line() +
+  labs(x = TeX('$\\theta$'),
+       y = TeX('$P(\\theta)$'))
+
+p4 <- theta_df %>% 
+  ggplot(aes(x = theta, y = unimodal3)) + 
+  geom_line() +
+  labs(x = TeX('$\\theta$'),
+       y = TeX('$P(\\theta)$'))
+
+
+plot_grid(p1,p2,p3,p4, labels = letters[1:4], nrow = 2)
+
+```
+
+
+# Bayes' rule and the posterior distribution
+
+Having specified our statistical model and our prior, we can now write out the full Bayesian model.
+$$
+\begin{aligned}
+Y \sim \textrm{Binom}(\theta, n = 250),\\
+\theta \sim \textrm{Beta}(\alpha = 5, \beta = 5)
+\end{aligned}
+$$
+
+* We will use this joint probability distribution, coupled with the fact that we observe the value of $Y$, to calculate a probability distribution over the possible values of $\theta$ conditional on all the observed data and the assumptions of the model.
+* This is known as the *posterior distribution*, and is the central result in Bayesian inference.
+
+
+# Posterior distribution
+
+The probability distribution over the possible values of $\theta$ given what is known or assumed is the posterior distribution:
+$$
+\underbrace{\Prob{\theta \given Y, \alpha, \beta, n}}_{\text{posterior}} 
+=
+\frac{\overbrace{L(\theta \given Y, n)}^{\text{likelihood}}\overbrace{P(\theta\given \alpha, \beta)}^{\text{prior}}}
+{\underbrace{\int L(\theta \given Y, n)P(\theta\given \alpha, \beta) d\theta}_{\text{marginal likelihood}}}.
+$$
+This tells us is that having observed the data, the probability distribution over the possible values of $\theta$ is the normalized product of the likelihood function and the prior over $\theta$.
+
+
+# Posterior distribution
+
+For the case of our data and prior, i.e., $m=140$, $n=250$, $\alpha = \beta = 5$, the posterior, likelihood, and prior are shown below.
+
+```{r, prior_likelihood_posterior, echo=F, fig.cap='The posterior, likelihood, and prior in a binomial problem with $m=140$ and $n=250$ and where the prior is a beta distribution with $\\alpha=5$, $\\beta=5$.', fig.align='center', out.width='0.75\\textwidth'}
+m <- 14
+n <- 25
+
+plot_bin_model <- function(m, n, a, b, xlim=c(0, 1)){
+  tibble(theta = seq(xlim[1], xlim[2], length.out = 1e4),
+         prior = theta^(a-1) * (1-theta)^(b-1),
+         likelihood = theta^m * (1-theta)^(n-m)
+  ) %>% mutate(prior = prior/sum(prior),
+               likelihood = likelihood/sum(likelihood),
+               posterior = prior * likelihood,
+               posterior = posterior/sum(posterior)
+  ) %>% pivot_longer(-theta, names_to = 'model', values_to = 'p') %>% 
+    ggplot(aes(x = theta, y = p, linetype = model)) + 
+    geom_line() +
+    labs(x = TeX('$\\theta$'), y = '') +
+    theme(legend.position="bottom",
+          legend.title=element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank())
+}
+
+plot_bin_model(140, 250, 5, 5)
+# plot_grid(
+#    
+#    plot_bin_model(140, 250, 5, 5, xlim=c(0.4, 0.7)),
+#    nrow = 2,
+#    labels = c('a', 'b')
+#   plot_bin_model(14, 25, 5, 5),
+#   plot_bin_model(140, 250, 5, 5)
+#)
+
+```
+

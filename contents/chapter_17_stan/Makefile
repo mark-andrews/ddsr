@@ -17,7 +17,7 @@ $(main).md: $(main).Rmd $(header) $(bibtex)
 $(main).html: $(main).Rmd $(header) $(bibtex)
 	Rscript -e 'rmarkdown::render("$(main).Rmd", output_format = "html_document")'
 
-$(main).docx: $(main).Rmd $(header) $(bibtex)
+$(main).docx: $(main).Rmd $(header) $(bibtex) 
 	Rscript -e 'rmarkdown::render("$(main).Rmd", output_format = "word_document")'
 
 $(main).pdf: $(main).tex
@@ -27,6 +27,9 @@ $(main).pdf: $(main).tex
 	$(mkpdf) $(main).tex
 	$(mkpdf) $(main).tex
 	$(mkpdf) $(main).tex
+
+$(main)_slides.pdf: $(main)_slides.Rmd $(header) $(bibtex) M_math_2.Rds
+	Rscript -e "rmarkdown::render(input = '$(main)_slides.Rmd', output_file = '$(main)_slides.pdf')"
 
 M_dice_3.Rds: 
 	Rscript scripts/m_dice_3.R
@@ -68,7 +71,13 @@ clean:
 	$(rm) _minted-$(main)
 	$(rm) $(main)_files
 	$(rm) $(main)_cache
-
+	rm -rf $(main)_slides_files
+	rm -rf $(main)_slides_cache
+	rm -rf $(main)_slides.tex
+	rm -rf $(main)_slides.aux
+	rm -rf $(main)_slides.log
+	rm -rf $(main)_slides.toc
+	rm -rf _minted-$(main)_slides
 
 mrproper: clean
 	$(rm) *.Rds
@@ -79,4 +88,4 @@ mrproper: clean
 	rm -f $(main).html
 	rm -f $(main).docx
 	rm -f $(bibtex)
-
+	rm -rf $(main)_slides.pdf

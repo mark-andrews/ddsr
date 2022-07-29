@@ -1,0 +1,320 @@
+---
+title: "Chapter 17: Probabilistic Modelling with Stan"
+author: "Mark Andrews"
+output:
+ beamer_presentation:
+  keep_tex: true
+  fonttheme: "serif"
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{./header.tex}
+  - \usepackage{minted}
+---
+  
+```{r, include=FALSE}
+options(tinytex.engine_args = '-shell-escape')
+```
+
+  
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = T, warning = F, message = F)
+
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+
+library(tidyverse)
+library(magrittr)
+library(rstan)
+library(latex2exp)
+
+theme_set(theme_classic())
+
+options(width=120)
+
+cat_script <- function(filename, start=NA, end=NA, filename_in_comment = T, minted='stan', comment_symbol = "//", leading_trim = T){
+  
+  basename <- function(path){
+    path %>% str_split(pattern = '/') %>% 
+      extract2(1) %>% 
+      tail(1)
+  }
+  
+  lines <- readLines(filename)
+  
+  if (leading_trim){
+    lines <- remove_leading_spaces(lines)
+  }
+  
+  start <- ifelse(is.na(start), 1, start)
+  end <- ifelse(is.na(end), length(lines), end)
+  cat(sprintf("\\begin{minted}{%s}", minted), sep='\n')
+  #cat(sprintf("\\begin{minted}[bgcolor=LightGray]{%s}", minted), sep='\n')
+  if (filename_in_comment){
+    cat(str_c(comment_symbol, ' ', basename(filename)), sep="\n")
+  } 
+  
+  lines <- lines[start:end]
+  
+  if (leading_trim){
+    lines <- remove_leading_spaces(lines)
+  }
+  
+  cat(lines, sep='\n')
+  cat("\\end{minted}")
+}
+
+cat_rscript <- function(filename, start=NA, end=NA, filename_in_comment = T){
+  cat_script(filename = filename, start=start, end=end, filename_in_comment = filename_in_comment, minted = 'R', comment_symbol = '#')
+}
+
+
+cat_stanfile <- function(filename, start=NA, end=NA, filename_in_comment = T){
+  cat_script(filename = filename, start=start, end=end, filename_in_comment = filename_in_comment, minted = 'stan', comment_symbol = '//')
+}
+
+
+
+remove_leading_spaces <- function(s){
+  s %>%
+    str_remove(pattern = '^\n') %>%
+    str_remove(patter = '\n$') %>% 
+    str_split(pattern = '\n') %>% 
+    unlist() %>% 
+    enframe() %>% 
+    mutate(n_leading_space = str_extract(value, pattern = regex('^\\s*')) %>%
+             str_count(pattern = regex("\\s"))
+    ) %>% 
+    mutate(n = min(n_leading_space)) %>% 
+    mutate(new_value = str_remove(value, pattern = regex(sprintf('\\s{%d}', n)))) %>% 
+    pull(new_value)
+}
+
+```
+
+# Introduction
+
+
+* Stan is a *probabilistic programming language* (\ppl), whose aim is to automate the implementation of the \mcmc sampler.
+* With a \ppl, all we need do is specify our probabilistic model, including the priors, in a high level programming language.
+* The sampler is then automatically derived and compiled and executed for us, and samples are then returned to us.
+* The saving in terms of our time and effort can be remarkable.
+* Stan is arguably the dominant probabilistic programming language for Bayesian data analysis in statistics.
+* Here, we will attempt to provide a self-contained tutorial introduction to Stan and how it can be used in R by using `rstan`.
+
+# Loaded die model
+
+```{r, echo=F}
+set.seed(10101)
+N <- 250
+sample(seq(6),
+       size = N,
+       replace = T,
+       prob = c(1, 1, 1, 1, 1, 2)
+) %>% tibble(outcome = .) %>% write_csv('data/loaded_dice.csv')
+```
+
+* Let us begin with a very simple one parameter problem.
+* Let us imagine that we have a die that is loaded to make an outcome of 6 more likely than other outcome.
+* We throw this die $N = `r N`$ times and record the resulting face on each occasion.
+* Simulated data of this kind is available in the following data set.
+```{r}
+dice_df <- read_csv('data/loaded_dice.csv')
+```
+We can recode each outcome as a "six" or "not-six" binary outcome.
+```{r}
+dice_df %<>% 
+  mutate(is_six = ifelse(outcome == 6, 1, 0))
+```
+
+# Bernoulli model of loaded die
+
+* If we denote these binary outcomes as $y_1, y_2 \ldots y_n$, with each $y_i \in \{0, 1\}$, an assuming that there is a fixed probability $\theta$ that each $y_i = 1$, then Bayesian our model of this data is as follows, where we use a Beta prior.
+$$
+\begin{aligned}
+y_i &\sim \textrm{Bernoulli}(\theta),\quad\text{for $i \in 1, 2\ldots n$},\\
+\theta &\sim \textrm{Beta}(\alpha, \beta).
+\end{aligned}
+$$
+
+# Bernoulli model in Stan
+
+* To implement this model is Stan, we first extract out the `is_six` variable as a standalone vector, which we will name `y`, and record the length of this vector as `N`.
+```{r}
+y <- dice_df %>% pull(is_six)
+N <- length(y)
+```
+* We will set them to be both equal to $1$, which gives us a uniform prior distribution over $\theta$.
+```{r}
+alpha <- 1.0
+beta <- 1.0
+```
+* The four variables `y`, `N`, `alpha`, and `beta` are the data that we will send to Stan, and to do so, we must put them into a list.
+
+\footnotesize
+```{r}
+dice_data <- list(y = y,
+                  N = N,
+                  alpha = alpha, 
+                  beta = beta)
+```
+\normalsize
+
+# 
+
+The Stan implementation of this model is written in an external file, namely `loaded_dice.stan`.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice.stan')
+```
+
+# `data` block
+
+We notice that in this Stan program, as with most Stan programs, we have multiple code blocks, specifically `data`, `parameters`, and `model`.
+The `data` block defines the input data.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice.stan', start = 1, end = 6, filename_in_comment = F)
+```
+Notice that we must not only declare the names of the variables that we will be passing in to the program as data, but we must also declare their size and type.
+
+# `parameters` block
+
+The `parameters` block declares the (free) parameters of the model.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice.stan', start = 8, end = 10, filename_in_comment = F)
+```
+In this example, we have just one parameter, `theta`, which corresponds to $\theta$ in the above mathematical description.
+
+# `model` block
+
+The next block is `model` and is where we define the model itself.
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/loaded_dice.stan', start = 12, end = 15, filename_in_comment = F)
+```
+This code corresponds almost perfectly to the mathematical description of the model.
+
+```{r, echo = F}
+stan <- function(file, ...){
+  rstan::stan(file = fs::path('stan', file), refresh = 0, ...)
+}
+```
+
+# Running Stan models using `rstan`
+
+We can execute this Stan program in R via commands provided by the `rstan` package.
+```{r, eval=F}
+library(rstan)
+```
+* The following command from the `rstan` package will compile a sampler based on the specifications in `loaded_dice.stan` and the data in `dice_data`, and then draw samples from it.
+```{r, cache=T}
+M_dice <- stan(file = 'loaded_dice.stan',
+               data = dice_data)
+```
+
+# Stan output
+
+Typing the name `M_dice` gives us the following output.
+\tiny
+```{r}
+M_dice
+```
+\normalsize
+
+# 
+
+* If we apply the generic `summary` command to `M_dice`, we are given a list with two objects: `summary` and `c_summary`.
+```{r}
+summary(M_dice) %>% class()
+summary(M_dice) %>% names()
+```
+* The `summary` object in this list is a matrix that summarizes the samples from all chains together.
+
+\footnotesize
+```{r}
+stan_summary <- function(stan_model, pars, probs = c(0.025, 0.975)){
+  summary(stan_model, pars = pars, probs = probs)$summary %>% 
+    as_tibble(rownames = 'par')
+}
+
+stan_summary(M_dice, pars = 'theta')
+```
+\normalsize
+
+# Simple linear regression
+
+A simple linear regression model as a full Bayesian model is as follows.
+$$
+\begin{aligned}
+y_i &\sim N(\mu_i, \sigma^2),\quad\mu_i = \beta_0 + \beta_1 x_i,\\
+\beta_0 &\sim N(\nu_0, \tau^2_0),\quad
+\beta_1 \sim N(\nu_1, \tau^2_1),\quad
+\sigma \sim \mathrm{Student}_{+}(\kappa, \phi, \omega)
+\end{aligned}
+$$
+
+# Stan code for simple linear regression
+
+The Stan code for this model is in `normallinear.stan`.
+\tiny
+```{r, echo=F, results='asis'}
+cat_stanfile('stan/normlinear.stan')
+```
+\normalsize
+
+# 
+
+We can call the Stan program as using `rstan::stan` as we did above.
+```{r, echo=F, results='asis'}
+cat_rscript('scripts/normlinear.R', start = 4, end = 18, filename_in_comment = F)
+```
+
+# 
+
+```{r, echo=F}
+M_math_2 <- readRDS('M_math_2.Rds')
+```
+As before, we can view the results with `stan_summary`
+\scriptsize
+```{r}
+stan_summary(M_math_2, pars = c('beta_0', 'beta_1', 'sigma'))
+```
+\normalsize
+
+# Posterior expectations
+
+* Quantities of interest from a Bayesian model can be expressed as *posterior expectations* that can be approximated using Monte Carlo integration:
+$$
+\left\langle g(\theta) \right\rangle = \int g(\theta) \Prob{\theta\given\data} d\theta \approx \left\langle g(\theta) \right\rangle \approx \frac{1}{n} \sum_{i=1}^n g(\tilde{\theta}_i),
+$$
+where $\tilde{\theta}_1, \tilde{\theta}_2 \ldots \tilde{\theta}_n$ are posterior samples of the unknown variables in the model.
+
+# Extracting samples 
+
+* We can obtain each sample from each chain for any variables using `rstan::extract` as follows.
+
+\tiny
+```{r}
+rstan::extract(M_dice, pars='theta', permuted=F, inc_warmup=T) %>% 
+  magrittr::extract(,,1) %>% 
+  as_tibble()
+```
+\normalsize
+
+We obtain an array for each parameter that we specify in `pars`, and get all samples including the warmup samples by `inc_warmup`.
+
+# `tidybayes`
+
+* The package `tidybayes` provides many useful functions from working with Stan based models, including functions from extracting samples.
+* The following extracts the (post-warmup) samples into a data frame with one row for each sample from each chain.
+
+\tiny
+```{r}
+library(tidybayes)
+spread_draws(M_math_2, beta_0, beta_1, sigma)
+```
+\normalsize
+
+With these samples in this format, we may now easily compute quantities of interest.

@@ -1,0 +1,604 @@
+---
+title: "Chapter 9: Normal Linear Models"
+author: |
+  | Mark Andrews
+  | Psychology Department, Nottingham Trent University
+  | 
+  | \faEnvelopeO\  ```mark.andrews@ntu.ac.uk```
+fontsize: 10pt
+output:
+ beamer_presentation:
+  keep_tex: true
+  fonttheme: "serif"
+bibliography:
+  - "`r system('kpsewhich mjandrews.bib', intern=TRUE)`"
+biblio-style: apalike   
+header-includes:
+  - \input{header.tex}
+---
+
+
+```{r, echo=F}
+knitr::opts_chunk$set(echo = F, prompt = F, warning = F, message = F, comment='#>')
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+```
+
+```{r}
+library(tidyverse)
+library(here)
+library(knitr)
+library(ggridges)
+library(cowplot)
+theme_set(theme_classic())
+
+set.seed(10101)
+```
+
+# Regression models
+
+```{r, out.width='0.67\\textwidth', fig.align='center'}
+n <- 10
+tibble(x = rnorm(n), 
+       y = x + rnorm(n)) %>% 
+  ggplot(aes(x = x, y = y)) + geom_point() + stat_smooth(method = 'lm', se = F)
+```
+
+* Regression models are often introduced as fitting lines to points.
+* This is a limited perspective that makes understanding more complex regression models, like generalized linear models, harder to grasp.
+
+
+# Regression models
+
+* Put simply and generally, a regression model is a model of how the probability distribution of one variable, known as the *outcome* variable and other names, varies as a function of other variables, known as the *explanatory* or *predictor* variables.
+
+* The most common or basic type of regression models is the *normal* *linear* model.
+
+* In normal linear models, we assume that the outcome variable is normally distributed and that its mean varies linearly with changes in a set of predictor variables.
+
+* By understanding the normal linear model thoroughly, we can see how it can be extended to deal with data and problems beyond those that it is designed for.
+
+# Normal linear models: Model definition
+
+* In a normal linear model, we have $n$ observations of an outcome variable:
+$$
+y_1, y_2 \ldots y_i \ldots y_n,
+$$
+and for each $y_i$, we have a set of $K \geq 0$ explantory variables:
+$$
+\vec{x}_1, \vec{x}_2 \ldots \vec{x}_i \ldots \vec{x}_n,
+$$
+where $\vec{x}_i = [x_{1i}, x_{2i} \ldots x_{ki} \ldots x_{Ki}]\strut^\intercal$.
+
+* We model $y_1, y_2 \ldots y_i \ldots y_n$ as follows:
+$$
+\begin{aligned}
+y_i &\sim N(\mu_i, \sigma^2),\quad\text{for $i \in 1 \ldots n$},\\
+\mu_i &= \beta_0 + \sum_{k=1}^K \beta_k x_{ki}
+\end{aligned}
+$$
+
+* In words, each $y_i$ is modelled a normal distribution, of equal variance $\sigma^2$, whose mean is a linear function of $\vec{x}_i$.
+
+# Normal linear models: Model definition
+
+* From this model, for every hypothetically possible value of the $K$ predictor variables, i.e. $\vec{x}_{i^\prime}$, there is a corresponding mean $\mu_{i^\prime}$, i.e. $\mu_{i^\prime} = \beta_0 + \sum_{k=1}^K \beta_k x_{ki^\prime}$.
+
+* If we change $x_{ki^\prime}$ by $\Delta_k$, then $\mu_{i^\prime}$ changes by $\beta_k \Delta_k$.
+
+# Example problem
+
+* Let us consider a simple problem that we can analyse using a normal linear model.
+```{r, echo=T}
+# data on heights, weights etc of US Army personnel
+weight_df <- read_csv("data/weight.csv")
+weight_male_df <- weight_df %>% filter(gender == 'male')
+```
+
+* Let's say that our interest lies in understanding the distribution of the weights, which are measured in kilograms, of these men.
+
+# Example problem
+
+* To begin with, let us imagine that we do not have any information concerning any other variable, and so our task is essentially to model the data that is being illustrated in the following histogram:
+```{r male_weight_dist, fig.align='center', out.width='0.5\\textwidth'}
+weight_male_df %>% 
+  ggplot(aes(x = weight)) + 
+  geom_histogram(binwidth = 5, colour = 'white')
+```
+
+* This data is unimodal and roughly bell-shaped, and so as a first approximation, we could model it as a normal distribution. 
+* In other words, we model the weights, $y_1, y_2 \ldots y_n$, as follows:
+$$
+  y_i \sim N(\mu, \sigma^2),\quad\text{for $i \in 1 \ldots n$.}
+$$
+  
+  
+# Example problem
+
+* Now let us consider how men's weights vary with changes in the men's heights.
+
+```{r, out.width='0.7\\textwidth', fig.height=7, fig.align='center'}
+P_1 <- weight_male_df %>% 
+  mutate(height_decile = ntile(height, 5)) %>% 
+  ggplot(aes(x = weight)) + 
+  geom_histogram(binwidth = 5, colour = 'white') +
+  facet_wrap(~height_decile) +
+  theme_minimal()
+
+P_2 <- weight_male_df %>% 
+  mutate(height_decile = ntile(height, 5)) %>% 
+  ggplot(aes(x = weight, y = height_decile, group = height_decile)) + 
+  geom_density_ridges(bandwidth = 10) + 
+  ylab('Height quintile')
+
+P_3 <- weight_male_df %>% 
+  mutate(height_decile = ntile(height, 5)) %>%
+  group_by(height_decile) %>% 
+  summarize(height = mean(height),
+            weight = mean(weight)) %>% 
+  ggplot(aes(x = height, y = weight)) + geom_point()
+
+plot_grid(P_1, 
+          plot_grid(P_2, P_3, labels = c('b', 'c')), 
+          labels = c('a', ''), 
+          nrow = 2)
+
+```
+
+The histograms (a) and density plots (b) of the weights in a sample of men who are subdivided according to the quintile of their heights. In (c), we plot the mean weight against the mean height in each quintile.
+
+# Normal linear model of weight by height
+
+* Denoting the heights of the men by $x_1, x_2 \ldots x_n$, our new probabilistic model of their weights $y_1, y_2 \ldots y_n$ could be as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad\mu_i = \beta_0 + \beta_1 x_i,\quad\text{for $i \in 1 \ldots n$}.
+$$
+* In other words, we our assuming that each observed weight $y_i$ is a sample drawn from a normal distribution, the mean of which is a linear function of $x_i$, i.e. $\mu_i = \beta_0 + \beta_1 x_i$.
+* For simplicity and convenience, we also usually assume that the standard deviation of these distributions are all identical and have the value of $\sigma$. 
+
+# Normal linear model of weight by height
+
+* According to the model, for any given male height $x^\prime$, the corresponding distribution of male weights is normally distributed with a mean $\mu^\prime = \beta_0 + \beta_1 x^\prime$ and standard deviation $\sigma$.
+* If height changes by any amount $\Delta_x$, the mean of the corresponding normal distribution over weight changes by exactly $\beta_1 \Delta_x$.
+* This fact entails that if height changes by exactly $\Delta_x  = 1$, the mean of the corresponding normal distribution over weight changes by exactly $\beta_1$. 
+
+# Normal linear model of weight by height and age
+
+* We may also model how the distribution of weight varies as either, or both, the height and the age of men changes.
+```{r fig.align='center', out.width='0.8\\textwidth'}
+weight_male_df %>% 
+  mutate(height_decile = ntile(height, 5),
+         age_tercile = ntile(age, 3)) %>% 
+  ggplot(aes(x = weight, y = height_decile, group = height_decile)) + 
+  geom_density_ridges(bandwidth = 10.1) + 
+  ylab('Height quintile') + 
+  facet_grid(~age_tercile,
+             labeller = label_both
+             ) + theme_minimal()
+```
+In this figure, we see the density of male weight for the different quintiles of male height, and the different terciles of age.
+
+# Normal linear model of weight by height and age
+
+* Denoting the men's heights by $x_{11}, x_{12} \ldots x_{1i} \ldots x_{1n}$ and the men's ages by $x_{21}, x_{22} \ldots x_{2i} \ldots x_{2n}$, the model is now 
+$$
+y_i \sim N(\mu_i, \sigma^2)\quad \mu_i = \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i}.
+$$
+* For any given combination of height and age, we have a normal distribution over weight. 
+* If the height variable changes by one unit, when age is held constant, then the average value of the corresponding distribution of weight changes by $\beta_1$.
+* Conversely, if the age variable changes by one unit, when height is held constant, then the average value of the corresponding distribution of weight changes by $\beta_2$.
+
+
+
+# Model fitting 
+
+* If we assume the model
+$$
+y_i \sim N(\mu_i, \sigma^2),\quad\text{for $i \in 1 \ldots n$},\mu_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki}
+$$
+then we immediately face the problem of inferring the values of the $K + 2$ unknowns $\beta_0, \beta_1 \ldots \beta_K$ and $\sigma$.
+
+* In general in statistics, maximum likelihood estimation is a method by which we estimate the values of the unknown variables in a statistical model.
+* In the case of normal linear model, the maximum likelihood estimators of the $K + 2$ unknowns, which we can denote by 
+$$
+\hat{\beta}_0, \hat{\beta}_1 \ldots \hat{\beta}_K, \hat{\sigma},
+$$
+are the set of values $K + 2$ unknown variables that make the observed data most probable.
+
+# Model fitting 
+
+* The maximum likelihood values of the $K +1$ coefficients, i.e. $\hat{\beta}_0, \hat{\beta}_1 \ldots \hat{\beta}_K$, are those values of the $\beta_0, \beta_1 \ldots \beta_K$ variables that minimize the *residual sum of squares*:
+$$
+\textrm{RSS} = \sum^n_{i=1} |y_i - \mu_i|^2,
+$$
+where $\mu_i$ is as defined above.
+
+* Once we have $\hat{\beta}$, then the maximum likelihood estimate of $\sigma$, denoted $\hat{\sigma}$ is:
+$$
+\hat{\sigma} = \sqrt{\frac{1}{n - K - 1} \sum_{i=1}^n | y_i - \hat{\mu}_i|^2}.
+$$
+
+
+# Fitting a normal linear model using `lm`
+
+* Here, we model `weight` as a function of `height` and `age` in the sample of men in the `weight_male_df` data set:
+```{r, echo=T}
+M1 <- lm(weight ~ height + age, data = weight_male_df)
+```
+
+* The maximum likelihood estimates of $\beta_0$ (the intercept), $\beta_1$ (coefficient for height), $\beta_2$ (coefficient for age) are as follow:
+```{r, echo=T}
+(estimates <- coef(M1))
+```
+
+* The mle of $\sigma$ is
+```{r, echo=T}
+sigma(M1)
+```
+
+
+# Hypothesis testing and confidence intervals
+
+* If $\beta_k$ is the *hypothesized* true value of the coefficient, then 
+$$
+\frac{\hat{\beta}_k - \beta_k}{\hatse_k} \sim t_{n - K - 1}.
+$$
+* Roughly speaking, this result tells is that if the true value of the coefficient was some hypothesized value $\beta_k$, then we expect the t-statistic to have a certain range of values with high probability.
+
+
+# Hypothesis testing 
+
+* We will test a hypothesis about the coefficient for `height` in the `M1` model above.
+```{r, echo=T}
+# extract the whole coefficients table from the summary output
+coefs_table <- summary(M1)$coefficients
+
+# the following gets the mle for height 
+# also possible using `coef(...)`
+beta_height <- coefs_table['height', 'Estimate']
+
+# here is the standard error
+se_height <- coefs_table['height', 'Std. Error']
+```
+* If we hypothesize the the true value of the coefficient is exactly 1.0, then our t-statistic is
+$$
+\frac{\hat{\beta}_k - \beta_k}{\hatse_k} = \frac{`r round(beta_height, 3)` - 1.0}{`r round(se_height, 3)`} = `r round((beta_height - 1)/se_height, 3)`.
+$$
+```{r, echo=T}
+(t_stat_1 <- (beta_height - 1)/se_height)
+```
+
+# p-values
+
+* The *p-value* for the hypothesis is the probability of getting a value *as or more extreme* than the absolute value of t-statistic in the t-distribution.
+* This is the area under the curve in the t-distribution that is as or more extreme than the absolute value of t-statistic.
+* It tells us how far into the tails of the distribution the t-statistic is.
+```{r,echo=T}
+n <- nrow(weight_male_df)
+K <- 2
+pt(abs(t_stat_1), df = n - K - 1, lower.tail = FALSE) * 2
+
+(t_stat_2 <- (beta_height - 0)/se_height)
+pt(abs(t_stat_2), df = n - K - 1, lower.tail = FALSE) * 2
+
+coefs_table['height',c('t value', 'Pr(>|t|)')]
+```
+
+
+# Confidence intervals
+
+* The set of all hypotheses that we do not rule out at the $p < 0.05$ level of significance is known as the 0.95 confidence interval.
+* Likewise, the set of all hypotheses that we do not rule out at the $p < 0.01$ level of significance is known as the 0.99 confidence interval, and so on.
+* In a normal linear model, the formula for the $1-2\epsilon$ confidence interval on coefficient $k$ is
+$$
+\hat{\beta}_k \pm \tau_{(1-\epsilon, \nu)}  \cdot \hatse_k,
+$$
+where $\tau_{(1-\epsilon, \nu)}$ is value in a t-distribution with $\nu$ degrees of freedom below which lines $1-\epsilon$ of the area under the curve.
+
+# Confidence intervals in R
+
+* In R, we can calculate $\tau$ this using `qt`.
+```{r, echo=T}
+tau <- qt(0.975, df = n-K-1)
+```
+We then obtain the confidence interval as follows
+```{r, echo=T}
+beta_height + c(-1, 1) * se_height * tau
+```
+
+* This calculation can more conveniently done using the `confint` function applied to the `lm` object `M1`.
+```{r, echo=T}
+confint(M1, parm = 'height', level = 0.95)
+```
+
+
+# Predictions
+
+* Using $\hat{\beta}_0, \hat{\beta}_1 \ldots \hat{\beta}_K$ and $\hat{\sigma}^2$, then for any new vector of predictor variables $\vec{x}_{i^\prime}$, the corresponding $y_{i^\prime}$ is now
+$$
+y_{i^\prime} \sim N(\hat{\mu}_{i^\prime}, \sigma^2), \quad\hat{\mu}_{i^\prime} = \hat{\beta}_0 + \sum_{k=1}^K \hat{\beta}_k x_{i^\prime k}.
+$$
+
+* We can use the `predict` and related functions in R to calculate $\hat{\mu}_{i^\prime}$ for any given new vector of predictor variables $\vec{x}_{i^\prime}$.
+```{r, echo=T}
+weight_male_df_new <- tibble(height = 175,
+                             age = 35)
+
+predict(M1, newdata = weight_male_df_new)
+```
+
+# Prediction confidence intervals
+
+
+* We can calculate confidence intervals for the predicted values of $\mu_{i^\prime}$.
+* The $1-2\epsilon$ *confidence interval* for $\mu_{i^\prime}$ is as follows:
+$$
+\hat{\mu}_{i^\prime} \pm \tau_{(1-\epsilon, \nu)}  \cdot \hatsemu,
+$$
+where $\hatsemu$ is the standard error term the corresponds to $\hat{\mu}_{i^\prime}$.
+
+* Using R, we can obtain the confidence intervals on $\mu^{i^\prime}$ by using the option `interval = 'confidence'` in the `predict` function.
+```{r, echo=T}
+predict(M1, 
+        interval = 'confidence',
+        newdata = weight_male_df_new)
+```
+
+
+#  $R^2$
+
+* It can be shown that in general
+$$
+\underbrace{\sum_{i=1}^n (y_i-\bar{y})^2}_{\text{TSS}} = \underbrace{\sum_{i=1}^n (\hat{\mu}_i - \bar{y})^2}_{\text{ESS}} + \underbrace{\sum_{i=1}^n (y_i - \hat{\mu}_i)^2}_{\text{RSS}},
+$$
+
+* The proportion of the variability in outcome variable due to changes in predictors is referred to as $R^2$:
+$$
+R^2 = \frac{\textrm{ESS}}{\textrm{TSS}}.
+$$
+* $R^2$ is routinely taken to be a measure of model fit in linear models. 
+* $R^2$, by definition, gives the proportion of total variation due to variation in the predictor variables.
+
+# Adjusted $R^2$
+
+* The value of $R^2$ necessarily increases, or does not decrease, as we add more predictors to the model, even if the true values of the coefficients for these predictors are zero.
+* To overcome this spurious increase in $R^2$, the following adjustment is applied.
+$$
+\begin{aligned}
+R^2_{\textrm{Adj}} &= 1 - \frac{\textrm{RSS}}{\textrm{TSS}} \frac{n-1}{n-K-1},\\
+                   &= 1 - \left(1 - R^2\right) \underbrace{\frac{n-1}{n-K-1}}_{\textrm{penalty}}.
+\end{aligned}
+$$
+
+
+# $R^2$ and Adjusted $R^2$ with `lm`
+
+* From the `lm` object, the $R^2$ and $R^2_{\textrm{Adj}}$ are easily obtained using the `summary` function.
+```{r, echo=T}
+S <- summary(M1)
+S$r.squared
+S$adj.r.squared
+```
+
+
+
+# Model comparison
+
+* When all coefficients are simultaneously zero, we are essentially saying that the following two models are identical.
+$$
+\begin{aligned}
+\mathcal{M}_0 &\colon y_i \sim N(\hat{\mu}_i, \sigma^2),\quad\hat{\mu}_i = \beta_0,\quad\text{for $i \in 1 \ldots n$},\\
+\mathcal{M}_1 &\colon y_i \sim N(\hat{\mu}_i, \sigma^2),\quad\hat{\mu}_i = \beta_0 + \sum_{k=1}^K \beta_k x_{ki},\quad\text{for $i \in 1 \ldots n$}.
+\end{aligned}
+$$
+* The residual sums of sums for these two models can be denoted $\textrm{RSS}_0$ and $\textrm{RSS}_1$.
+
+* Under the null hypothesis that these two models are identical, and so the coefficients for all predictors are simultaneously zero, we have the following result:
+$$
+\underbrace{\frac{\left(\textrm{RSS}_{0} - \textrm{RSS}_{1}\right)/K}
+{\textrm{RSS}_{1}/(n-K-1)}}_{\text{F-statistic}}
+\sim F(K, n-K-1).
+$$
+* In words, under the null hypothesis, the F-statistic is distributed as an F-distribution with $K$ and $N - K - 1$ degrees of freedom.
+
+
+# Model comparison
+
+* We can extend the above result to test whether any subset of the $K$ predictors have coefficients that are simultaneously zero. 
+* In general, we can compare two models $\mathcal{M}_1$ and $\mathcal{M}_0$ with $K_1$ and $K_0$ predictors, respectively, and where $K_0 < K$ and all the $K_0$ predictors in $\mathcal{M}_0$ are also present in $\mathcal{M}_1$.
+* Under the null hypothesis that the $K_1 - K_0$ predictors in $\mathcal{M}_1$ and not in $\mathcal{M}_0$ are simultaneously zero, we have
+$$
+\frac{\left(\textrm{RSS}_{0} - \textrm{RSS}_{1}\right)/(K_1 - K_0)}
+{\textrm{RSS}_{1}/(n-K_1-1)}
+\sim F(K_1 - K_0, n-K_1-1).
+$$
+
+# Model comparison using `lm`
+
+* The results of the null hypothesis test that $R^2 = 0$ can be obtained in numerous ways, but the easiest is to use the generic `anova` function where we compare model `M` against `M_null`.
+```{r, echo=T}
+M0 <- lm(weight ~ 1, data = weight_male_df)
+anova(M0, M1)
+```
+
+
+# Categorical predictor variables
+
+```{r weight_dist_by_sex_height, fig.align='center', out.width='0.8\\textwidth', fig.height=7}
+
+tmp_df <- weight_df %>%
+  mutate(height_ntile = ntile(height, 5),
+         age_ntile = ntile(age, 3))
+
+p_1 <- tmp_df %>% 
+  ggplot(aes(x = weight, group = gender, colour = gender, fill = gender)) + 
+  geom_density(bw = 5.1, alpha = 0.5) + 
+  ylab('density') + 
+  theme_minimal()
+
+p_2 <- tmp_df %>% 
+  ggplot(aes(x = weight, y = height_ntile, group = height_ntile)) + 
+  geom_density_ridges(bandwidth = 10.1) + 
+  ylab('Height quintile') + 
+  facet_grid(~ gender,
+             labeller = label_both
+  ) + theme_minimal()
+
+plot_grid(p_1, p_2, 
+          labels = c('a', 'b'), 
+          rel_heights = c(1, 2)/3,
+          nrow = 2)
+```
+a) Density plots of the weights of males and females. b) Density plots of the weights of males and females for each of the different quintiles of height (across both males and females).
+
+# Binary predictors
+
+
+* We can code a binary variable as 0 and 1, e.g. the gender variable can be coded by `female` as 0 and `male` as 1.
+* Using gender alone as a predictor, our model is then 
+$$
+y_i \sim N(\mu_i, \sigma^2), \quad \mu_i = \beta_0 + \beta_1 x_i,\quad\text{for $i \in 1\ldots n$},
+$$
+where $x_i = 0$ if the value of `gender` of person $i$ is `female` and $x_i = 1$ if the value of `gender` of person $i$ is `male`.
+Put another way, we create variables $x_1, x_2 \ldots x_n$ defined as follows
+$$
+x_i = \begin{cases}
+0,\text{if $\textrm{gender}_i = \texttt{female}$}\\
+1,\text{if $\textrm{gender}_i = \texttt{male}$}
+\end{cases}
+$$
+
+# Categorical predictors using `lm`
+
+```{r, echo=T}
+M_gender <- lm(weight ~ gender, data = weight_df)
+coef(M_gender)
+```
+* The intercept term $\beta_0$ is, by definition, the average of the distribution of weight when the predictor variable takes a value of 0. 
+* In this case, $x_i$ takes a value of 0 whenever $\textrm{gender}_i$ is `female`.
+* As such, the intercept term is the average of the distribution of weights for females.
+* On the other hand, the average of the distribution of weight for males is equal to the the value of $\mu_i$ when $x_i = 1$, which is $\beta_0 + \beta_1 \cdot 1 = \beta_0 + \beta_1$.
+* This entails that $\beta_1$ gives the *difference* in the average of the distribution of weight for females and males.
+
+# Varying intercept model
+
+* When we include `gender` as a explanatory variable in addition to a continuous predictor variable, the model is as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2), \quad \mu_i = \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i},\quad\text{for $i \in 1\ldots n$}.
+$$
+* To implement this model using `lm` we would do the following.
+```{r, echo=T}
+M_gender_height <- lm(weight ~ height + gender, 
+                      data = weight_df)
+coef(M_gender_height)
+```
+
+# Varying intercept model
+
+* Given that $x_{2i}$ takes that value of 0 when the gender is female and takes the value of 1 when gender is male, this model can be written as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2), \quad \mu_i
+= \begin{cases}
+\beta_0 + \beta_1 x_{1i},\text{if $\textrm{gender}_i = \texttt{female}$}\\
+\beta_0 + \beta_1 x_{1i} + \beta_2,\text{if $\textrm{gender}_i = \texttt{male}$}
+\end{cases}.
+$$
+* This is a *varying intercept* model. 
+
+
+
+# Interactions and varying slope model
+
+* The varying-intercept model is written as follows:
+$$
+y_i \sim N(\mu_i, \sigma^2), \quad \mu_i = \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i},\quad\text{for $i \in 1\ldots n$},
+$$
+* On the other hand, the following is a varying intercept and varying slope model:
+$$
+\begin{aligned}
+y_i &\sim N(\mu_i, \sigma^2),\\
+\mu_i &= \beta_0 + \beta_{1}x_{1i} + \beta_{2}x_{2i} + \underbrace{\beta_3 x_{1i} x_{2i}}_{\text{interaction}}
+\end{aligned}
+$$
+In this model, we effectively have a third predictor $x_{1i} x_{2i}$ that is the product of $x_{1i}$ of $x_{2i}$.
+
+# Interactions and varying slope model
+
+* Using `gender` and `height` as predictors, we can do the following in R to perform a varying-intercept model:
+```{r,echo=T}
+# vivs := varying intercept, varying slope
+M_vivs <- lm(weight ~ height * gender, data=weight_df)
+```
+
+# Interactions and varying slope model
+
+From this model, the intercept terms for `female` and `male` are
+```{r, echo=T}
+betas <- coef(M_vivs)
+betas['(Intercept)'] # female
+betas['(Intercept)'] + betas['gendermale'] # male
+```
+By contrast, the slope terms are as follows:
+```{r, echo=T}
+betas['height'] # female
+betas['height'] + betas['height:gendermale'] # male
+```
+
+
+
+# Polychotomous predictors
+
+* In linear models, we can also use categorical predictor variables that have more than two levels, which can be referred to as polychotomous predictor variables.
+
+* Using `race` as our single categorical predictor variable, the linear model would be as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2), \quad \mu_i = \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i},\quad\text{for $i \in 1\ldots n$},
+$$
+where $x_{1i}, x_{2i}$ are as follows
+$$
+x_{1i}, x_{2i} = \begin{cases}
+0,0\quad\text{if $\textrm{race}_i = \texttt{black}$}\\
+1,0\quad\text{if $\textrm{race}_i = \texttt{hispanic}$}\\
+0,1\quad\text{if $\textrm{race}_i = \texttt{white}$}\\
+\end{cases}.
+$$
+
+# Polychotomous predictors 
+
+```{r, echo=T}
+weight_df_2 <- weight_df %>% 
+  filter(race %in% c('white', 'black', 'hispanic'))
+```
+
+* Using `race` as our single categorical predictor variable, the linear model would be as follows.
+$$
+y_i \sim N(\mu_i, \sigma^2), \quad \mu_i = \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i},\quad\text{for $i \in 1\ldots n$},
+$$
+where $x_{1i}, x_{2i}$ are as follows
+$$
+x_{1i}, x_{2i} = \begin{cases}
+0,0\quad\text{if $\textrm{race}_i = \texttt{black}$}\\
+1,0\quad\text{if $\textrm{race}_i = \texttt{hispanic}$}\\
+0,1\quad\text{if $\textrm{race}_i = \texttt{white}$}\\
+\end{cases}.
+$$
+
+# Polychotomous predictors 
+
+Using `lm`, we would simply do as follows.
+```{r, echo=T}
+M_race <- lm(weight ~ race, data = weight_df_2)
+coef(M_race)
+```
+* The intercept term is the predicted average of the distribution of weight when `race` is `black`.
+* The predicted mean of the weight distribution for `hispanic` is
+$$
+`r round(coef(M_race)[1], 2)` + `r round(coef(M_race)[2], 2)` \times 1 + `r round(coef(M_race)[3], 2)` \times 0 = `r round(sum(coef(M_race)[c(1,2)]), 2)`.
+$$
+* When the `race` is `white`, the predicted mean of the weight distribution for whites is
+$$
+`r round(coef(M_race)[1], 2)` + `r round(coef(M_race)[2], 2)` \times 0 + `r round(coef(M_race)[3], 2)` \times 1 = `r round(sum(coef(M_race)[c(1,3)]), 2)`.
+$$
